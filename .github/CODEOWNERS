@@ -1,0 +1,38 @@
+# Default: Team Lead and Backend Integration Owner
+* @ktyfujkjdfx @ahadniyozov
+
+# Repository governance
+/.github/ @ktyfujkjdfx
+/README.md @ktyfujkjdfx @ahadniyozov
+/CONTRIBUTING.md @ktyfujkjdfx @ahadniyozov
+/CLAUDE.md @ktyfujkjdfx @ahadniyozov
+
+# Common documentation and role plans
+/docs/common/ @ktyfujkjdfx @ahadniyozov
+/docs/roles/ @ktyfujkjdfx
+
+# Role implementations
+/rs/ @csihwrcv @ahadniyozov @ktyfujkjdfx
+/backend/ @ahadniyozov @ktyfujkjdfx
+/blockchain/ @efimchuk20006-pixel @ahadniyozov @ktyfujkjdfx
+/frontend/ @KI-24-ATAKA @ahadniyozov @ktyfujkjdfx
+
+# Evidence contracts: RS produces, Backend consumes
+/contracts/verification.schema.json @csihwrcv @ahadniyozov @ktyfujkjdfx
+/contracts/rs-request.schema.json @csihwrcv @ahadniyozov @ktyfujkjdfx
+/fixtures/ @csihwrcv @ahadniyozov @ktyfujkjdfx
+
+# HTTP boundary: Backend produces, Frontend consumes
+/contracts/openapi.yaml @ahadniyozov @KI-24-ATAKA @ktyfujkjdfx
+/contracts/api-models.schema.json @ahadniyozov @KI-24-ATAKA @ktyfujkjdfx
+
+# Chain boundary: Blockchain produces, Backend consumes
+/contracts/contract-interface.sol @efimchuk20006-pixel @ahadniyozov @ktyfujkjdfx
+/contracts/contract-abi.json @efimchuk20006-pixel @ahadniyozov @ktyfujkjdfx
+/contracts/abi-build.json @efimchuk20006-pixel @ahadniyozov @ktyfujkjdfx
+/contracts/deployment.schema.json @efimchuk20006-pixel @ahadniyozov @ktyfujkjdfx
+
+# Decision policy and shared verification
+/config/ @ktyfujkjdfx @ahadniyozov @csihwrcv
+/tests/ @ahadniyozov @ktyfujkjdfx
+/tools/ @ahadniyozov @ktyfujkjdfx

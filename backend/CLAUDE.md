@@ -3,6 +3,12 @@
 Follow [root /CLAUDE.md](../CLAUDE.md) and
 [the Backend plan](../docs/roles/03_BACKEND_PLAN.md). Primary edit scope: `backend/`.
 
+Before creating or updating a Pull Request, read and follow
+`docs/common/07_PR_WORKFLOW.md` and `.github/pull_request_template.md` (root-relative).
+Never push to `main` or perform a PR merge. Use only your assigned `feat/backend-api`
+branch for PRs. Before push/PR creation, show summary, tests/results, and contract
+impact; follow the root confirmation rule. After PR creation, report URL and handoff.
+
 - You are the Integration Owner and sole runtime oracle sender. Own validation,
   JCS/SHA-256, policy evaluation, durable jobs/operations, and the chain adapter.
 - Inputs: RS evidence bundles and artifact manifests; Blockchain compiled ABI,

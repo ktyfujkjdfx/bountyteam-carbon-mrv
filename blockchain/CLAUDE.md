@@ -4,6 +4,12 @@ Follow [root /CLAUDE.md](../CLAUDE.md) and
 [the Blockchain plan](../docs/roles/04_BLOCKCHAIN_PLAN.md).
 Primary edit scope: `blockchain/`.
 
+Before creating or updating a Pull Request, read and follow
+`docs/common/07_PR_WORKFLOW.md` and `.github/pull_request_template.md` (root-relative).
+Never push to `main` or perform a PR merge. Use only your assigned `feat/chain-registry`
+branch for PRs. Before push/PR creation, show summary, tests/results, and contract
+impact; follow the root confirmation rule. After PR creation, report URL and handoff.
+
 - Inputs: `contracts/contract-interface.sol`, frozen ABI,
   `contracts/deployment.schema.json`, approved deployment roles/configuration,
   and Backend adapter calls with evidence/decision hashes.

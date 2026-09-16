@@ -13,6 +13,16 @@ These instructions apply to all Claude/Codex agents in this repository.
    [Definition of Done](docs/common/06_DEFINITION_OF_DONE.md).
 3. Read your personal plan in `docs/roles/` and your module's `CLAUDE.md`.
 
+## Pull Requests
+
+Before creating or updating a Pull Request, read and follow
+`docs/common/07_PR_WORKFLOW.md` and `.github/pull_request_template.md`.
+Never push to `main` or perform a PR merge. Create PRs only from your assigned
+role branch after required tests pass. Before push/PR creation, show the user
+the summary, tests/results, and contract impact. Create a PR through `gh` only
+when already authenticated and the user has confirmed; otherwise prepare its
+title/body and commands. After PR creation, report its URL and next handoff.
+
 ## Frozen boundaries
 
 - The shared contract baseline is `contracts-v1.0.0`. Never move, delete, or

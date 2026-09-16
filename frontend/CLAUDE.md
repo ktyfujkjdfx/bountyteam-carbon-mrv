@@ -3,6 +3,12 @@
 Follow [root /CLAUDE.md](../CLAUDE.md) and
 [the Frontend plan](../docs/roles/05_FRONTEND_PLAN.md). Primary edit scope: `frontend/`.
 
+Before creating or updating a Pull Request, read and follow
+`docs/common/07_PR_WORKFLOW.md` and `.github/pull_request_template.md` (root-relative).
+Never push to `main` or perform a PR merge. Use only your assigned `feat/frontend-dashboard`
+branch for PRs. Before push/PR creation, show summary, tests/results, and contract
+impact; follow the root confirmation rule. After PR creation, report URL and handoff.
+
 - Inputs: `contracts/openapi.yaml`, API models and HTTP examples, and Backend
   `/api/v1` responses: local previews/GeoJSON, evidence, decisions, jobs,
   operations, balances, receipts, events, and availability flags.

@@ -1,8 +1,10 @@
 ## Result
 
-- Priority/issue:
+- Priority (P0/P1/P2):
+- Linked Issue (Closes #... or Related to #...):
 - Owner:
 - Consumer/handoff:
+- Concrete result:
 
 ## Changes
 
@@ -15,6 +17,8 @@
 Commands run and exact results
 ```
 
+- Evidence (screenshot, API response, receipt/event/readback, or artifact manifest; explain if not applicable):
+
 ## Contract impact
 
 - [ ] No shared contract changed.
@@ -25,3 +29,4 @@ Commands run and exact results
 
 - Known limitation:
 - Rollback/fallback:
+- Next handoff (artifact, consumer, deadline, next step):

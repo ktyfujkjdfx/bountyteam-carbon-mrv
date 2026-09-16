@@ -13,6 +13,7 @@ and programmable temporary restrictions after a confirmed fire reversal.
 - Chain interface: `contracts/contract-interface.sol`
 - Policy: `config/policy.v1.json`
 - State semantics: `docs/common/status-machine.md`
+- Pull Request workflow: `docs/common/07_PR_WORKFLOW.md`
 
 Current contract baseline: `contracts-v1.0.0`.
 
