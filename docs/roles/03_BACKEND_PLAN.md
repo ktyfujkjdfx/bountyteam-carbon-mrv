@@ -147,17 +147,22 @@ CPU/IO pipeline запускай отдельным процессом/worker co
 ### Chain operation state
 
 ```text
-QUEUED → SIGNING → SUBMITTED → CONFIRMED
-                           ↘ FAILED
+QUEUED → SUBMITTED → CONFIRMED
+  ↘ FAILED       ↘ FAILED
 ```
 
 - Сначала запиши intent в БД.
+- Публичные состояния: только `QUEUED`, `SUBMITTED`, `CONFIRMED`, `FAILED`.
+  `SIGNING` не является API-состоянием: подписание выполняется внутри `QUEUED`.
 - Единственный runtime signer сериализует nonce.
 - Сохрани signed raw transaction и tx hash до broadcast.
+- После сохранения подписанной транзакции и broadcast перейди в `SUBMITTED`.
 - Timeout после broadcast остаётся `SUBMITTED`; не создавай новую транзакцию.
 - `CONFIRMED` только если receipt status=1, найден ожидаемый event и readback
   подтверждает batch state/balance.
-- После рестарта reconciliation проверяет все `SIGNING/SUBMITTED` операции.
+- После рестарта reconciliation восстанавливает `QUEUED/SUBMITTED` операции
+  по сохранённым intent, signed bytes и tx hash, без отдельного состояния
+  подписания и без создания транзакционных дублей с новым nonce.
 - При старте проверь chain ID, deployment address, runtime code hash и ABI hash;
   не работай молча с новым локальным deploy.
 

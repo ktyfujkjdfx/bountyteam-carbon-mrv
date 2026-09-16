@@ -87,8 +87,12 @@ receipts, events и flags.
 | RS outcome | `NO_CHANGE`, `DISTURBANCE_DETECTED`, `INSUFFICIENT_DATA` |
 | Evidence quality | `SUFFICIENT`, `REVIEW_REQUIRED`, `INSUFFICIENT` |
 | Backend decision | `NO_RESTRICTION`, `REVIEW_REQUIRED`, `FREEZE_REQUESTED` |
-| Operation | `QUEUED`, `SIGNING`, `SUBMITTED`, `CONFIRMED`, `FAILED` |
+| Operation | `QUEUED`, `SUBMITTED`, `CONFIRMED`, `FAILED` |
 | Credit | `ACTIVE`, `FROZEN`, `REVOKED` |
+
+`SIGNING` не является публичным API-состоянием и не отображается отдельно.
+Backend выполняет подписание внутри `QUEUED`; после сохранения подписанной
+транзакции и broadcast операция переходит в `SUBMITTED`.
 
 Критическое правило: `FREEZE_REQUESTED` и `SUBMITTED` ещё не означают `FROZEN`.
 Красный confirmed FROZEN показывается только когда backend вернул chain readback.

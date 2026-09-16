@@ -59,8 +59,8 @@ withdrawProceeds()
 
 События минимум:
 
-- `IssuerUpdated`
-- `OracleUpdated`
+- `IssuerPermissionChanged(address indexed account, bool allowed)`
+- `OraclePermissionChanged(address indexed account, bool allowed)`
 - `Issued`
 - `Purchased`
 - `Transferred`

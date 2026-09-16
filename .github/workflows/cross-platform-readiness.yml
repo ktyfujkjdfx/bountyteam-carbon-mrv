@@ -1,0 +1,58 @@
+name: Cross-platform readiness
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: "1"
+
+jobs:
+  readiness:
+    name: readiness (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: "3.12"
+          - os: ubuntu-latest
+            python: "3.13"
+          - os: windows-latest
+            python: "3.12"
+          - os: macos-latest
+            python: "3.12"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements-contracts.txt
+
+      - name: Install Node.js dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run shared contract tests
+        run: python -m pytest -q
+
+      - name: Check compiled ABI freshness
+        run: npm run check:abi
+
+      - name: Verify frozen artifacts were not modified
+        run: git diff --exit-code -- contracts config fixtures tests tools package.json package-lock.json requirements-contracts.txt
