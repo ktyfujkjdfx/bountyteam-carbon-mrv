@@ -1,0 +1,10 @@
+{
+  "name": "bountyteam-shared-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build:abi": "node tools/compile_abi.cjs",
+    "check:abi": "node tools/compile_abi.cjs --check"
+  },
+  "devDependencies": {"solc": "0.8.30"}
+}

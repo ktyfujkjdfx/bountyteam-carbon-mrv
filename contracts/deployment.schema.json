@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "deployment_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "chain_id": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,77})$"
+    },
+    "contract_address": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{40}$"
+    },
+    "deployment_tx_hash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "contract_code_hash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$",
+      "not": {
+        "const": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "abi_sha256": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "roles": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{40}$"
+        },
+        "issuer": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{40}$"
+        },
+        "oracle": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{40}$"
+        },
+        "buyer": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{40}$"
+        },
+        "recipient": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{40}$"
+        }
+      },
+      "required": [
+        "owner",
+        "issuer",
+        "oracle",
+        "buyer",
+        "recipient"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "deployment_id",
+    "chain_id",
+    "contract_address",
+    "deployment_tx_hash",
+    "contract_code_hash",
+    "abi_sha256",
+    "roles"
+  ],
+  "additionalProperties": false
+}

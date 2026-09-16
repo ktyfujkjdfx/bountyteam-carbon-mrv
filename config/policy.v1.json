@@ -1,0 +1,13 @@
+{
+  "policy_version": "1.0.0",
+  "policy_kind": "DEMO_LOGIC",
+  "minimum_valid_forest_ratio": 0.7,
+  "sufficient_valid_forest_ratio": 0.85,
+  "freeze_min_area_ha": 5,
+  "freeze_min_forest_fraction": 0.01,
+  "require_firms_support": true,
+  "reason_code_fire_reversal": 1,
+  "quality_score": "floor(100 * paired_valid_forest_ratio + 0.5)",
+  "automatic_unfreeze": false,
+  "automatic_revoke": false
+}

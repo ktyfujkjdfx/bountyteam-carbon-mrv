@@ -1,0 +1,2349 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bountyteam.invalid/contracts/api-models.schema.json",
+  "components": {
+    "schemas": {
+      "EvidenceHash32": {
+        "type": "string",
+        "pattern": "^0x[0-9a-f]{64}$"
+      },
+      "EvidenceTimestamp": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+      },
+      "EvidenceSourceAsset": {
+        "type": "object",
+        "properties": {
+          "band": {
+            "type": "string",
+            "enum": [
+              "B04",
+              "B08",
+              "B8A",
+              "B12",
+              "SCL"
+            ]
+          },
+          "source_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "local_sha256": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$",
+            "not": {
+              "const": "0x0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "scale_applied": {
+            "type": "number"
+          },
+          "offset_applied": {
+            "type": "number"
+          },
+          "transform_origin": {
+            "type": "string",
+            "enum": [
+              "PRODUCT_METADATA",
+              "PROVIDER_HARMONIZED"
+            ]
+          }
+        },
+        "required": [
+          "band",
+          "source_ref",
+          "local_sha256",
+          "scale_applied",
+          "offset_applied",
+          "transform_origin"
+        ],
+        "additionalProperties": false
+      },
+      "EvidenceScene": {
+        "type": "object",
+        "properties": {
+          "scene_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "acquired_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "provider": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 96
+          },
+          "collection": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 96
+          },
+          "processing_baseline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mgrs_tile": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSourceAsset"
+            },
+            "maxItems": 16
+          }
+        },
+        "required": [
+          "scene_id",
+          "acquired_at",
+          "provider",
+          "collection",
+          "processing_baseline",
+          "mgrs_tile",
+          "assets"
+        ],
+        "additionalProperties": false
+      },
+      "EvidenceGrid": {
+        "type": "object",
+        "properties": {
+          "epsg": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 999999
+          },
+          "resolution_m": {
+            "const": 20
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20000
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20000
+          },
+          "transform": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 6,
+            "maxItems": 6
+          }
+        },
+        "required": [
+          "epsg",
+          "resolution_m",
+          "width",
+          "height",
+          "transform"
+        ],
+        "additionalProperties": false
+      },
+      "EvidenceForestMask": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reference_year": {
+            "type": "integer",
+            "minimum": 1970,
+            "maximum": 2100
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$",
+            "not": {
+              "const": "0x0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "interpretation_note": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "source",
+          "version",
+          "reference_year",
+          "sha256",
+          "interpretation_note"
+        ],
+        "additionalProperties": false
+      },
+      "EvidenceParameters": {
+        "type": "object",
+        "properties": {
+          "ndvi_bands": {
+            "const": [
+              "B08",
+              "B04"
+            ]
+          },
+          "nbr_bands": {
+            "const": [
+              "B8A",
+              "B12"
+            ]
+          },
+          "disturbance_dnbr_min": {
+            "const": 0.27
+          },
+          "min_component_area_ha": {
+            "const": 1
+          },
+          "connectivity": {
+            "const": 8
+          },
+          "excluded_scl_classes": {
+            "const": [
+              0,
+              1,
+              2,
+              3,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11
+            ]
+          },
+          "resampling_continuous": {
+            "const": "average"
+          },
+          "resampling_categorical": {
+            "const": "nearest"
+          }
+        },
+        "required": [
+          "ndvi_bands",
+          "nbr_bands",
+          "disturbance_dnbr_min",
+          "min_component_area_ha",
+          "connectivity",
+          "excluded_scl_classes",
+          "resampling_continuous",
+          "resampling_categorical"
+        ],
+        "additionalProperties": false
+      },
+      "EvidenceMethod": {
+        "type": "object",
+        "properties": {
+          "pipeline_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 96
+          },
+          "code_commit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{40}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "config_sha256": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$",
+            "not": {
+              "const": "0x0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "grid": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceGrid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "forest_mask": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceForestMask"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/EvidenceParameters"
+          }
+        },
+        "required": [
+          "pipeline_version",
+          "code_commit",
+          "config_sha256",
+          "grid",
+          "forest_mask",
+          "parameters"
+        ],
+        "additionalProperties": false
+      },
+      "EvidenceQuality": {
+        "type": "object",
+        "properties": {
+          "paired_valid_aoi_ratio": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "paired_valid_forest_ratio": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "aoi_cloud_ratio_before": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "aoi_cloud_ratio_after": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata_complete": {
+            "type": "boolean"
+          },
+          "grid_aligned": {
+            "type": "boolean"
+          },
+          "temporal_comparability": {
+            "type": "string",
+            "enum": [
+              "YES",
+              "NO",
+              "UNCERTAIN"
+            ]
+          },
+          "temporal_note": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "paired_valid_aoi_ratio",
+          "paired_valid_forest_ratio",
+          "aoi_cloud_ratio_before",
+          "aoi_cloud_ratio_after",
+          "metadata_complete",
+          "grid_aligned",
+          "temporal_comparability",
+          "temporal_note"
+        ],
+        "additionalProperties": false
+      },
+      "EvidenceMetrics": {
+        "type": "object",
+        "properties": {
+          "plot_area_ha": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "baseline_forest_area_ha": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "analysed_forest_area_ha": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "affected_area_ha": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "affected_fraction_of_baseline_forest": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ndvi_before_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ndvi_after_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dnbr_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dnbr_mean_scope": {
+            "const": "PAIRED_VALID_BASELINE_FOREST"
+          },
+          "baseline_forest_pixel_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 400000000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "paired_valid_forest_pixel_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 400000000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "affected_pixel_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 400000000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "plot_area_ha",
+          "baseline_forest_area_ha",
+          "analysed_forest_area_ha",
+          "affected_area_ha",
+          "affected_fraction_of_baseline_forest",
+          "ndvi_before_mean",
+          "ndvi_after_mean",
+          "dnbr_mean",
+          "dnbr_mean_scope",
+          "baseline_forest_pixel_count",
+          "paired_valid_forest_pixel_count",
+          "affected_pixel_count"
+        ],
+        "additionalProperties": false
+      },
+      "EvidenceFirms": {
+        "type": "object",
+        "properties": {
+          "support": {
+            "type": "string",
+            "enum": [
+              "SUPPORTED",
+              "NOT_FOUND",
+              "NOT_CHECKED"
+            ]
+          },
+          "hotspot_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "window_start": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "window_end": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "spatial_tolerance_m": {
+            "const": 500
+          },
+          "product": {
+            "type": "string",
+            "minLength": 1
+          },
+          "confidence_filter": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "source_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "matched_points_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "support",
+          "hotspot_count",
+          "window_start",
+          "window_end",
+          "spatial_tolerance_m",
+          "product",
+          "confidence_filter",
+          "source_refs",
+          "matched_points_artifact_id"
+        ],
+        "additionalProperties": false
+      },
+      "EvidenceArtifact": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "PREVIEW_BEFORE",
+              "PREVIEW_AFTER",
+              "DNBR_RASTER",
+              "AFFECTED_AREA",
+              "FIRMS_POINTS",
+              "DNBR_PREVIEW",
+              "SWIR_BEFORE",
+              "SWIR_AFTER"
+            ]
+          },
+          "relative_path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"
+          },
+          "media_type": {
+            "type": "string",
+            "enum": [
+              "image/png",
+              "image/webp",
+              "image/tiff",
+              "application/geo+json"
+            ]
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$",
+            "not": {
+              "const": "0x0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000
+          },
+          "bounds_wgs84": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              },
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              }
+            ],
+            "items": false,
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "artifact_id",
+          "role",
+          "relative_path",
+          "media_type",
+          "sha256",
+          "size_bytes"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "media_type": {
+                  "enum": [
+                    "image/png",
+                    "image/webp"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "bounds_wgs84",
+                "width",
+                "height"
+              ]
+            }
+          }
+        ]
+      },
+      "VerificationEvidence": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "const": "1.0.0"
+          },
+          "dataset_kind": {
+            "type": "string",
+            "enum": [
+              "REAL",
+              "SYNTHETIC"
+            ]
+          },
+          "plot_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+          },
+          "plot_geometry_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$",
+            "not": {
+              "const": "0x0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "observation": {
+            "type": "object",
+            "properties": {
+              "before": {
+                "$ref": "#/components/schemas/EvidenceScene"
+              },
+              "after": {
+                "$ref": "#/components/schemas/EvidenceScene"
+              }
+            },
+            "required": [
+              "before",
+              "after"
+            ],
+            "additionalProperties": false
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "NO_CHANGE",
+              "DISTURBANCE_DETECTED",
+              "INSUFFICIENT_DATA"
+            ]
+          },
+          "method": {
+            "$ref": "#/components/schemas/EvidenceMethod"
+          },
+          "quality": {
+            "$ref": "#/components/schemas/EvidenceQuality"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/EvidenceMetrics"
+          },
+          "firms": {
+            "$ref": "#/components/schemas/EvidenceFirms"
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EvidenceArtifact"
+            },
+            "maxItems": 32
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "schema_version",
+          "dataset_kind",
+          "plot_id",
+          "plot_geometry_hash",
+          "observation",
+          "outcome",
+          "method",
+          "quality",
+          "metrics",
+          "firms",
+          "artifacts",
+          "limitations"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "outcome": {
+                  "enum": [
+                    "NO_CHANGE",
+                    "DISTURBANCE_DETECTED"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "metrics": {
+                  "properties": {
+                    "baseline_forest_area_ha": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "analysed_forest_area_ha": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "affected_area_ha": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "affected_fraction_of_baseline_forest": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "ndvi_before_mean": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "ndvi_after_mean": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "dnbr_mean": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "baseline_forest_pixel_count": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "paired_valid_forest_pixel_count": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "affected_pixel_count": {
+                      "not": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                },
+                "method": {
+                  "properties": {
+                    "grid": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "forest_mask": {
+                      "not": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                },
+                "quality": {
+                  "properties": {
+                    "metadata_complete": {
+                      "const": true
+                    },
+                    "grid_aligned": {
+                      "const": true
+                    },
+                    "paired_valid_forest_ratio": {
+                      "type": "number",
+                      "minimum": 0.7
+                    }
+                  }
+                },
+                "observation": {
+                  "properties": {
+                    "before": {
+                      "properties": {
+                        "processing_baseline": {
+                          "type": "string"
+                        },
+                        "mgrs_tile": {
+                          "type": "string"
+                        },
+                        "assets": {
+                          "minItems": 5
+                        }
+                      }
+                    },
+                    "after": {
+                      "properties": {
+                        "processing_baseline": {
+                          "type": "string"
+                        },
+                        "mgrs_tile": {
+                          "type": "string"
+                        },
+                        "assets": {
+                          "minItems": 5
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "dataset_kind": {
+                  "const": "REAL"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "method": {
+                  "properties": {
+                    "code_commit": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "plot_id": {
+                  "not": {
+                    "pattern": "^SYNTHETIC"
+                  }
+                },
+                "observation": {
+                  "properties": {
+                    "before": {
+                      "properties": {
+                        "scene_id": {
+                          "not": {
+                            "pattern": "^SYNTHETIC"
+                          }
+                        }
+                      }
+                    },
+                    "after": {
+                      "properties": {
+                        "scene_id": {
+                          "not": {
+                            "pattern": "^SYNTHETIC"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "firms": {
+                  "properties": {
+                    "support": {
+                      "const": "SUPPORTED"
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "firms": {
+                  "properties": {
+                    "hotspot_count": {
+                      "minimum": 1
+                    },
+                    "source_refs": {
+                      "minItems": 1
+                    },
+                    "matched_points_artifact_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "title": "VerificationEvidence"
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "details"
+        ],
+        "additionalProperties": false
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "error",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "ArtifactLink": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "PREVIEW_BEFORE",
+              "PREVIEW_AFTER",
+              "DNBR_RASTER",
+              "AFFECTED_AREA",
+              "FIRMS_POINTS",
+              "DNBR_PREVIEW",
+              "SWIR_BEFORE",
+              "SWIR_AFTER"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^/api/v1/artifacts/"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "media_type": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "artifact_id",
+          "role",
+          "url",
+          "sha256",
+          "media_type"
+        ],
+        "additionalProperties": false
+      },
+      "DecisionRecord": {
+        "type": "object",
+        "properties": {
+          "evidence_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "plot_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+          },
+          "policy_version": {
+            "const": "1.0.0"
+          },
+          "policy_parameters_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "NO_RESTRICTION",
+              "REVIEW_REQUIRED",
+              "FREEZE_REQUESTED"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "NO_SIGNIFICANT_CHANGE",
+              "DATA_INSUFFICIENT",
+              "DATA_REVIEW",
+              "DISTURBANCE_UNATTRIBUTED",
+              "BELOW_POLICY_THRESHOLD",
+              "FIRE_REVERSAL"
+            ]
+          },
+          "effective_observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "replay_as_of": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          }
+        },
+        "required": [
+          "evidence_hash",
+          "plot_id",
+          "policy_version",
+          "policy_parameters_hash",
+          "decision",
+          "reason",
+          "effective_observed_at",
+          "replay_as_of"
+        ],
+        "additionalProperties": false
+      },
+      "Verification": {
+        "type": "object",
+        "properties": {
+          "verification_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/VerificationEvidence"
+          },
+          "evidence_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "evidence_quality": {
+            "type": "string",
+            "enum": [
+              "SUFFICIENT",
+              "REVIEW_REQUIRED",
+              "INSUFFICIENT"
+            ]
+          },
+          "evidence_quality_score": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "NO_RESTRICTION",
+              "REVIEW_REQUIRED",
+              "FREEZE_REQUESTED"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "NO_SIGNIFICANT_CHANGE",
+              "DATA_INSUFFICIENT",
+              "DATA_REVIEW",
+              "DISTURBANCE_UNATTRIBUTED",
+              "BELOW_POLICY_THRESHOLD",
+              "FIRE_REVERSAL"
+            ]
+          },
+          "decision_record": {
+            "$ref": "#/components/schemas/DecisionRecord"
+          },
+          "decision_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "is_latest": {
+            "type": "boolean"
+          },
+          "processed_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "observation_mode": {
+            "const": "HISTORICAL_REPLAY"
+          },
+          "computation_mode": {
+            "type": "string",
+            "enum": [
+              "COMPUTED",
+              "CACHED_REPLAY"
+            ]
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactLink"
+            }
+          }
+        },
+        "required": [
+          "verification_id",
+          "evidence",
+          "evidence_hash",
+          "evidence_quality",
+          "evidence_quality_score",
+          "decision",
+          "reason",
+          "decision_record",
+          "decision_hash",
+          "is_latest",
+          "processed_at",
+          "observation_mode",
+          "computation_mode",
+          "artifacts"
+        ],
+        "additionalProperties": false
+      },
+      "JobAccepted": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "const": "QUEUED"
+          },
+          "status_url": {
+            "type": "string",
+            "pattern": "^/api/v1/jobs/"
+          }
+        },
+        "required": [
+          "job_id",
+          "state",
+          "status_url"
+        ],
+        "additionalProperties": false
+      },
+      "Job": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "QUEUED",
+              "RUNNING",
+              "SUCCEEDED",
+              "FAILED"
+            ]
+          },
+          "verification_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "job_id",
+          "state",
+          "verification_id",
+          "error"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "const": "SUCCEEDED"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "verification_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "error": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "const": "FAILED"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "error": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "verification_id": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Receipt": {
+        "type": "object",
+        "properties": {
+          "transaction_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "block_number": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,77})$"
+          },
+          "status": {
+            "const": 1
+          },
+          "event_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "state_readback_ok": {
+            "const": true
+          }
+        },
+        "required": [
+          "transaction_hash",
+          "block_number",
+          "status",
+          "event_names",
+          "state_readback_ok"
+        ],
+        "additionalProperties": false
+      },
+      "OperationAccepted": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "transaction_state": {
+            "const": "QUEUED"
+          },
+          "status_url": {
+            "type": "string",
+            "pattern": "^/api/v1/operations/"
+          }
+        },
+        "required": [
+          "operation_id",
+          "transaction_state",
+          "status_url"
+        ],
+        "additionalProperties": false
+      },
+      "Operation": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ISSUE",
+              "BUY",
+              "TRANSFER",
+              "FREEZE"
+            ]
+          },
+          "transaction_state": {
+            "type": "string",
+            "enum": [
+              "QUEUED",
+              "SUBMITTED",
+              "CONFIRMED",
+              "FAILED"
+            ]
+          },
+          "tx_hash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^0x[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,77})$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "receipt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Receipt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "operation_id",
+          "kind",
+          "transaction_state",
+          "tx_hash",
+          "batch_id",
+          "error",
+          "receipt"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "transaction_state": {
+                  "const": "CONFIRMED"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "receipt": {
+                  "$ref": "#/components/schemas/Receipt"
+                },
+                "tx_hash": {
+                  "type": "string",
+                  "pattern": "^0x[0-9a-f]{64}$"
+                },
+                "batch_id": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]{0,77})$"
+                },
+                "error": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "transaction_state": {
+                  "enum": [
+                    "QUEUED",
+                    "SUBMITTED",
+                    "FAILED"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "receipt": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CreditBatch": {
+        "type": "object",
+        "properties": {
+          "batch_id": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,77})$"
+          },
+          "plot_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+          },
+          "seller": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{40}$"
+          },
+          "actor": {
+            "type": "string",
+            "enum": [
+              "issuer",
+              "buyer",
+              "recipient"
+            ]
+          },
+          "total_supply": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,77}$"
+          },
+          "seller_balance": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,77})$"
+          },
+          "actor_balance": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,77})$"
+          },
+          "unit_price_wei": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,77}$"
+          },
+          "credit_status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "FROZEN",
+              "REVOKED"
+            ]
+          },
+          "evidence_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "decision_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "issued_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "frozen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "chain_state_checked_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "can_buy": {
+            "type": "boolean"
+          },
+          "can_transfer_backend": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "batch_id",
+          "plot_id",
+          "seller",
+          "actor",
+          "total_supply",
+          "seller_balance",
+          "actor_balance",
+          "unit_price_wei",
+          "credit_status",
+          "evidence_hash",
+          "decision_hash",
+          "issued_at",
+          "frozen_at",
+          "last_observed_at",
+          "chain_state_checked_at",
+          "can_buy",
+          "can_transfer_backend"
+        ],
+        "additionalProperties": false
+      },
+      "PlotSummary": {
+        "type": "object",
+        "properties": {
+          "plot_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "latest_verification_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence_quality": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "SUFFICIENT",
+                  "REVIEW_REQUIRED",
+                  "INSUFFICIENT"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_decision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "NO_RESTRICTION",
+                  "REVIEW_REQUIRED",
+                  "FREEZE_REQUESTED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "plot_id",
+          "name",
+          "latest_verification_id",
+          "evidence_quality",
+          "latest_decision"
+        ],
+        "additionalProperties": false
+      },
+      "Plot": {
+        "type": "object",
+        "properties": {
+          "plot_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "latest_verification_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence_quality": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "SUFFICIENT",
+                  "REVIEW_REQUIRED",
+                  "INSUFFICIENT"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_decision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "NO_RESTRICTION",
+                  "REVIEW_REQUIRED",
+                  "FREEZE_REQUESTED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "geometry": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "Polygon"
+                  },
+                  "coordinates": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "prefixItems": [
+                          {
+                            "type": "number",
+                            "minimum": -180,
+                            "maximum": 180
+                          },
+                          {
+                            "type": "number",
+                            "minimum": -90,
+                            "maximum": 90
+                          }
+                        ],
+                        "items": false,
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 4
+                    },
+                    "minItems": 1
+                  }
+                },
+                "required": [
+                  "type",
+                  "coordinates"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "MultiPolygon"
+                  },
+                  "coordinates": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "type": "number",
+                              "minimum": -180,
+                              "maximum": 180
+                            },
+                            {
+                              "type": "number",
+                              "minimum": -90,
+                              "maximum": 90
+                            }
+                          ],
+                          "items": false,
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "minItems": 4
+                      },
+                      "minItems": 1
+                    },
+                    "minItems": 1
+                  }
+                },
+                "required": [
+                  "type",
+                  "coordinates"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "geometry_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "area_ha": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "can_issue": {
+            "type": "boolean"
+          },
+          "can_buy": {
+            "type": "boolean"
+          },
+          "can_transfer_backend": {
+            "type": "boolean"
+          },
+          "action_block_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "plot_id",
+          "name",
+          "latest_verification_id",
+          "evidence_quality",
+          "latest_decision",
+          "geometry",
+          "geometry_hash",
+          "area_ha",
+          "can_issue",
+          "can_buy",
+          "can_transfer_backend",
+          "action_block_reason"
+        ],
+        "additionalProperties": false
+      },
+      "HistoryItem": {
+        "type": "object",
+        "properties": {
+          "verification_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "processed_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "NO_CHANGE",
+              "DISTURBANCE_DETECTED",
+              "INSUFFICIENT_DATA"
+            ]
+          },
+          "evidence_quality": {
+            "type": "string",
+            "enum": [
+              "SUFFICIENT",
+              "REVIEW_REQUIRED",
+              "INSUFFICIENT"
+            ]
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "NO_RESTRICTION",
+              "REVIEW_REQUIRED",
+              "FREEZE_REQUESTED"
+            ]
+          },
+          "is_latest": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "verification_id",
+          "observed_at",
+          "processed_at",
+          "outcome",
+          "evidence_quality",
+          "decision",
+          "is_latest"
+        ],
+        "additionalProperties": false
+      },
+      "Anchor": {
+        "type": "object",
+        "properties": {
+          "event_name": {
+            "type": "string",
+            "enum": [
+              "Issued",
+              "Frozen"
+            ]
+          },
+          "batch_id": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,77})$"
+          },
+          "tx_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "evidence_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "decision_hash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^0x[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confirmed": {
+            "const": true
+          }
+        },
+        "required": [
+          "event_name",
+          "batch_id",
+          "tx_hash",
+          "evidence_hash",
+          "decision_hash",
+          "confirmed"
+        ],
+        "additionalProperties": false
+      },
+      "Proof": {
+        "type": "object",
+        "properties": {
+          "evidence_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "recomputed_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "decision_hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "canonical_url": {
+            "type": "string",
+            "pattern": "^/api/v1/verifications/"
+          },
+          "anchors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Anchor"
+            }
+          },
+          "integrity_ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "evidence_hash",
+          "recomputed_hash",
+          "decision_hash",
+          "canonical_url",
+          "anchors",
+          "integrity_ok"
+        ],
+        "additionalProperties": false
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "plot_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "VERIFICATION",
+              "DECISION",
+              "TX_SUBMITTED",
+              "TX_CONFIRMED",
+              "TX_FAILED"
+            ]
+          },
+          "verification_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tx_hash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^0x[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,77})$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "event_id",
+          "occurred_at",
+          "plot_id",
+          "kind",
+          "verification_id",
+          "operation_id",
+          "tx_hash",
+          "batch_id",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "Events": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "api": {
+            "type": "string",
+            "enum": [
+              "UP",
+              "DOWN"
+            ]
+          },
+          "db": {
+            "type": "string",
+            "enum": [
+              "UP",
+              "DOWN"
+            ]
+          },
+          "worker": {
+            "type": "string",
+            "enum": [
+              "UP",
+              "DOWN"
+            ]
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "UP",
+              "DOWN"
+            ]
+          },
+          "deployment_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "CONTRACT_FIXTURE",
+              "LOCAL_DEMO"
+            ]
+          }
+        },
+        "required": [
+          "api",
+          "db",
+          "worker",
+          "chain",
+          "deployment_id",
+          "mode"
+        ],
+        "additionalProperties": false
+      },
+      "VerifyRequest": {
+        "type": "object",
+        "properties": {
+          "scenario_id": {
+            "type": "string",
+            "enum": [
+              "baseline",
+              "post_fire",
+              "insufficient"
+            ]
+          }
+        },
+        "required": [
+          "scenario_id"
+        ],
+        "additionalProperties": false
+      },
+      "IssueRequest": {
+        "type": "object",
+        "properties": {
+          "demo_authorization_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+          }
+        },
+        "required": [
+          "demo_authorization_id"
+        ],
+        "additionalProperties": false
+      },
+      "BuyRequest": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,77}$"
+          }
+        },
+        "required": [
+          "amount"
+        ],
+        "additionalProperties": false
+      },
+      "TransferRequest": {
+        "type": "object",
+        "properties": {
+          "to_actor": {
+            "type": "string",
+            "enum": [
+              "issuer",
+              "buyer",
+              "recipient"
+            ]
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,77}$"
+          }
+        },
+        "required": [
+          "to_actor",
+          "amount"
+        ],
+        "additionalProperties": false
+      },
+      "Plots": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlotSummary"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "Credits": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreditBatch"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "History": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryItem"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

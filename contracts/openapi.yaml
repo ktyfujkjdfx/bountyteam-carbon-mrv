@@ -1,0 +1,1977 @@
+openapi: 3.1.0
+info:
+  title: BountyTeam shared REST contract
+  version: 1.0.0
+  description: Specification, not a running service. Historical replay and valueless
+    demo units only.
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+servers:
+- url: http://127.0.0.1:8000/api/v1
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: getHealth
+      parameters: []
+      responses:
+        '200':
+          description: Успешное чтение
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security: []
+  /plots:
+    get:
+      operationId: listPlots
+      summary: listPlots
+      parameters: []
+      responses:
+        '200':
+          description: Успешное чтение
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plots'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security:
+      - DemoSession: []
+  /plots/{plot_id}:
+    get:
+      operationId: getPlot
+      summary: getPlot
+      parameters:
+      - name: plot_id
+        in: path
+        required: true
+        schema: &id001
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$
+      - $ref: '#/components/parameters/DemoActor'
+      responses:
+        '200':
+          description: Успешное чтение
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plot'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security:
+      - DemoSession: []
+  /plots/{plot_id}/verify:
+    post:
+      operationId: startVerification
+      summary: startVerification
+      parameters:
+      - name: plot_id
+        in: path
+        required: true
+        schema: *id001
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/DemoActor'
+      responses:
+        '202':
+          description: Принято в очередь
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobAccepted'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security:
+      - DemoSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+      description: Только demo-актор issuer. Неверная роль — 403.
+  /jobs/{job_id}:
+    get:
+      operationId: getVerificationJob
+      summary: getVerificationJob
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema: &id002
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Успешное чтение
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security:
+      - DemoSession: []
+  /verifications/{verification_id}:
+    get:
+      operationId: getVerification
+      summary: getVerification
+      parameters:
+      - name: verification_id
+        in: path
+        required: true
+        schema: *id002
+      responses:
+        '200':
+          description: Успешное чтение
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Verification'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security:
+      - DemoSession: []
+  /verifications/{verification_id}/proof:
+    get:
+      operationId: getProof
+      summary: getProof
+      parameters:
+      - name: verification_id
+        in: path
+        required: true
+        schema: *id002
+      responses:
+        '200':
+          description: Успешное чтение
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proof'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security:
+      - DemoSession: []
+  /verifications/{verification_id}/canonical:
+    get:
+      operationId: getCanonicalEvidence
+      summary: getCanonicalEvidence
+      parameters:
+      - name: verification_id
+        in: path
+        required: true
+        schema: *id002
+      responses:
+        '200':
+          description: Успешное чтение
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationEvidence'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security:
+      - DemoSession: []
+      description: Возвращает сохранённые JCS-байты без повторной сериализации.
+  /plots/{plot_id}/history:
+    get:
+      operationId: getHistory
+      summary: getHistory
+      parameters:
+      - name: plot_id
+        in: path
+        required: true
+        schema: *id001
+      responses:
+        '200':
+          description: Успешное чтение
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/History'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security:
+      - DemoSession: []
+  /plots/{plot_id}/credits:
+    get:
+      operationId: getCredits
+      summary: getCredits
+      parameters:
+      - name: plot_id
+        in: path
+        required: true
+        schema: *id001
+      - $ref: '#/components/parameters/DemoActor'
+      responses:
+        '200':
+          description: Успешное чтение
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Credits'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security:
+      - DemoSession: []
+  /plots/{plot_id}/issue:
+    post:
+      operationId: issueBatch
+      summary: issueBatch
+      parameters:
+      - name: plot_id
+        in: path
+        required: true
+        schema: *id001
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/DemoActor'
+      responses:
+        '202':
+          description: Принято в очередь
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security:
+      - DemoSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueRequest'
+      description: Только demo-актор issuer. Неверная роль — 403.
+  /batches/{batch_id}/buy:
+    post:
+      operationId: buyCredits
+      summary: buyCredits
+      parameters:
+      - name: batch_id
+        in: path
+        required: true
+        schema: &id003
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/DemoActor'
+      responses:
+        '202':
+          description: Принято в очередь
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security:
+      - DemoSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuyRequest'
+  /batches/{batch_id}/transfer:
+    post:
+      operationId: transferCredits
+      summary: transferCredits
+      parameters:
+      - name: batch_id
+        in: path
+        required: true
+        schema: *id003
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/DemoActor'
+      responses:
+        '202':
+          description: Принято в очередь
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security:
+      - DemoSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRequest'
+  /operations/{operation_id}:
+    get:
+      operationId: getOperation
+      summary: getOperation
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema: *id002
+      responses:
+        '200':
+          description: Успешное чтение
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security:
+      - DemoSession: []
+  /events:
+    get:
+      operationId: listEvents
+      summary: listEvents
+      parameters:
+      - name: plot_id
+        in: query
+        required: true
+        schema: *id001
+      - name: cursor
+        in: query
+        schema:
+          type: string
+          minLength: 1
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      responses:
+        '200':
+          description: Успешное чтение
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Events'
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security:
+      - DemoSession: []
+  /artifacts/{artifact_id}:
+    get:
+      operationId: getArtifact
+      summary: getArtifact
+      parameters:
+      - name: artifact_id
+        in: path
+        required: true
+        schema: *id001
+      responses:
+        '200':
+          description: Файл из разрешённого manifest
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            image/tiff:
+              schema:
+                type: string
+                format: binary
+            application/geo+json:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Failure'
+        '403':
+          $ref: '#/components/responses/Failure'
+        '404':
+          $ref: '#/components/responses/Failure'
+        '409':
+          $ref: '#/components/responses/Failure'
+        '422':
+          $ref: '#/components/responses/Failure'
+        '503':
+          $ref: '#/components/responses/Failure'
+      security:
+      - DemoSession: []
+components:
+  schemas:
+    EvidenceHash32:
+      type: string
+      pattern: ^0x[0-9a-f]{64}$
+    EvidenceTimestamp:
+      type: string
+      format: date-time
+      pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$
+    EvidenceSourceAsset:
+      type: object
+      properties:
+        band:
+          type: string
+          enum:
+          - B04
+          - B08
+          - B8A
+          - B12
+          - SCL
+        source_ref:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        local_sha256:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+          not:
+            const: '0x0000000000000000000000000000000000000000000000000000000000000000'
+        scale_applied:
+          type: number
+        offset_applied:
+          type: number
+        transform_origin:
+          type: string
+          enum:
+          - PRODUCT_METADATA
+          - PROVIDER_HARMONIZED
+      required:
+      - band
+      - source_ref
+      - local_sha256
+      - scale_applied
+      - offset_applied
+      - transform_origin
+      additionalProperties: false
+    EvidenceScene:
+      type: object
+      properties:
+        scene_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        acquired_at:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$
+        provider:
+          type: string
+          minLength: 1
+          maxLength: 96
+        collection:
+          type: string
+          minLength: 1
+          maxLength: 96
+        processing_baseline:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 64
+          - type: 'null'
+        mgrs_tile:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 64
+          - type: 'null'
+        assets:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceSourceAsset'
+          maxItems: 16
+      required:
+      - scene_id
+      - acquired_at
+      - provider
+      - collection
+      - processing_baseline
+      - mgrs_tile
+      - assets
+      additionalProperties: false
+    EvidenceGrid:
+      type: object
+      properties:
+        epsg:
+          type: integer
+          minimum: 1
+          maximum: 999999
+        resolution_m:
+          const: 20
+        width:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        height:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        transform:
+          type: array
+          items:
+            type: number
+          minItems: 6
+          maxItems: 6
+      required:
+      - epsg
+      - resolution_m
+      - width
+      - height
+      - transform
+      additionalProperties: false
+    EvidenceForestMask:
+      type: object
+      properties:
+        source:
+          type: string
+          minLength: 1
+        version:
+          type: string
+          minLength: 1
+        reference_year:
+          type: integer
+          minimum: 1970
+          maximum: 2100
+        sha256:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+          not:
+            const: '0x0000000000000000000000000000000000000000000000000000000000000000'
+        interpretation_note:
+          type: string
+          minLength: 1
+      required:
+      - source
+      - version
+      - reference_year
+      - sha256
+      - interpretation_note
+      additionalProperties: false
+    EvidenceParameters:
+      type: object
+      properties:
+        ndvi_bands:
+          const:
+          - B08
+          - B04
+        nbr_bands:
+          const:
+          - B8A
+          - B12
+        disturbance_dnbr_min:
+          const: 0.27
+        min_component_area_ha:
+          const: 1
+        connectivity:
+          const: 8
+        excluded_scl_classes:
+          const:
+          - 0
+          - 1
+          - 2
+          - 3
+          - 6
+          - 7
+          - 8
+          - 9
+          - 10
+          - 11
+        resampling_continuous:
+          const: average
+        resampling_categorical:
+          const: nearest
+      required:
+      - ndvi_bands
+      - nbr_bands
+      - disturbance_dnbr_min
+      - min_component_area_ha
+      - connectivity
+      - excluded_scl_classes
+      - resampling_continuous
+      - resampling_categorical
+      additionalProperties: false
+    EvidenceMethod:
+      type: object
+      properties:
+        pipeline_version:
+          type: string
+          minLength: 1
+          maxLength: 96
+        code_commit:
+          anyOf:
+          - type: string
+            pattern: ^[0-9a-f]{40}$
+          - type: 'null'
+        config_sha256:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+          not:
+            const: '0x0000000000000000000000000000000000000000000000000000000000000000'
+        grid:
+          anyOf:
+          - $ref: '#/components/schemas/EvidenceGrid'
+          - type: 'null'
+        forest_mask:
+          anyOf:
+          - $ref: '#/components/schemas/EvidenceForestMask'
+          - type: 'null'
+        parameters:
+          $ref: '#/components/schemas/EvidenceParameters'
+      required:
+      - pipeline_version
+      - code_commit
+      - config_sha256
+      - grid
+      - forest_mask
+      - parameters
+      additionalProperties: false
+    EvidenceQuality:
+      type: object
+      properties:
+        paired_valid_aoi_ratio:
+          anyOf:
+          - type: number
+            minimum: 0
+            maximum: 1
+          - type: 'null'
+        paired_valid_forest_ratio:
+          anyOf:
+          - type: number
+            minimum: 0
+            maximum: 1
+          - type: 'null'
+        aoi_cloud_ratio_before:
+          anyOf:
+          - type: number
+            minimum: 0
+            maximum: 1
+          - type: 'null'
+        aoi_cloud_ratio_after:
+          anyOf:
+          - type: number
+            minimum: 0
+            maximum: 1
+          - type: 'null'
+        metadata_complete:
+          type: boolean
+        grid_aligned:
+          type: boolean
+        temporal_comparability:
+          type: string
+          enum:
+          - 'YES'
+          - 'NO'
+          - UNCERTAIN
+        temporal_note:
+          type: string
+          minLength: 1
+      required:
+      - paired_valid_aoi_ratio
+      - paired_valid_forest_ratio
+      - aoi_cloud_ratio_before
+      - aoi_cloud_ratio_after
+      - metadata_complete
+      - grid_aligned
+      - temporal_comparability
+      - temporal_note
+      additionalProperties: false
+    EvidenceMetrics:
+      type: object
+      properties:
+        plot_area_ha:
+          type: number
+          exclusiveMinimum: 0
+        baseline_forest_area_ha:
+          anyOf:
+          - type: number
+            minimum: 0
+          - type: 'null'
+        analysed_forest_area_ha:
+          anyOf:
+          - type: number
+            minimum: 0
+          - type: 'null'
+        affected_area_ha:
+          anyOf:
+          - type: number
+            minimum: 0
+          - type: 'null'
+        affected_fraction_of_baseline_forest:
+          anyOf:
+          - type: number
+            minimum: 0
+            maximum: 1
+          - type: 'null'
+        ndvi_before_mean:
+          anyOf:
+          - type: number
+          - type: 'null'
+        ndvi_after_mean:
+          anyOf:
+          - type: number
+          - type: 'null'
+        dnbr_mean:
+          anyOf:
+          - type: number
+          - type: 'null'
+        dnbr_mean_scope:
+          const: PAIRED_VALID_BASELINE_FOREST
+        baseline_forest_pixel_count:
+          anyOf:
+          - type: integer
+            minimum: 0
+            maximum: 400000000
+          - type: 'null'
+        paired_valid_forest_pixel_count:
+          anyOf:
+          - type: integer
+            minimum: 0
+            maximum: 400000000
+          - type: 'null'
+        affected_pixel_count:
+          anyOf:
+          - type: integer
+            minimum: 0
+            maximum: 400000000
+          - type: 'null'
+      required:
+      - plot_area_ha
+      - baseline_forest_area_ha
+      - analysed_forest_area_ha
+      - affected_area_ha
+      - affected_fraction_of_baseline_forest
+      - ndvi_before_mean
+      - ndvi_after_mean
+      - dnbr_mean
+      - dnbr_mean_scope
+      - baseline_forest_pixel_count
+      - paired_valid_forest_pixel_count
+      - affected_pixel_count
+      additionalProperties: false
+    EvidenceFirms:
+      type: object
+      properties:
+        support:
+          type: string
+          enum:
+          - SUPPORTED
+          - NOT_FOUND
+          - NOT_CHECKED
+        hotspot_count:
+          type: integer
+          minimum: 0
+        window_start:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$
+        window_end:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$
+        spatial_tolerance_m:
+          const: 500
+        product:
+          type: string
+          minLength: 1
+        confidence_filter:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          uniqueItems: true
+        source_refs:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        matched_points_artifact_id:
+          anyOf:
+          - type: string
+            pattern: ^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$
+          - type: 'null'
+      required:
+      - support
+      - hotspot_count
+      - window_start
+      - window_end
+      - spatial_tolerance_m
+      - product
+      - confidence_filter
+      - source_refs
+      - matched_points_artifact_id
+      additionalProperties: false
+    EvidenceArtifact:
+      type: object
+      properties:
+        artifact_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$
+        role:
+          type: string
+          enum:
+          - PREVIEW_BEFORE
+          - PREVIEW_AFTER
+          - DNBR_RASTER
+          - AFFECTED_AREA
+          - FIRMS_POINTS
+          - DNBR_PREVIEW
+          - SWIR_BEFORE
+          - SWIR_AFTER
+        relative_path:
+          type: string
+          pattern: ^(?!/)(?!.*(?:^|/)\.\.(?:/|$))[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$
+        media_type:
+          type: string
+          enum:
+          - image/png
+          - image/webp
+          - image/tiff
+          - application/geo+json
+        sha256:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+          not:
+            const: '0x0000000000000000000000000000000000000000000000000000000000000000'
+        size_bytes:
+          type: integer
+          minimum: 1
+          maximum: 1000000000
+        bounds_wgs84:
+          type: array
+          prefixItems:
+          - type: number
+            minimum: -180
+            maximum: 180
+          - type: number
+            minimum: -90
+            maximum: 90
+          - type: number
+            minimum: -180
+            maximum: 180
+          - type: number
+            minimum: -90
+            maximum: 90
+          items: false
+          minItems: 4
+          maxItems: 4
+        width:
+          type: integer
+          minimum: 1
+        height:
+          type: integer
+          minimum: 1
+      required:
+      - artifact_id
+      - role
+      - relative_path
+      - media_type
+      - sha256
+      - size_bytes
+      additionalProperties: false
+      allOf:
+      - if:
+          properties:
+            media_type:
+              enum:
+              - image/png
+              - image/webp
+        then:
+          required:
+          - bounds_wgs84
+          - width
+          - height
+    VerificationEvidence:
+      type: object
+      properties:
+        schema_version:
+          const: 1.0.0
+        dataset_kind:
+          type: string
+          enum:
+          - REAL
+          - SYNTHETIC
+        plot_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$
+        plot_geometry_hash:
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+          not:
+            const: '0x0000000000000000000000000000000000000000000000000000000000000000'
+        observation:
+          type: object
+          properties:
+            before:
+              $ref: '#/components/schemas/EvidenceScene'
+            after:
+              $ref: '#/components/schemas/EvidenceScene'
+          required:
+          - before
+          - after
+          additionalProperties: false
+        outcome:
+          type: string
+          enum:
+          - NO_CHANGE
+          - DISTURBANCE_DETECTED
+          - INSUFFICIENT_DATA
+        method:
+          $ref: '#/components/schemas/EvidenceMethod'
+        quality:
+          $ref: '#/components/schemas/EvidenceQuality'
+        metrics:
+          $ref: '#/components/schemas/EvidenceMetrics'
+        firms:
+          $ref: '#/components/schemas/EvidenceFirms'
+        artifacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceArtifact'
+          maxItems: 32
+        limitations:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          uniqueItems: true
+      required:
+      - schema_version
+      - dataset_kind
+      - plot_id
+      - plot_geometry_hash
+      - observation
+      - outcome
+      - method
+      - quality
+      - metrics
+      - firms
+      - artifacts
+      - limitations
+      additionalProperties: false
+      allOf:
+      - if:
+          properties:
+            outcome:
+              enum:
+              - NO_CHANGE
+              - DISTURBANCE_DETECTED
+        then:
+          properties:
+            metrics:
+              properties:
+                baseline_forest_area_ha:
+                  not:
+                    type: 'null'
+                analysed_forest_area_ha:
+                  not:
+                    type: 'null'
+                affected_area_ha:
+                  not:
+                    type: 'null'
+                affected_fraction_of_baseline_forest:
+                  not:
+                    type: 'null'
+                ndvi_before_mean:
+                  not:
+                    type: 'null'
+                ndvi_after_mean:
+                  not:
+                    type: 'null'
+                dnbr_mean:
+                  not:
+                    type: 'null'
+                baseline_forest_pixel_count:
+                  not:
+                    type: 'null'
+                paired_valid_forest_pixel_count:
+                  not:
+                    type: 'null'
+                affected_pixel_count:
+                  not:
+                    type: 'null'
+            method:
+              properties:
+                grid:
+                  not:
+                    type: 'null'
+                forest_mask:
+                  not:
+                    type: 'null'
+            quality:
+              properties:
+                metadata_complete:
+                  const: true
+                grid_aligned:
+                  const: true
+                paired_valid_forest_ratio:
+                  type: number
+                  minimum: 0.7
+            observation:
+              properties:
+                before:
+                  properties:
+                    processing_baseline:
+                      type: string
+                    mgrs_tile:
+                      type: string
+                    assets:
+                      minItems: 5
+                after:
+                  properties:
+                    processing_baseline:
+                      type: string
+                    mgrs_tile:
+                      type: string
+                    assets:
+                      minItems: 5
+      - if:
+          properties:
+            dataset_kind:
+              const: REAL
+        then:
+          properties:
+            method:
+              properties:
+                code_commit:
+                  type: string
+            plot_id:
+              not:
+                pattern: ^SYNTHETIC
+            observation:
+              properties:
+                before:
+                  properties:
+                    scene_id:
+                      not:
+                        pattern: ^SYNTHETIC
+                after:
+                  properties:
+                    scene_id:
+                      not:
+                        pattern: ^SYNTHETIC
+      - if:
+          properties:
+            firms:
+              properties:
+                support:
+                  const: SUPPORTED
+        then:
+          properties:
+            firms:
+              properties:
+                hotspot_count:
+                  minimum: 1
+                source_refs:
+                  minItems: 1
+                matched_points_artifact_id:
+                  type: string
+      title: VerificationEvidence
+    ErrorDetail:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+        message:
+          type: string
+          minLength: 1
+        details:
+          type: object
+          additionalProperties: true
+      required:
+      - code
+      - message
+      - details
+      additionalProperties: false
+    Error:
+      type: object
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+        request_id: *id002
+      required:
+      - error
+      - request_id
+      additionalProperties: false
+    ArtifactLink:
+      type: object
+      properties:
+        artifact_id: *id001
+        role:
+          type: string
+          enum:
+          - PREVIEW_BEFORE
+          - PREVIEW_AFTER
+          - DNBR_RASTER
+          - AFFECTED_AREA
+          - FIRMS_POINTS
+          - DNBR_PREVIEW
+          - SWIR_BEFORE
+          - SWIR_AFTER
+        url:
+          type: string
+          pattern: ^/api/v1/artifacts/
+        sha256: &id004
+          type: string
+          pattern: ^0x[0-9a-f]{64}$
+        media_type:
+          type: string
+          minLength: 1
+      required:
+      - artifact_id
+      - role
+      - url
+      - sha256
+      - media_type
+      additionalProperties: false
+    DecisionRecord:
+      type: object
+      properties:
+        evidence_hash: *id004
+        plot_id: *id001
+        policy_version:
+          const: 1.0.0
+        policy_parameters_hash: *id004
+        decision: &id006
+          type: string
+          enum:
+          - NO_RESTRICTION
+          - REVIEW_REQUIRED
+          - FREEZE_REQUESTED
+        reason: &id007
+          type: string
+          enum:
+          - NO_SIGNIFICANT_CHANGE
+          - DATA_INSUFFICIENT
+          - DATA_REVIEW
+          - DISTURBANCE_UNATTRIBUTED
+          - BELOW_POLICY_THRESHOLD
+          - FIRE_REVERSAL
+        effective_observed_at: &id005
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$
+        replay_as_of: *id005
+      required:
+      - evidence_hash
+      - plot_id
+      - policy_version
+      - policy_parameters_hash
+      - decision
+      - reason
+      - effective_observed_at
+      - replay_as_of
+      additionalProperties: false
+    Verification:
+      type: object
+      properties:
+        verification_id: *id002
+        evidence:
+          $ref: '#/components/schemas/VerificationEvidence'
+        evidence_hash: *id004
+        evidence_quality: &id009
+          type: string
+          enum:
+          - SUFFICIENT
+          - REVIEW_REQUIRED
+          - INSUFFICIENT
+        evidence_quality_score:
+          anyOf:
+          - type: integer
+            minimum: 0
+            maximum: 100
+          - type: 'null'
+        decision: *id006
+        reason: *id007
+        decision_record:
+          $ref: '#/components/schemas/DecisionRecord'
+        decision_hash: *id004
+        is_latest:
+          type: boolean
+        processed_at: *id005
+        observation_mode:
+          const: HISTORICAL_REPLAY
+        computation_mode:
+          type: string
+          enum:
+          - COMPUTED
+          - CACHED_REPLAY
+        artifacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArtifactLink'
+      required:
+      - verification_id
+      - evidence
+      - evidence_hash
+      - evidence_quality
+      - evidence_quality_score
+      - decision
+      - reason
+      - decision_record
+      - decision_hash
+      - is_latest
+      - processed_at
+      - observation_mode
+      - computation_mode
+      - artifacts
+      additionalProperties: false
+    JobAccepted:
+      type: object
+      properties:
+        job_id: *id002
+        state:
+          const: QUEUED
+        status_url:
+          type: string
+          pattern: ^/api/v1/jobs/
+      required:
+      - job_id
+      - state
+      - status_url
+      additionalProperties: false
+    Job:
+      type: object
+      properties:
+        job_id: *id002
+        state:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+        verification_id:
+          anyOf:
+          - *id002
+          - type: 'null'
+        error:
+          anyOf:
+          - $ref: '#/components/schemas/ErrorDetail'
+          - type: 'null'
+      required:
+      - job_id
+      - state
+      - verification_id
+      - error
+      additionalProperties: false
+      allOf:
+      - if:
+          properties:
+            state:
+              const: SUCCEEDED
+        then:
+          properties:
+            verification_id: *id002
+            error:
+              type: 'null'
+      - if:
+          properties:
+            state:
+              const: FAILED
+        then:
+          properties:
+            error:
+              $ref: '#/components/schemas/ErrorDetail'
+            verification_id:
+              type: 'null'
+    Receipt:
+      type: object
+      properties:
+        transaction_hash: *id004
+        block_number: *id003
+        status:
+          const: 1
+        event_names:
+          type: array
+          items:
+            type: string
+        state_readback_ok:
+          const: true
+      required:
+      - transaction_hash
+      - block_number
+      - status
+      - event_names
+      - state_readback_ok
+      additionalProperties: false
+    OperationAccepted:
+      type: object
+      properties:
+        operation_id: *id002
+        transaction_state:
+          const: QUEUED
+        status_url:
+          type: string
+          pattern: ^/api/v1/operations/
+      required:
+      - operation_id
+      - transaction_state
+      - status_url
+      additionalProperties: false
+    Operation:
+      type: object
+      properties:
+        operation_id: *id002
+        kind:
+          type: string
+          enum:
+          - ISSUE
+          - BUY
+          - TRANSFER
+          - FREEZE
+        transaction_state:
+          type: string
+          enum:
+          - QUEUED
+          - SUBMITTED
+          - CONFIRMED
+          - FAILED
+        tx_hash:
+          anyOf:
+          - *id004
+          - type: 'null'
+        batch_id:
+          anyOf:
+          - *id003
+          - type: 'null'
+        error:
+          anyOf:
+          - $ref: '#/components/schemas/ErrorDetail'
+          - type: 'null'
+        receipt:
+          anyOf:
+          - $ref: '#/components/schemas/Receipt'
+          - type: 'null'
+      required:
+      - operation_id
+      - kind
+      - transaction_state
+      - tx_hash
+      - batch_id
+      - error
+      - receipt
+      additionalProperties: false
+      allOf:
+      - if:
+          properties:
+            transaction_state:
+              const: CONFIRMED
+        then:
+          properties:
+            receipt:
+              $ref: '#/components/schemas/Receipt'
+            tx_hash: *id004
+            batch_id: *id003
+            error:
+              type: 'null'
+      - if:
+          properties:
+            transaction_state:
+              enum:
+              - QUEUED
+              - SUBMITTED
+              - FAILED
+        then:
+          properties:
+            receipt:
+              type: 'null'
+    CreditBatch:
+      type: object
+      properties:
+        batch_id: *id003
+        plot_id: *id001
+        seller:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        actor: &id011
+          type: string
+          enum:
+          - issuer
+          - buyer
+          - recipient
+        total_supply: &id008
+          type: string
+          pattern: ^[1-9][0-9]{0,77}$
+        seller_balance: *id003
+        actor_balance: *id003
+        unit_price_wei: *id008
+        credit_status:
+          type: string
+          enum:
+          - ACTIVE
+          - FROZEN
+          - REVOKED
+        evidence_hash: *id004
+        decision_hash: *id004
+        issued_at: *id005
+        frozen_at:
+          anyOf:
+          - *id005
+          - type: 'null'
+        last_observed_at: *id005
+        chain_state_checked_at: *id005
+        can_buy:
+          type: boolean
+        can_transfer_backend:
+          type: boolean
+      required:
+      - batch_id
+      - plot_id
+      - seller
+      - actor
+      - total_supply
+      - seller_balance
+      - actor_balance
+      - unit_price_wei
+      - credit_status
+      - evidence_hash
+      - decision_hash
+      - issued_at
+      - frozen_at
+      - last_observed_at
+      - chain_state_checked_at
+      - can_buy
+      - can_transfer_backend
+      additionalProperties: false
+    PlotSummary:
+      type: object
+      properties:
+        plot_id: *id001
+        name:
+          type: string
+          minLength: 1
+        latest_verification_id:
+          anyOf:
+          - *id002
+          - type: 'null'
+        evidence_quality:
+          anyOf:
+          - *id009
+          - type: 'null'
+        latest_decision:
+          anyOf:
+          - *id006
+          - type: 'null'
+      required:
+      - plot_id
+      - name
+      - latest_verification_id
+      - evidence_quality
+      - latest_decision
+      additionalProperties: false
+    Plot:
+      type: object
+      properties:
+        plot_id:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$
+        name:
+          type: string
+          minLength: 1
+        latest_verification_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+        evidence_quality:
+          anyOf:
+          - type: string
+            enum:
+            - SUFFICIENT
+            - REVIEW_REQUIRED
+            - INSUFFICIENT
+          - type: 'null'
+        latest_decision:
+          anyOf:
+          - type: string
+            enum:
+            - NO_RESTRICTION
+            - REVIEW_REQUIRED
+            - FREEZE_REQUESTED
+          - type: 'null'
+        geometry:
+          oneOf:
+          - type: object
+            properties:
+              type:
+                const: Polygon
+              coordinates:
+                type: array
+                items: &id010
+                  type: array
+                  items:
+                    type: array
+                    prefixItems:
+                    - type: number
+                      minimum: -180
+                      maximum: 180
+                    - type: number
+                      minimum: -90
+                      maximum: 90
+                    items: false
+                    minItems: 2
+                    maxItems: 2
+                  minItems: 4
+                minItems: 1
+            required:
+            - type
+            - coordinates
+            additionalProperties: false
+          - type: object
+            properties:
+              type:
+                const: MultiPolygon
+              coordinates:
+                type: array
+                items:
+                  type: array
+                  items: *id010
+                  minItems: 1
+                minItems: 1
+            required:
+            - type
+            - coordinates
+            additionalProperties: false
+        geometry_hash: *id004
+        area_ha:
+          type: number
+          exclusiveMinimum: 0
+        can_issue:
+          type: boolean
+        can_buy:
+          type: boolean
+        can_transfer_backend:
+          type: boolean
+        action_block_reason:
+          anyOf:
+          - type: string
+            minLength: 1
+          - type: 'null'
+      required:
+      - plot_id
+      - name
+      - latest_verification_id
+      - evidence_quality
+      - latest_decision
+      - geometry
+      - geometry_hash
+      - area_ha
+      - can_issue
+      - can_buy
+      - can_transfer_backend
+      - action_block_reason
+      additionalProperties: false
+    HistoryItem:
+      type: object
+      properties:
+        verification_id: *id002
+        observed_at: *id005
+        processed_at: *id005
+        outcome:
+          type: string
+          enum:
+          - NO_CHANGE
+          - DISTURBANCE_DETECTED
+          - INSUFFICIENT_DATA
+        evidence_quality: *id009
+        decision: *id006
+        is_latest:
+          type: boolean
+      required:
+      - verification_id
+      - observed_at
+      - processed_at
+      - outcome
+      - evidence_quality
+      - decision
+      - is_latest
+      additionalProperties: false
+    Anchor:
+      type: object
+      properties:
+        event_name:
+          type: string
+          enum:
+          - Issued
+          - Frozen
+        batch_id: *id003
+        tx_hash: *id004
+        evidence_hash: *id004
+        decision_hash:
+          anyOf:
+          - *id004
+          - type: 'null'
+        confirmed:
+          const: true
+      required:
+      - event_name
+      - batch_id
+      - tx_hash
+      - evidence_hash
+      - decision_hash
+      - confirmed
+      additionalProperties: false
+    Proof:
+      type: object
+      properties:
+        evidence_hash: *id004
+        recomputed_hash: *id004
+        decision_hash: *id004
+        canonical_url:
+          type: string
+          pattern: ^/api/v1/verifications/
+        anchors:
+          type: array
+          items:
+            $ref: '#/components/schemas/Anchor'
+        integrity_ok:
+          type: boolean
+      required:
+      - evidence_hash
+      - recomputed_hash
+      - decision_hash
+      - canonical_url
+      - anchors
+      - integrity_ok
+      additionalProperties: false
+    Event:
+      type: object
+      properties:
+        event_id: *id002
+        occurred_at: *id005
+        plot_id: *id001
+        kind:
+          type: string
+          enum:
+          - VERIFICATION
+          - DECISION
+          - TX_SUBMITTED
+          - TX_CONFIRMED
+          - TX_FAILED
+        verification_id:
+          anyOf:
+          - *id002
+          - type: 'null'
+        operation_id:
+          anyOf:
+          - *id002
+          - type: 'null'
+        tx_hash:
+          anyOf:
+          - *id004
+          - type: 'null'
+        batch_id:
+          anyOf:
+          - *id003
+          - type: 'null'
+        message:
+          type: string
+          minLength: 1
+      required:
+      - event_id
+      - occurred_at
+      - plot_id
+      - kind
+      - verification_id
+      - operation_id
+      - tx_hash
+      - batch_id
+      - message
+      additionalProperties: false
+    Events:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        next_cursor:
+          anyOf:
+          - type: string
+            minLength: 1
+          - type: 'null'
+      required:
+      - items
+      - next_cursor
+      additionalProperties: false
+    Health:
+      type: object
+      properties:
+        api:
+          type: string
+          enum:
+          - UP
+          - DOWN
+        db:
+          type: string
+          enum:
+          - UP
+          - DOWN
+        worker:
+          type: string
+          enum:
+          - UP
+          - DOWN
+        chain:
+          type: string
+          enum:
+          - UP
+          - DOWN
+        deployment_id:
+          anyOf:
+          - *id002
+          - type: 'null'
+        mode:
+          type: string
+          enum:
+          - CONTRACT_FIXTURE
+          - LOCAL_DEMO
+      required:
+      - api
+      - db
+      - worker
+      - chain
+      - deployment_id
+      - mode
+      additionalProperties: false
+    VerifyRequest:
+      type: object
+      properties:
+        scenario_id:
+          type: string
+          enum:
+          - baseline
+          - post_fire
+          - insufficient
+      required:
+      - scenario_id
+      additionalProperties: false
+    IssueRequest:
+      type: object
+      properties:
+        demo_authorization_id: *id001
+      required:
+      - demo_authorization_id
+      additionalProperties: false
+    BuyRequest:
+      type: object
+      properties:
+        amount: *id008
+      required:
+      - amount
+      additionalProperties: false
+    TransferRequest:
+      type: object
+      properties:
+        to_actor: *id011
+        amount: *id008
+      required:
+      - to_actor
+      - amount
+      additionalProperties: false
+    Plots:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlotSummary'
+      required:
+      - items
+      additionalProperties: false
+    Credits:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditBatch'
+      required:
+      - items
+      additionalProperties: false
+    History:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoryItem'
+      required:
+      - items
+      additionalProperties: false
+  securitySchemes:
+    DemoSession:
+      type: apiKey
+      in: header
+      name: X-Demo-Session
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+    DemoActor:
+      name: X-Demo-Actor
+      in: header
+      required: true
+      schema: *id011
+  responses:
+    Failure:
+      description: Структурированная ошибка
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

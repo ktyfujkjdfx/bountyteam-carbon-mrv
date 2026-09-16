@@ -1,0 +1,868 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "plot_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+    },
+    "geometry": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Polygon"
+            },
+            "coordinates": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "minItems": 4
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "type",
+            "coordinates"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "MultiPolygon"
+            },
+            "coordinates": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "number",
+                        "minimum": -180,
+                        "maximum": 180
+                      },
+                      {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 90
+                      }
+                    ],
+                    "items": false,
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "minItems": 4
+                },
+                "minItems": 1
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "type",
+            "coordinates"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "plot_geometry_hash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$",
+      "not": {
+        "const": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "before": {
+      "$ref": "#/$defs/Scene"
+    },
+    "after": {
+      "$ref": "#/$defs/Scene"
+    },
+    "parameters": {
+      "$ref": "#/$defs/Parameters"
+    },
+    "data_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dataset_kind": {
+      "type": "string",
+      "enum": [
+        "REAL",
+        "SYNTHETIC"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "plot_id",
+    "geometry",
+    "plot_geometry_hash",
+    "before",
+    "after",
+    "parameters",
+    "data_root",
+    "dataset_kind"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bountyteam.invalid/contracts/rs-request.schema.json",
+  "$defs": {
+    "Hash32": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "Timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "SourceAsset": {
+      "type": "object",
+      "properties": {
+        "band": {
+          "type": "string",
+          "enum": [
+            "B04",
+            "B08",
+            "B8A",
+            "B12",
+            "SCL"
+          ]
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "local_sha256": {
+          "type": "string",
+          "pattern": "^0x[0-9a-f]{64}$",
+          "not": {
+            "const": "0x0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "scale_applied": {
+          "type": "number"
+        },
+        "offset_applied": {
+          "type": "number"
+        },
+        "transform_origin": {
+          "type": "string",
+          "enum": [
+            "PRODUCT_METADATA",
+            "PROVIDER_HARMONIZED"
+          ]
+        }
+      },
+      "required": [
+        "band",
+        "source_ref",
+        "local_sha256",
+        "scale_applied",
+        "offset_applied",
+        "transform_origin"
+      ],
+      "additionalProperties": false
+    },
+    "Scene": {
+      "type": "object",
+      "properties": {
+        "scene_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "acquired_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 96
+        },
+        "collection": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 96
+        },
+        "processing_baseline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mgrs_tile": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceAsset"
+          },
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "scene_id",
+        "acquired_at",
+        "provider",
+        "collection",
+        "processing_baseline",
+        "mgrs_tile",
+        "assets"
+      ],
+      "additionalProperties": false
+    },
+    "Grid": {
+      "type": "object",
+      "properties": {
+        "epsg": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 999999
+        },
+        "resolution_m": {
+          "const": 20
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20000
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20000
+        },
+        "transform": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 6,
+          "maxItems": 6
+        }
+      },
+      "required": [
+        "epsg",
+        "resolution_m",
+        "width",
+        "height",
+        "transform"
+      ],
+      "additionalProperties": false
+    },
+    "ForestMask": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reference_year": {
+          "type": "integer",
+          "minimum": 1970,
+          "maximum": 2100
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^0x[0-9a-f]{64}$",
+          "not": {
+            "const": "0x0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "interpretation_note": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "source",
+        "version",
+        "reference_year",
+        "sha256",
+        "interpretation_note"
+      ],
+      "additionalProperties": false
+    },
+    "Parameters": {
+      "type": "object",
+      "properties": {
+        "ndvi_bands": {
+          "const": [
+            "B08",
+            "B04"
+          ]
+        },
+        "nbr_bands": {
+          "const": [
+            "B8A",
+            "B12"
+          ]
+        },
+        "disturbance_dnbr_min": {
+          "const": 0.27
+        },
+        "min_component_area_ha": {
+          "const": 1
+        },
+        "connectivity": {
+          "const": 8
+        },
+        "excluded_scl_classes": {
+          "const": [
+            0,
+            1,
+            2,
+            3,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ]
+        },
+        "resampling_continuous": {
+          "const": "average"
+        },
+        "resampling_categorical": {
+          "const": "nearest"
+        }
+      },
+      "required": [
+        "ndvi_bands",
+        "nbr_bands",
+        "disturbance_dnbr_min",
+        "min_component_area_ha",
+        "connectivity",
+        "excluded_scl_classes",
+        "resampling_continuous",
+        "resampling_categorical"
+      ],
+      "additionalProperties": false
+    },
+    "Method": {
+      "type": "object",
+      "properties": {
+        "pipeline_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 96
+        },
+        "code_commit": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "config_sha256": {
+          "type": "string",
+          "pattern": "^0x[0-9a-f]{64}$",
+          "not": {
+            "const": "0x0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "grid": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Grid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "forest_mask": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ForestMask"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parameters": {
+          "$ref": "#/$defs/Parameters"
+        }
+      },
+      "required": [
+        "pipeline_version",
+        "code_commit",
+        "config_sha256",
+        "grid",
+        "forest_mask",
+        "parameters"
+      ],
+      "additionalProperties": false
+    },
+    "Quality": {
+      "type": "object",
+      "properties": {
+        "paired_valid_aoi_ratio": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paired_valid_forest_ratio": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "aoi_cloud_ratio_before": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "aoi_cloud_ratio_after": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadata_complete": {
+          "type": "boolean"
+        },
+        "grid_aligned": {
+          "type": "boolean"
+        },
+        "temporal_comparability": {
+          "type": "string",
+          "enum": [
+            "YES",
+            "NO",
+            "UNCERTAIN"
+          ]
+        },
+        "temporal_note": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "paired_valid_aoi_ratio",
+        "paired_valid_forest_ratio",
+        "aoi_cloud_ratio_before",
+        "aoi_cloud_ratio_after",
+        "metadata_complete",
+        "grid_aligned",
+        "temporal_comparability",
+        "temporal_note"
+      ],
+      "additionalProperties": false
+    },
+    "Metrics": {
+      "type": "object",
+      "properties": {
+        "plot_area_ha": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "baseline_forest_area_ha": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "analysed_forest_area_ha": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "affected_area_ha": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "affected_fraction_of_baseline_forest": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ndvi_before_mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ndvi_after_mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dnbr_mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dnbr_mean_scope": {
+          "const": "PAIRED_VALID_BASELINE_FOREST"
+        },
+        "baseline_forest_pixel_count": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 400000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paired_valid_forest_pixel_count": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 400000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "affected_pixel_count": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 400000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "plot_area_ha",
+        "baseline_forest_area_ha",
+        "analysed_forest_area_ha",
+        "affected_area_ha",
+        "affected_fraction_of_baseline_forest",
+        "ndvi_before_mean",
+        "ndvi_after_mean",
+        "dnbr_mean",
+        "dnbr_mean_scope",
+        "baseline_forest_pixel_count",
+        "paired_valid_forest_pixel_count",
+        "affected_pixel_count"
+      ],
+      "additionalProperties": false
+    },
+    "Firms": {
+      "type": "object",
+      "properties": {
+        "support": {
+          "type": "string",
+          "enum": [
+            "SUPPORTED",
+            "NOT_FOUND",
+            "NOT_CHECKED"
+          ]
+        },
+        "hotspot_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "window_start": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "window_end": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "spatial_tolerance_m": {
+          "const": 500
+        },
+        "product": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confidence_filter": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "matched_points_artifact_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "support",
+        "hotspot_count",
+        "window_start",
+        "window_end",
+        "spatial_tolerance_m",
+        "product",
+        "confidence_filter",
+        "source_refs",
+        "matched_points_artifact_id"
+      ],
+      "additionalProperties": false
+    },
+    "Artifact": {
+      "type": "object",
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "PREVIEW_BEFORE",
+            "PREVIEW_AFTER",
+            "DNBR_RASTER",
+            "AFFECTED_AREA",
+            "FIRMS_POINTS",
+            "DNBR_PREVIEW",
+            "SWIR_BEFORE",
+            "SWIR_AFTER"
+          ]
+        },
+        "relative_path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"
+        },
+        "media_type": {
+          "type": "string",
+          "enum": [
+            "image/png",
+            "image/webp",
+            "image/tiff",
+            "application/geo+json"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^0x[0-9a-f]{64}$",
+          "not": {
+            "const": "0x0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "bounds_wgs84": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          ],
+          "items": false,
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "artifact_id",
+        "role",
+        "relative_path",
+        "media_type",
+        "sha256",
+        "size_bytes"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "media_type": {
+                "enum": [
+                  "image/png",
+                  "image/webp"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "bounds_wgs84",
+              "width",
+              "height"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

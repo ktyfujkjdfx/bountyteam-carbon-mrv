@@ -1,0 +1,12 @@
+{
+  "0x6c3eec62dac1773757d2ed761912f06717e202481f585ccc4076a62dac58828f": "assets/source_forest_mask.tif",
+  "0xeff2efdb8af4f37f93dc90861734005b5d0b7001a2c48cf48601f9ac187b14ed": "assets/verification_insufficient/before_B04.tif",
+  "0x6ada78e728aec84834e248f374009fbc048b26e0a21aebae1603ce5936342d0c": "assets/verification_insufficient/before_B8A.tif",
+  "0x3e413587aa383717c26bc64d9f5e071d33da805bf3698e12cc3dc7b5b4cae363": "assets/verification_insufficient/before_B12.tif",
+  "0x5619b6d89dcd96379faf00345cb42c26a0218c920132b5302c51f8eb7dde5900": "assets/verification_insufficient/before_SCL.tif",
+  "0x9519c445b557efb7046e29d20fac35811bc7897cf372aaba5891f99bc32dd9b6": "assets/verification_insufficient/after_B04.tif",
+  "0x16c5cd622323384cd057a2f857e6e4f60ec583f06613553611f0fea30ba6dc53": "assets/verification_insufficient/after_B8A.tif",
+  "0x1d76ae056477ba1f2d8ae13134aee67f8f3f4b131bceaad624be89972fec1b9e": "assets/verification_insufficient/after_B12.tif",
+  "0x1864543cd52e511bc03487cb703b3b9cff50ebe742af046509a95026f9145c57": "assets/verification_fire/after_SCL.tif",
+  "0xeeab1f7e90e328beadf3999c28f73083849fc70eff9fb313847a383c6f727a9e": "assets/verification_insufficient/after_SCL.tif"
+}

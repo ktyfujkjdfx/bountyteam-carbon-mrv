@@ -1,0 +1,19 @@
+{
+  "mode": "CONTRACT_FIXTURE",
+  "dataset_kind": "SYNTHETIC",
+  "real_scenes_configured": false,
+  "scenarios": {
+    "baseline": {
+      "fixture": "fixtures/verification_no_change.json",
+      "rs_request": "fixtures/rs_request_no_change.json"
+    },
+    "post_fire": {
+      "fixture": "fixtures/verification_fire.json",
+      "rs_request": "fixtures/rs_request_fire.json"
+    },
+    "insufficient": {
+      "fixture": "fixtures/verification_insufficient.json",
+      "rs_request": "fixtures/rs_request_insufficient.json"
+    }
+  }
+}

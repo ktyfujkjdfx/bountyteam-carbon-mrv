@@ -1,0 +1,21 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          91.87966834202076,
+          56.205353832697554
+        ]
+      },
+      "properties": {
+        "synthetic": true,
+        "acquired_at": "2024-07-15T10:00:00Z",
+        "confidence": "nominal",
+        "source": "SYNTHETIC_NOT_NASA"
+      }
+    }
+  ]
+}

@@ -1,0 +1,254 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_kind": "SYNTHETIC",
+  "plot_id": "SYNTHETIC-PLOT-001",
+  "plot_geometry_hash": "0xec548e113e459a13ce79a1eb08bdf02291148a14676e745be47f2c7696fb1bb9",
+  "observation": {
+    "before": {
+      "scene_id": "SYNTHETIC_T0_no_change",
+      "acquired_at": "2023-07-10T05:00:00Z",
+      "provider": "SYNTHETIC_FIXTURE",
+      "collection": "not-a-sentinel-collection",
+      "processing_baseline": "SYNTHETIC-1",
+      "mgrs_tile": "SYNTHETIC",
+      "assets": [
+        {
+          "band": "B04",
+          "source_ref": "fixture://assets/verification_no_change/before_B04.tif",
+          "local_sha256": "0xeff2efdb8af4f37f93dc90861734005b5d0b7001a2c48cf48601f9ac187b14ed",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "B08",
+          "source_ref": "fixture://assets/verification_no_change/before_B08.tif",
+          "local_sha256": "0x6ada78e728aec84834e248f374009fbc048b26e0a21aebae1603ce5936342d0c",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "B12",
+          "source_ref": "fixture://assets/verification_no_change/before_B12.tif",
+          "local_sha256": "0x3e413587aa383717c26bc64d9f5e071d33da805bf3698e12cc3dc7b5b4cae363",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "B8A",
+          "source_ref": "fixture://assets/verification_no_change/before_B8A.tif",
+          "local_sha256": "0x6ada78e728aec84834e248f374009fbc048b26e0a21aebae1603ce5936342d0c",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "SCL",
+          "source_ref": "fixture://assets/verification_no_change/before_SCL.tif",
+          "local_sha256": "0x5619b6d89dcd96379faf00345cb42c26a0218c920132b5302c51f8eb7dde5900",
+          "scale_applied": 1,
+          "offset_applied": 0,
+          "transform_origin": "PRODUCT_METADATA"
+        }
+      ]
+    },
+    "after": {
+      "scene_id": "SYNTHETIC_T1_no_change",
+      "acquired_at": "2024-07-10T05:00:00Z",
+      "provider": "SYNTHETIC_FIXTURE",
+      "collection": "not-a-sentinel-collection",
+      "processing_baseline": "SYNTHETIC-1",
+      "mgrs_tile": "SYNTHETIC",
+      "assets": [
+        {
+          "band": "B04",
+          "source_ref": "fixture://assets/verification_no_change/after_B04.tif",
+          "local_sha256": "0xeff2efdb8af4f37f93dc90861734005b5d0b7001a2c48cf48601f9ac187b14ed",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "B08",
+          "source_ref": "fixture://assets/verification_no_change/after_B08.tif",
+          "local_sha256": "0x6ada78e728aec84834e248f374009fbc048b26e0a21aebae1603ce5936342d0c",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "B12",
+          "source_ref": "fixture://assets/verification_no_change/after_B12.tif",
+          "local_sha256": "0x3e413587aa383717c26bc64d9f5e071d33da805bf3698e12cc3dc7b5b4cae363",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "B8A",
+          "source_ref": "fixture://assets/verification_no_change/after_B8A.tif",
+          "local_sha256": "0x6ada78e728aec84834e248f374009fbc048b26e0a21aebae1603ce5936342d0c",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "SCL",
+          "source_ref": "fixture://assets/verification_no_change/after_SCL.tif",
+          "local_sha256": "0x5619b6d89dcd96379faf00345cb42c26a0218c920132b5302c51f8eb7dde5900",
+          "scale_applied": 1,
+          "offset_applied": 0,
+          "transform_origin": "PRODUCT_METADATA"
+        }
+      ]
+    }
+  },
+  "outcome": "NO_CHANGE",
+  "method": {
+    "pipeline_version": "synthetic-fixture-generator/1.0.0",
+    "code_commit": null,
+    "config_sha256": "0xf2c9820c7262e4530c581ea75be4b5b0e95c0ffa69806cf99e5f61a34169cc7b",
+    "grid": {
+      "epsg": 32646,
+      "resolution_m": 20,
+      "width": 50,
+      "height": 50,
+      "transform": [
+        20.0,
+        0.0,
+        430000.0,
+        0.0,
+        -20.0,
+        6230000.0
+      ]
+    },
+    "forest_mask": {
+      "source": "fixture://assets/source_forest_mask.tif",
+      "version": "synthetic-1",
+      "reference_year": 2021,
+      "sha256": "0x6c3eec62dac1773757d2ed761912f06717e202481f585ccc4076a62dac58828f",
+      "interpretation_note": "Synthetic all-forest mask. Not WorldCover, not a real land inventory."
+    },
+    "parameters": {
+      "ndvi_bands": [
+        "B08",
+        "B04"
+      ],
+      "nbr_bands": [
+        "B8A",
+        "B12"
+      ],
+      "disturbance_dnbr_min": 0.27,
+      "min_component_area_ha": 1,
+      "connectivity": 8,
+      "excluded_scl_classes": [
+        0,
+        1,
+        2,
+        3,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "resampling_continuous": "average",
+      "resampling_categorical": "nearest"
+    }
+  },
+  "quality": {
+    "paired_valid_aoi_ratio": 1,
+    "paired_valid_forest_ratio": 1,
+    "aoi_cloud_ratio_before": 0,
+    "aoi_cloud_ratio_after": 0,
+    "metadata_complete": true,
+    "grid_aligned": true,
+    "temporal_comparability": "YES",
+    "temporal_note": "Synthetic seasonal compatibility flag for contract tests only."
+  },
+  "metrics": {
+    "plot_area_ha": 100,
+    "baseline_forest_area_ha": 100,
+    "analysed_forest_area_ha": 100,
+    "affected_area_ha": 0.0,
+    "affected_fraction_of_baseline_forest": 0.0,
+    "ndvi_before_mean": 0.666667,
+    "ndvi_after_mean": 0.666667,
+    "dnbr_mean": 0.0,
+    "dnbr_mean_scope": "PAIRED_VALID_BASELINE_FOREST",
+    "baseline_forest_pixel_count": 2500,
+    "paired_valid_forest_pixel_count": 2500,
+    "affected_pixel_count": 0
+  },
+  "firms": {
+    "support": "NOT_FOUND",
+    "hotspot_count": 0,
+    "window_start": "2023-07-10T05:00:00Z",
+    "window_end": "2024-07-10T05:00:00Z",
+    "spatial_tolerance_m": 500,
+    "product": "SYNTHETIC_VIIRS_SHAPED_TEST_DATA",
+    "confidence_filter": [
+      "nominal",
+      "high"
+    ],
+    "source_refs": [],
+    "matched_points_artifact_id": null
+  },
+  "artifacts": [
+    {
+      "artifact_id": "no_change-affected_area",
+      "role": "AFFECTED_AREA",
+      "relative_path": "assets/verification_no_change/affected_area.geojson",
+      "media_type": "application/geo+json",
+      "sha256": "0xb3049ad7a1062091e169bd352424d59721a26b8b6229942aef26d11b0c6a96e1",
+      "size_bytes": 52
+    },
+    {
+      "artifact_id": "no_change-dnbr_raster",
+      "role": "DNBR_RASTER",
+      "relative_path": "assets/verification_no_change/dnbr.tif",
+      "media_type": "image/tiff",
+      "sha256": "0xa0d758cd1c64c42ab47171741589aca858f7802f91907e4b85590ec2f1940ad1",
+      "size_bytes": 439
+    },
+    {
+      "artifact_id": "no_change-preview_after",
+      "role": "PREVIEW_AFTER",
+      "relative_path": "assets/verification_no_change/after.png",
+      "media_type": "image/png",
+      "sha256": "0xc40008f9a25cf6d50711cd00c25dc136531473876a431645407a631bb9f83d6f",
+      "size_bytes": 2887,
+      "bounds_wgs84": [
+        91.8714782379942,
+        56.20078912424207,
+        91.88785656310161,
+        56.209918037389
+      ],
+      "width": 400,
+      "height": 400
+    },
+    {
+      "artifact_id": "no_change-preview_before",
+      "role": "PREVIEW_BEFORE",
+      "relative_path": "assets/verification_no_change/before.png",
+      "media_type": "image/png",
+      "sha256": "0xc40008f9a25cf6d50711cd00c25dc136531473876a431645407a631bb9f83d6f",
+      "size_bytes": 2887,
+      "bounds_wgs84": [
+        91.8714782379942,
+        56.20078912424207,
+        91.88785656310161,
+        56.209918037389
+      ],
+      "width": 400,
+      "height": 400
+    }
+  ],
+  "limitations": [
+    "Entire fixture is synthetic, including location, spectral values, classifications and FIRMS-shaped support.",
+    "Contract test only; not scientific validation and not a carbon credit."
+  ]
+}

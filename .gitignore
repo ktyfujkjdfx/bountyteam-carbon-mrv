@@ -1,0 +1,11 @@
+.venv/
+node_modules/
+__pycache__/
+.pytest_cache/
+.env
+data/
+runtime/
+*.db
+*.db-shm
+*.db-wal
+frontend/dist/

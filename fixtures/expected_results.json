@@ -1,0 +1,56 @@
+{
+  "no_change": {
+    "evidence_quality": "SUFFICIENT",
+    "evidence_quality_score": 100,
+    "decision": "NO_RESTRICTION",
+    "reason": "NO_SIGNIFICANT_CHANGE",
+    "evidence_hash": "0x510e9fc8acbe0795bfeb84a1ab85d7e22bec7c340c41c6430170f13a3b7d9308",
+    "decision_hash": "0xbb9a79bad03215b51207d3868e8a4364f719b21d4e9a70d89f02431d858cc10c",
+    "decision_record": {
+      "evidence_hash": "0x510e9fc8acbe0795bfeb84a1ab85d7e22bec7c340c41c6430170f13a3b7d9308",
+      "plot_id": "SYNTHETIC-PLOT-001",
+      "policy_version": "1.0.0",
+      "policy_parameters_hash": "0x1efa15259a54bf3159fd6ea568fd6da32683574a3e3e996ffa035be4434bf8a0",
+      "decision": "NO_RESTRICTION",
+      "reason": "NO_SIGNIFICANT_CHANGE",
+      "effective_observed_at": "2024-07-10T05:00:00Z",
+      "replay_as_of": "2024-07-10T05:00:00Z"
+    }
+  },
+  "fire": {
+    "evidence_quality": "SUFFICIENT",
+    "evidence_quality_score": 100,
+    "decision": "FREEZE_REQUESTED",
+    "reason": "FIRE_REVERSAL",
+    "evidence_hash": "0x70c7c6e693d7f9ccc8824c110b814cf630786d292ef72c1d46a3c04207453193",
+    "decision_hash": "0x4fe0c386302c1e7bb24796e76a6ac4d476eaba363504146681bd2473ad5c3622",
+    "decision_record": {
+      "evidence_hash": "0x70c7c6e693d7f9ccc8824c110b814cf630786d292ef72c1d46a3c04207453193",
+      "plot_id": "SYNTHETIC-PLOT-001",
+      "policy_version": "1.0.0",
+      "policy_parameters_hash": "0x1efa15259a54bf3159fd6ea568fd6da32683574a3e3e996ffa035be4434bf8a0",
+      "decision": "FREEZE_REQUESTED",
+      "reason": "FIRE_REVERSAL",
+      "effective_observed_at": "2024-08-01T05:00:00Z",
+      "replay_as_of": "2024-08-01T05:00:00Z"
+    }
+  },
+  "insufficient": {
+    "evidence_quality": "INSUFFICIENT",
+    "evidence_quality_score": 20,
+    "decision": "REVIEW_REQUIRED",
+    "reason": "DATA_INSUFFICIENT",
+    "evidence_hash": "0xf75747f24ead22f33e1f0441f1981f84aa3fb8083d797f204dc110aaeb0fd8a9",
+    "decision_hash": "0xa296a41b424e7d5831a57cbed78ebbc379140497fe9177a5656f50db3192362b",
+    "decision_record": {
+      "evidence_hash": "0xf75747f24ead22f33e1f0441f1981f84aa3fb8083d797f204dc110aaeb0fd8a9",
+      "plot_id": "SYNTHETIC-PLOT-001",
+      "policy_version": "1.0.0",
+      "policy_parameters_hash": "0x1efa15259a54bf3159fd6ea568fd6da32683574a3e3e996ffa035be4434bf8a0",
+      "decision": "REVIEW_REQUIRED",
+      "reason": "DATA_INSUFFICIENT",
+      "effective_observed_at": "2024-08-01T05:00:00Z",
+      "replay_as_of": "2024-08-01T05:00:00Z"
+    }
+  }
+}

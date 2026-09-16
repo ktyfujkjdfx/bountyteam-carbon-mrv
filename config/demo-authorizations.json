@@ -1,0 +1,15 @@
+{
+  "mode": "CONTRACT_FIXTURE",
+  "authorizations": [
+    {
+      "demo_authorization_id": "SYNTHETIC-AUTH-001",
+      "plot_id": "SYNTHETIC-PLOT-001",
+      "amount": "100",
+      "unit_price_wei": "1000000000000000",
+      "issuer_actor": "issuer",
+      "seller_actor": "issuer",
+      "single_use": true,
+      "certified_carbon_units": false
+    }
+  ]
+}

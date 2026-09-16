@@ -1,0 +1,162 @@
+{
+  "schema_version": "1.0.0",
+  "request_id": "10000000-0000-4000-8000-000000000002",
+  "plot_id": "SYNTHETIC-PLOT-001",
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          91.87174204034686,
+          56.20078912424207
+        ],
+        [
+          91.88785656310161,
+          56.200935087671915
+        ],
+        [
+          91.88759652664038,
+          56.209918037389
+        ],
+        [
+          91.8714782379942,
+          56.20977202472756
+        ],
+        [
+          91.87174204034686,
+          56.20078912424207
+        ]
+      ]
+    ]
+  },
+  "plot_geometry_hash": "0xec548e113e459a13ce79a1eb08bdf02291148a14676e745be47f2c7696fb1bb9",
+  "before": {
+    "scene_id": "SYNTHETIC_T1_fire",
+    "acquired_at": "2024-07-10T05:00:00Z",
+    "provider": "SYNTHETIC_FIXTURE",
+    "collection": "not-a-sentinel-collection",
+    "processing_baseline": "SYNTHETIC-1",
+    "mgrs_tile": "SYNTHETIC",
+    "assets": [
+      {
+        "band": "B04",
+        "source_ref": "fixture://assets/verification_fire/before_B04.tif",
+        "local_sha256": "0xeff2efdb8af4f37f93dc90861734005b5d0b7001a2c48cf48601f9ac187b14ed",
+        "scale_applied": 0.0001,
+        "offset_applied": 0,
+        "transform_origin": "PROVIDER_HARMONIZED"
+      },
+      {
+        "band": "B08",
+        "source_ref": "fixture://assets/verification_fire/before_B08.tif",
+        "local_sha256": "0x6ada78e728aec84834e248f374009fbc048b26e0a21aebae1603ce5936342d0c",
+        "scale_applied": 0.0001,
+        "offset_applied": 0,
+        "transform_origin": "PROVIDER_HARMONIZED"
+      },
+      {
+        "band": "B12",
+        "source_ref": "fixture://assets/verification_fire/before_B12.tif",
+        "local_sha256": "0x3e413587aa383717c26bc64d9f5e071d33da805bf3698e12cc3dc7b5b4cae363",
+        "scale_applied": 0.0001,
+        "offset_applied": 0,
+        "transform_origin": "PROVIDER_HARMONIZED"
+      },
+      {
+        "band": "B8A",
+        "source_ref": "fixture://assets/verification_fire/before_B8A.tif",
+        "local_sha256": "0x6ada78e728aec84834e248f374009fbc048b26e0a21aebae1603ce5936342d0c",
+        "scale_applied": 0.0001,
+        "offset_applied": 0,
+        "transform_origin": "PROVIDER_HARMONIZED"
+      },
+      {
+        "band": "SCL",
+        "source_ref": "fixture://assets/verification_fire/before_SCL.tif",
+        "local_sha256": "0x5619b6d89dcd96379faf00345cb42c26a0218c920132b5302c51f8eb7dde5900",
+        "scale_applied": 1,
+        "offset_applied": 0,
+        "transform_origin": "PRODUCT_METADATA"
+      }
+    ]
+  },
+  "after": {
+    "scene_id": "SYNTHETIC_T2_fire",
+    "acquired_at": "2024-08-01T05:00:00Z",
+    "provider": "SYNTHETIC_FIXTURE",
+    "collection": "not-a-sentinel-collection",
+    "processing_baseline": "SYNTHETIC-1",
+    "mgrs_tile": "SYNTHETIC",
+    "assets": [
+      {
+        "band": "B04",
+        "source_ref": "fixture://assets/verification_fire/after_B04.tif",
+        "local_sha256": "0x9519c445b557efb7046e29d20fac35811bc7897cf372aaba5891f99bc32dd9b6",
+        "scale_applied": 0.0001,
+        "offset_applied": 0,
+        "transform_origin": "PROVIDER_HARMONIZED"
+      },
+      {
+        "band": "B08",
+        "source_ref": "fixture://assets/verification_fire/after_B08.tif",
+        "local_sha256": "0x16c5cd622323384cd057a2f857e6e4f60ec583f06613553611f0fea30ba6dc53",
+        "scale_applied": 0.0001,
+        "offset_applied": 0,
+        "transform_origin": "PROVIDER_HARMONIZED"
+      },
+      {
+        "band": "B12",
+        "source_ref": "fixture://assets/verification_fire/after_B12.tif",
+        "local_sha256": "0x1d76ae056477ba1f2d8ae13134aee67f8f3f4b131bceaad624be89972fec1b9e",
+        "scale_applied": 0.0001,
+        "offset_applied": 0,
+        "transform_origin": "PROVIDER_HARMONIZED"
+      },
+      {
+        "band": "B8A",
+        "source_ref": "fixture://assets/verification_fire/after_B8A.tif",
+        "local_sha256": "0x16c5cd622323384cd057a2f857e6e4f60ec583f06613553611f0fea30ba6dc53",
+        "scale_applied": 0.0001,
+        "offset_applied": 0,
+        "transform_origin": "PROVIDER_HARMONIZED"
+      },
+      {
+        "band": "SCL",
+        "source_ref": "fixture://assets/verification_fire/after_SCL.tif",
+        "local_sha256": "0x1864543cd52e511bc03487cb703b3b9cff50ebe742af046509a95026f9145c57",
+        "scale_applied": 1,
+        "offset_applied": 0,
+        "transform_origin": "PRODUCT_METADATA"
+      }
+    ]
+  },
+  "parameters": {
+    "ndvi_bands": [
+      "B08",
+      "B04"
+    ],
+    "nbr_bands": [
+      "B8A",
+      "B12"
+    ],
+    "disturbance_dnbr_min": 0.27,
+    "min_component_area_ha": 1,
+    "connectivity": 8,
+    "excluded_scl_classes": [
+      0,
+      1,
+      2,
+      3,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "resampling_continuous": "average",
+    "resampling_categorical": "nearest"
+  },
+  "data_root": "fixtures",
+  "dataset_kind": "SYNTHETIC"
+}
