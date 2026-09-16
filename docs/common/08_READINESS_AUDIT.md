@@ -1,8 +1,14 @@
 # Cross-platform development readiness audit
 
-Audit date: 2026-09-17. Result: **NOT READY for unconditional parallel-development
-sign-off**. The shared package passes locally, but the documentation conflicts
-below need owner decisions and the new OS matrix has not run yet.
+Audit date: 2026-09-17. Result: **READY FOR PARALLEL DEVELOPMENT**, conditional on:
+
+- Approval of the existing PR by Backend / Integration Owner.
+- Human squash merge of the PR.
+- Green checks on `main` after merge.
+
+The three discrepancies were resolved as **DOCS_ONLY**: instructions now match
+the frozen technical baseline. These conditions are release gates, not a claim
+that approval or merge has already happened. Required PR checks must remain green.
 This is an infrastructure/contract audit, not application acceptance.
 
 ## Scope and starting state
@@ -33,42 +39,37 @@ No application security or runtime readiness claim is made: there is no implemen
    Some frozen tests call `read_text()` without an encoding. README and both
    workflows now set `PYTHONUTF8=1`. Tests/contracts are unchanged; errors are
    not suppressed. This environment setting is required on each new terminal.
-2. **Cross-platform evidence incomplete — CI added, execution pending.**
+2. **Cross-platform coverage — CI added and passed for the initial audit commit.**
    Previously only Ubuntu/Python 3.12 ran in CI. The new `readiness` matrix covers
    Ubuntu 3.12/3.13, Windows 3.12, and macOS 3.12 on PRs to `main` and manual
    dispatch, without feature-branch push triggers, secrets, or deployment.
-   A local Windows 3.13 pass cannot substitute for these four results.
-3. **Public operation enum conflicts — owner decision required.**
-   `docs/roles/03_BACKEND_PLAN.md` section 6 and
-   `docs/roles/05_FRONTEND_PLAN.md` section 4 include `SIGNING`. Frozen
-   `contracts/api-models.schema.json`, `contracts/openapi.yaml`, the manifest
-   section 6, and `docs/common/status-machine.md` expose only `QUEUED`,
-   `SUBMITTED`, `CONFIRMED`, `FAILED`. Minimal proposal: align role-plan public
-   states to the baseline; if an internal signing phase is needed, explicitly
-   distinguish it from the public enum. Do not add a public state during this audit.
-   Approvals: Backend, Frontend, Team Lead; consumers: API clients and operation UI.
-4. **Event-name conflicts — owner decision required.**
-   Blockchain plan section 2 lists `IssuerUpdated` / `OracleUpdated`, while the
-   frozen Solidity source and compiled ABI use `IssuerPermissionChanged` /
-   `OraclePermissionChanged`. Minimal proposal: correct role-plan wording to
-   the compiled interface after Blockchain, Backend, and Team Lead agree.
-   Do not rename or extend ABI events. Consumers: deploy tooling and chain adapter.
-5. **Repeated-freeze semantics ambiguous — owner decision required.**
-   Manifest section 6 and `status-machine.md` show a `FROZEN -> FROZEN` transition
-   for repeated/newer observations. Manifest section 11 and the Blockchain plan
-   require ACTIVE for `freeze`; the Blockchain acceptance checklist also says
-   repeat freeze is rejected. The abstract Solidity interface cannot test the
-   intended runtime behavior. Minimal proposal: owners explicitly distinguish
-   off-chain handling of observations from permitted on-chain calls, preserving
-   the baseline unless a separate contract change is approved. Approvals:
-   Blockchain, Backend, Team Lead; consumers: oracle, reconciliation, and UI.
+   The four-job workflow and Shared contracts passed for `adcd200`; links below.
+   Checks must rerun for the documentation update and remain green before merge.
+3. **Public operation enum — corrected in documentation.**
+   Backend plan section 6 and Frontend plan section 4 now expose only `QUEUED`,
+   `SUBMITTED`, `CONFIRMED`, `FAILED`, matching OpenAPI and API models.
+   `SIGNING` is explicitly not a public API state. Signing happens within
+   `QUEUED`; persisted signed bytes plus broadcast lead to `SUBMITTED`.
+   Reconciliation uses saved intent, signed bytes, and tx hash without a separate
+   signing state or duplicate transactions. No technical enum changed.
+4. **Permission-event names — corrected in documentation.**
+   Blockchain plan section 2 now uses
+   `IssuerPermissionChanged(address indexed account, bool allowed)` and
+   `OraclePermissionChanged(address indexed account, bool allowed)`.
+   Solidity and its compiler-generated ABI already agreed and remain unchanged.
+5. **Repeated freeze — clarified in documentation.**
+   Manifest section 6 and `status-machine.md` now explicitly describe
+   `FROZEN -> FROZEN` as retained state, not another on-chain call. Backend
+   deduplicates requests/evidence; new evidence is stored separately without
+   a second freeze transaction for an already FROZEN batch. On-chain freeze
+   requires an existing ACTIVE batch; a repeated call for FROZEN is rejected
+   without a new Frozen event. Pending/timeout reconciliation reuses the existing
+   operation without a new-nonce transaction. Frontend must not attribute an old
+   anchor to new evidence; RS supplies observations only.
 
-For findings 3-5, stop the affected implementation and open `contract-change`
-Issues using the existing template. This report supplies the problem, minimal
-proposal, affected documents, and reviewers; it does not approve a resolution.
-No fixture changes are proposed for documentation-only alignment. Any semantic
-change requires coordinated fixtures/tests and a separately approved version.
-Resolve these before the first interface implementation handoff.
+Findings 3-5 are closed by documentation alignment (DOCS_ONLY). No new technical
+contract version, fixture change, or tag is needed. Future semantic changes still
+require the existing coordinated contract-change process.
 
 ### Minor
 
@@ -119,8 +120,8 @@ supplies deployment/ABI and jointly validates the boundary, not a second oracle.
 The PR workflow requires a linked Issue, tests/results, contract impact,
 limitations/fallback, handoff, independent review, and human squash merge without
 self-merge. No instructions authorize ordinary direct pushes to `main` or a
-second API/schema/ABI. However, findings 3-5 mean the prose is not yet a fully
-consistent restatement of the frozen machine contracts.
+second API/schema/ABI. The three identified prose discrepancies now agree with
+the frozen machine contracts and the baseline's idempotency requirements.
 
 ## Portability and security evidence
 
@@ -152,9 +153,11 @@ consistent restatement of the frozen machine contracts.
 | Local Windows, Python 3.13.15, Node 24.19.0, npm 11.17.0 | Shared pytest with `PYTHONUTF8=1`; ABI check | 68 passed; ABI OK |
 | Local Windows without UTF-8 mode | Isolated OpenAPI test | Reproduced cp1252 failure; setup fix documented |
 | Ubuntu, Python 3.12 | Existing Shared contracts run for starting `main` | Success (historical CI evidence) |
-| New Ubuntu 3.12 / Ubuntu 3.13 / Windows 3.12 / macOS 3.12 matrix | New PR workflow | Pending PR creation and execution |
+| Ubuntu 3.12 / Ubuntu 3.13 / Windows 3.12 / macOS 3.12 matrix | PR workflow on `adcd200` | Success; rerun required for the updated PR head |
 
 Existing CI evidence: [Shared contracts run 35130636808](https://github.com/ktyfujkjdfx/bountyteam-carbon-mrv/actions/runs/35130636808).
+PR evidence on `adcd200`: [Cross-platform readiness](https://github.com/ktyfujkjdfx/bountyteam-carbon-mrv/actions/runs/35132375323)
+and [Shared contracts](https://github.com/ktyfujkjdfx/bountyteam-carbon-mrv/actions/runs/35132375257), both successful.
 Only Python 3.13 was available locally (`py -0p`); no local 3.12/macOS/Linux run
 is claimed. Current matrix coverage does not claim all macOS architectures or
 all Windows/Python combinations.
@@ -181,14 +184,16 @@ and [setup-node version-file support](https://github.com/actions/setup-node).
 
 ## Required handoff
 
-1. Team Lead opens the audit PR against `main` from `chore/readiness-audit`
-   (GitHub CLI is unavailable locally); Backend reviews CI/setup alongside the
-   Team Lead. If Team Lead authors the PR, Backend performs any approved merge.
-2. Wait for all four `readiness` jobs and Shared contracts to pass. Record the
-   run URLs/results before changing this NOT READY verdict. The new workflow
-   intentionally does not run merely from pushing this branch.
-3. Resolve findings 3-5 through the existing contract-change process. Preserve
-   the baseline; do not silently implement the conflicting prose.
+1. Backend / Integration Owner reviews and approves the updated
+   [existing PR #1](https://github.com/ktyfujkjdfx/bountyteam-carbon-mrv/pull/1).
+   If Team Lead authors the PR, Backend performs the approved human squash merge;
+   the agent does not merge.
+2. Wait for all four `readiness` jobs and Shared contracts on the updated PR head
+   to pass before merge, then verify green checks on `main` after merge.
+   The readiness workflow runs on PR updates/manual dispatch, not ordinary pushes;
+   use manual dispatch on `main` if post-merge matrix verification is needed.
+3. Preserve `contracts-v1.0.0`; the three documentation corrections do not
+   authorize any technical contract change or new tag.
 4. Repository owner verifies collaborator access and available branch protection
    or ruleset enforcement. No account invitations or settings were changed here.
 5. After review and human merge, participants clone/update, follow the single

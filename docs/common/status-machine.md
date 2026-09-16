@@ -39,11 +39,21 @@ component ≥1 га применяются RS до передачи `affected_pi
 stateDiagram-v2
     [*] --> ACTIVE: confirmed issue
     ACTIVE --> FROZEN: confirmed freeze
-    FROZEN --> FROZEN: duplicate or newer observation
+    FROZEN --> FROZEN: observation processed, no new on-chain freeze
 ```
 
 Автоматического unfreeze/revoke в P0 нет. `NO_RESTRICTION` от старого/нового
 evidence не меняет FROZEN.
+
+`FROZEN → FROZEN` означает сохранение состояния серии при повторной обработке
+evidence или новом наблюдении, а не новый on-chain вызов `freeze`.
+Backend дедуплицирует evidence и повторные запросы. Новый evidence сохраняется
+отдельно, но не создаёт вторую freeze-транзакцию для уже `FROZEN` серии.
+On-chain `freeze` разрешён только для существующей `ACTIVE` серии; повторный
+вызов для `FROZEN` отклоняется без нового события `Frozen`.
+При timeout или pending Backend продолжает reconciliation существующей операции
+и не создаёт новую транзакцию с новым nonce. Frontend не приписывает новому
+evidence старый on-chain anchor. RS передаёт только наблюдение.
 
 ## Transaction lifecycle
 
