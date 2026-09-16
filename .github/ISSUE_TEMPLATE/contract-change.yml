@@ -1,0 +1,65 @@
+name: Contract change
+description: Propose a shared contract change for producer, consumer, and team lead review.
+title: "[Contract change] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Baseline: contracts-v1.0.0. Preserve compatibility until the required owners agree.
+        Do not move the baseline tag. This proposal does not authorize a contract change.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the conflict or failing use case, proposal owner, and decision deadline.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Minimal proposed change
+      description: Describe the smallest change and its intended behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Affected files
+      description: Include sources, generated contracts, configuration, and documentation.
+    validations:
+      required: true
+  - type: textarea
+    id: roles
+    attributes:
+      label: Affected roles
+      description: Name producers, consumers, and handoff owners.
+    validations:
+      required: true
+  - type: textarea
+    id: migration
+    attributes:
+      label: Migration / compatibility
+      description: Explain baseline compatibility, coordinated rollout, and rollback.
+    validations:
+      required: true
+  - type: textarea
+    id: fixtures
+    attributes:
+      label: Required fixture changes
+      description: List required regeneration and expected results, or explain why none are needed.
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Required tests
+      description: Include shared checks and relevant producer/consumer integration tests.
+    validations:
+      required: true
+  - type: textarea
+    id: approvals
+    attributes:
+      label: Approvals needed
+      description: Name the producer, consumer, and team lead; follow docs/common/04_GIT_AND_INTEGRATION.md.
+    validations:
+      required: true

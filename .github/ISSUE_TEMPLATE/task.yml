@@ -1,0 +1,63 @@
+name: Task
+description: Define a deliverable and its acceptance handoff.
+title: "[Task] "
+body:
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P0
+        - P1
+        - P2
+    validations:
+      required: true
+  - type: input
+    id: owner
+    attributes:
+      label: Owner
+      description: Name the responsible person and role.
+    validations:
+      required: true
+  - type: textarea
+    id: artifact
+    attributes:
+      label: Expected artifact
+      description: Specify the deliverable and its repository path or format.
+    validations:
+      required: true
+  - type: textarea
+    id: handoff
+    attributes:
+      label: Consumer / handoff
+      description: Name who receives the result and how they will verify it.
+    validations:
+      required: true
+  - type: input
+    id: deadline
+    attributes:
+      label: Deadline
+      description: Include date, time, and timezone or the agreed checkpoint.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List measurable results and required test/run commands.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Link blocking issues, PRs, inputs, or write None.
+    validations:
+      required: true
+  - type: textarea
+    id: fallback
+    attributes:
+      label: Fallback
+      description: State the agreed fallback or the decision needed if blocked.
+    validations:
+      required: true
