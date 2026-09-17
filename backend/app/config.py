@@ -42,7 +42,7 @@ class Settings:
     chain_adapter: str = "mock"
     mock_chain_path: Path = BACKEND_ROOT / "runtime" / "mock-chain.sqlite"
     rpc_url: str = "http://127.0.0.1:8545"
-    deployment_path: Path = REPO_ROOT / "blockchain" / "runtime" / "deployment.json"
+    deployment_path: Path = REPO_ROOT / "runtime" / "deployment.json"
     private_keys: dict[str, str] = field(default_factory=dict, repr=False)
     rs_mode: str = "cached_bundle"
     rs_command: tuple[str, ...] = ()
