@@ -52,7 +52,6 @@ class Settings:
     max_bundle_bytes: int = 512 * 1024 * 1024
     worker_poll_seconds: float = 1.0
     worker_lease_seconds: float = 15.0
-    receipt_poll_limit: int = 0
 
     def validate(self) -> "Settings":
         if self.mode not in MODES:
