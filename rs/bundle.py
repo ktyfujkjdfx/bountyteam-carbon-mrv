@@ -119,7 +119,15 @@ def write_bundle(evidence, artifacts_payload, request, output_dir):
         determinism.write_json(output_dir / "affected_area.geojson", affected_geojson)
         add_artifact("affected_area", "AFFECTED_AREA", "affected_area.geojson", "application/geo+json")
 
-        dnbr_preview_img = preview.dnbr_preview(artifacts_payload["dnbr"], artifacts_payload["footprint"] & artifacts_payload["forest_mask"])
+        # Classify at the float32 precision that dnbr.tif publishes, so the
+        # preview cannot disagree with the raster and last-ULP differences
+        # between CPU architectures are rounded away before they can flip a
+        # class boundary. NaN is preserved (unlike in dnbr_arr, where it became
+        # the nodata value), so masked pixels still render as "no data".
+        dnbr_at_published_precision = artifacts_payload["dnbr"].astype("float32").astype("float64")
+        dnbr_preview_img = preview.dnbr_preview(
+            dnbr_at_published_precision, artifacts_payload["footprint"] & artifacts_payload["forest_mask"]
+        )
         dnbr_preview_path = output_dir / "dnbr_preview.png"
         dsize = preview.save_png(dnbr_preview_img, dnbr_preview_path)
         add_artifact("dnbr_preview", "DNBR_PREVIEW", "dnbr_preview.png", "image/png", bounds=bounds_wgs84, size=dsize)

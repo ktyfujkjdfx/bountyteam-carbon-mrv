@@ -406,22 +406,34 @@ def test_geojson_coordinates_are_rounded_to_a_fixed_precision(tmp_path):
                 assert round(lat, determinism.COORDINATE_DECIMALS) == lat
 
 
-def test_preview_stretch_cutoffs_are_real_samples_not_interpolated():
-    # Regression guard for a genuine cross-platform failure: interpolated
-    # percentiles differ in the last ULP between x86-64 and arm64, which moved
-    # pixels sitting on a uint8 boundary and changed the preview hash on macOS
-    # only. Rank selection returns an actual sample, so there is nothing to
-    # disagree about.
+def test_preview_stretch_is_immune_to_last_ulp_input_noise():
+    # Regression guard for a real cross-platform failure the CI matrix caught:
+    # Resampling.average sums in a CPU-dependent order, so reflectance differed
+    # in the last ULP on arm64 and previews (but not dnbr.tif) hashed
+    # differently on macOS. Perturbing every sample by an ULP must not change a
+    # single output byte.
     from rs import preview as preview_mod
 
-    values = np.array([0.0, 1.0, 2.0, 3.0, 7.0, 11.0, 13.0, 17.0, 19.0, 23.0], dtype="float64")
-    low, high = np.percentile(values, [2, 98], method="nearest")
-    assert low in values and high in values
-    # and the stretch itself must be stable when the same data arrives as a
-    # different (but equal-valued) dtype
-    as_float32 = preview_mod._stretch(values.astype("float32").reshape(2, 5))
-    as_float64 = preview_mod._stretch(values.reshape(2, 5))
-    assert np.array_equal(as_float32, as_float64)
+    rng = np.random.default_rng(20230821)
+    band = np.round(rng.uniform(0.0, 0.6, size=(40, 40)), 4)
+    nudged = np.nextafter(band, np.inf)
+    nudged[::2] = np.nextafter(band[::2], -np.inf)
+    assert not np.array_equal(band, nudged)
+    assert np.array_equal(preview_mod._stretch(band), preview_mod._stretch(nudged))
+
+
+def test_preview_quantisation_is_tie_stable_on_the_dn_lattice():
+    # Averaging integer DNs lands on exact .5 constantly, and whether the float
+    # is .5 or .5 +/- 1 ULP is exactly what differs between platforms. All
+    # three must land on the same lattice point.
+    from rs import preview as preview_mod
+
+    half = 2.5 / preview_mod.DN_SCALE
+    values = np.array([half, np.nextafter(half, np.inf), np.nextafter(half, -np.inf)])
+    quantised = preview_mod._quantize(values)
+    assert len(set(quantised.tolist())) == 1
+    # NaN must survive quantisation so masked pixels stay "no data"
+    assert np.isnan(preview_mod._quantize(np.array([np.nan])))[0]
 
 
 def test_png_encoding_is_pinned_and_carries_no_timestamp(tmp_path):
@@ -630,7 +642,14 @@ def test_real_bundle_rebuilds_byte_identically_on_this_platform(tmp_path, bundle
     committed_hashes, rebuilt_hashes = _file_hashes(bundle_dir), _file_hashes(rebuilt_dir)
     assert set(committed_hashes) == set(rebuilt_hashes)
     mismatched = [name for name in committed_hashes if committed_hashes[name] != rebuilt_hashes[name]]
-    assert not mismatched, f"{bundle_name} is not byte-reproducible here: {mismatched}"
+    if mismatched:
+        # Name what actually drifted: a preview-only difference and a drift in
+        # the measured science are very different bugs, and the file list alone
+        # cannot tell them apart (verification.json embeds artifact hashes).
+        rebuilt = read_json(rebuilt_dir / "verification.json")
+        fields = sorted(k for k in set(committed) | set(rebuilt) if committed.get(k) != rebuilt.get(k))
+        pytest.fail(f"{bundle_name} is not byte-reproducible here: files={mismatched} "
+                    f"verification.json fields={fields}")
 
 
 @pytest.mark.parametrize("bundle_name,request_name,_outcome,_tile", REAL_BUNDLES)
