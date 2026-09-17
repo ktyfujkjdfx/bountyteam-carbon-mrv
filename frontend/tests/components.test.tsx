@@ -279,7 +279,7 @@ describe('CreditsPanel', () => {
   it('empty credits show an empty state', () => {
     const { client } = createFixtureBackend();
     render(<CreditsPanel {...creditsProps(client, { credits: { items: [] } })} />);
-    expect(screen.getByTestId('credits-panel')).toHaveTextContent('Серий пока нет');
+    expect(screen.getByTestId('credits-panel')).toHaveTextContent('Серия не выпущена');
   });
 });
 

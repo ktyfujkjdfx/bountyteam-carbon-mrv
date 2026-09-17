@@ -28,6 +28,22 @@ export function Loading({ label = 'Загрузка…' }: { label?: string }) {
   );
 }
 
+export function Skeleton({ label, height, className }: { label: string; height: number | string; className?: string }) {
+  return (
+    <div className={`skeleton${className ? ` ${className}` : ''}`} style={{ height }} role="status" aria-live="polite">
+      <span className="skeleton-label">{label}</span>
+    </div>
+  );
+}
+
+export function NotAvailable({ reason = 'поле не передано Backend' }: { reason?: string }) {
+  return (
+    <span className="metric-na" title={reason} aria-label={`N/A — ${reason}`}>
+      N/A
+    </span>
+  );
+}
+
 export function Empty({ children }: { children: ReactNode }) {
   return <div className="state state-empty">{children}</div>;
 }
@@ -56,9 +72,11 @@ export function ErrorNotice({
       {hint && <span className="muted">{hint}</span>}
       {error.requestId && <span className="muted mono">request_id: {error.requestId}</span>}
       {onRetry && (
-        <button type="button" className="btn btn-small" onClick={onRetry}>
-          Повторить
-        </button>
+        <span>
+          <button type="button" className="btn btn-small btn-secondary" onClick={onRetry}>
+            Повторить
+          </button>
+        </span>
       )}
     </div>
   );
