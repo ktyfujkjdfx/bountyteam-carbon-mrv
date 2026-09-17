@@ -15,15 +15,30 @@ DNBR_LEGEND = (
 
 
 def _stretch(band, low_pct=2, high_pct=98):
+    """Percentile stretch to uint8, pinned to be bit-identical across platforms.
+
+    Two deliberate choices, both about determinism rather than appearance:
+
+    * `method="nearest"` returns an actual element of the data instead of
+      interpolating between the two straddling samples. Interpolation is
+      float arithmetic whose last ULP depends on the CPU (FMA and SIMD width
+      differ between x86-64 and arm64), and a cutoff that moves by one ULP
+      pushes pixels sitting exactly on a quantisation boundary to a different
+      byte. Selection by rank has no such freedom.
+    * `np.rint` instead of truncating via `astype`, so a value landing on .5
+      resolves by a stated rule rather than by whatever the preceding
+      arithmetic rounded to.
+    """
+    band = np.asarray(band, dtype="float64")
     finite = band[np.isfinite(band)]
     if finite.size == 0:
         return np.zeros(band.shape, dtype="uint8")
-    lo, hi = np.percentile(finite, [low_pct, high_pct])
+    lo, hi = np.percentile(finite, [low_pct, high_pct], method="nearest")
     if hi <= lo:
         hi = lo + 1e-6
     scaled = np.clip((band - lo) / (hi - lo), 0, 1)
     scaled = np.where(np.isfinite(band), scaled, 0)
-    return (scaled * 255).astype("uint8")
+    return np.rint(scaled * 255).astype("uint8")
 
 
 def false_color_preview(nir, swir, red):

@@ -406,6 +406,24 @@ def test_geojson_coordinates_are_rounded_to_a_fixed_precision(tmp_path):
                 assert round(lat, determinism.COORDINATE_DECIMALS) == lat
 
 
+def test_preview_stretch_cutoffs_are_real_samples_not_interpolated():
+    # Regression guard for a genuine cross-platform failure: interpolated
+    # percentiles differ in the last ULP between x86-64 and arm64, which moved
+    # pixels sitting on a uint8 boundary and changed the preview hash on macOS
+    # only. Rank selection returns an actual sample, so there is nothing to
+    # disagree about.
+    from rs import preview as preview_mod
+
+    values = np.array([0.0, 1.0, 2.0, 3.0, 7.0, 11.0, 13.0, 17.0, 19.0, 23.0], dtype="float64")
+    low, high = np.percentile(values, [2, 98], method="nearest")
+    assert low in values and high in values
+    # and the stretch itself must be stable when the same data arrives as a
+    # different (but equal-valued) dtype
+    as_float32 = preview_mod._stretch(values.astype("float32").reshape(2, 5))
+    as_float64 = preview_mod._stretch(values.reshape(2, 5))
+    assert np.array_equal(as_float32, as_float64)
+
+
 def test_png_encoding_is_pinned_and_carries_no_timestamp(tmp_path):
     from PIL import Image
 

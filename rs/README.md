@@ -119,6 +119,11 @@ things that otherwise vary:
 - **Fixed coordinate precision.** Reprojected GeoJSON coordinates are rounded
   to 7 decimals (~1 cm, far finer than the 20 m grid) because PROJ builds can
   disagree in the last ULP.
+- **Rank-selected percentiles.** The preview stretch uses
+  `np.percentile(..., method="nearest")` and `np.rint`, not interpolation and
+  truncation. Interpolated cutoffs differ in the last ULP between x86-64 and
+  arm64, which moved boundary pixels and changed preview hashes on macOS only
+  — caught by the CI matrix, not by local testing.
 - **Pinned encoders.** PNGs are written with `compress_level=0`, `optimize=False`
   and no `pnginfo`, so no `tIME`/`tEXt` chunk and no build-specific deflate
   stream; the dNBR GeoTIFF states `zlevel`, `predictor`, `interleave` and
