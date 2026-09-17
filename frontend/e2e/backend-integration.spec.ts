@@ -12,6 +12,15 @@ async function shot(page: Page, name: string) {
   if (shots) await page.screenshot({ path: `${shots}/${name}.png`, fullPage: true });
 }
 
+async function openSyntheticPlot(page: Page) {
+  await expect(page.getByTestId('plot-name')).toBeVisible();
+  const select = page.getByTestId('plot-select');
+  if ((await select.count()) > 0) {
+    await select.selectOption('SYNTHETIC-PLOT-001');
+    await expect(page.getByTestId('plot-select')).toHaveValue('SYNTHETIC-PLOT-001');
+  }
+}
+
 async function browserFetch(page: Page, path: string, init: { method?: string; headers?: Record<string, string>; body?: string } = {}) {
   return page.evaluate(
     async ({ url, init: requestInit }) => {
@@ -73,6 +82,10 @@ test('CORS: an origin outside BACKEND_CORS_ORIGINS is blocked by the browser', a
 test('real Frontend against Backend: baseline → issue → buy → post_fire → FROZEN → transfer rejected', async ({ page }) => {
   const apiErrors: string[] = [];
   page.on('pageerror', (err) => apiErrors.push(err.message));
+  // Expected rejections (403 wrong actor, 409 frozen transfer) are logged by the browser as failed resources.
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' && !/status of (403|409) /.test(msg.text())) apiErrors.push(`console: ${msg.text()}`);
+  });
   const backendRequests: string[] = [];
   page.on('request', (req) => {
     const url = new URL(req.url());
@@ -84,7 +97,7 @@ test('real Frontend against Backend: baseline → issue → buy → post_fire �
   await expect(page.getByTestId('health-mode')).toHaveText('CONTRACT_FIXTURE');
   await expect(page.getByTestId('mock-ledger-banner')).toBeVisible();
   await expect(page.getByTestId('fixture-banner')).toHaveCount(0);
-  await expect(page.getByTestId('plot-name')).toBeVisible();
+  await openSyntheticPlot(page);
 
   // 403 surfaced in UI for a non-issuer verification.
   await page.getByTestId('actor-select').selectOption('buyer');
@@ -104,7 +117,7 @@ test('real Frontend against Backend: baseline → issue → buy → post_fire �
   await expect.poll(async () => images.first().evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
   await expect(images.first()).toHaveAttribute('src', /^blob:/);
   expect(backendRequests.filter((r) => r === 'POST /api/v1/plots/SYNTHETIC-PLOT-001/verify')).toHaveLength(2);
-  await shot(page, 'backend-01-baseline');
+  await shot(page, 'backend-01-no-change');
 
   await page.getByTestId('tab-credits').click();
   await page.getByTestId('issue-submit').dblclick();
@@ -125,6 +138,7 @@ test('real Frontend against Backend: baseline → issue → buy → post_fire �
   await expect(page.getByTestId('job-state')).toHaveText('SUCCEEDED', { timeout: 30_000 });
   await expect(page.getByTestId('value-decision')).toHaveText('FREEZE_REQUESTED');
   await expect(page.getByTestId('value-reason')).toHaveText('FIRE_REVERSAL');
+  await shot(page, 'backend-02-disturbance-freeze-requested');
   await expect(page.getByTestId('value-credit')).toHaveText(/ACTIVE|FROZEN/);
   await expect(page.getByTestId('value-credit')).toHaveText('FROZEN', { timeout: 30_000 });
   await expect(page.locator('[data-testid="journal-event"][data-kind="TX_CONFIRMED"]').first()).toBeVisible();
@@ -138,7 +152,7 @@ test('real Frontend against Backend: baseline → issue → buy → post_fire �
   await expect(page.getByTestId('error-notice').filter({ hasText: 'BATCH_NOT_ACTIVE' })).toBeVisible();
   await expect(page.getByTestId('client-log-entry').first()).toContainText('409');
   await expect(page.getByTestId('actor-balance')).toHaveText('10');
-  await shot(page, 'backend-02-frozen-transfer-rejected');
+  await shot(page, 'backend-03-frozen-transfer-rejected');
 
   await page.getByTestId('tab-proof').click();
   await expect(page.getByTestId('anchors')).toContainText('Frozen');
@@ -154,13 +168,30 @@ test('real Frontend against Backend: baseline → issue → buy → post_fire �
   await expect(page.getByTestId('value-outcome')).toHaveText('INSUFFICIENT_DATA');
   await expect(page.getByTestId('value-decision')).toHaveText('REVIEW_REQUIRED');
   await expect(page.getByTestId('value-credit')).toHaveText('FROZEN');
-  await shot(page, 'backend-03-insufficient-still-frozen');
+  await shot(page, 'backend-04-insufficient-review-still-frozen');
 
   // Refresh keeps confirmed state from Backend (no local invention).
   await page.reload();
+  await openSyntheticPlot(page);
   await expect(page.getByTestId('value-credit')).toHaveText('FROZEN');
   await expect(page.getByTestId('value-decision')).toHaveText('REVIEW_REQUIRED');
 
   expect(backendRequests.some((r) => r.includes('/freeze'))).toBe(false);
   expect(apiErrors).toEqual([]);
+});
+
+test('mobile viewport keeps status, map and critical state readable', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true });
+  const page = await context.newPage();
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  await page.goto('/');
+  await openSyntheticPlot(page);
+  await expect(page.getByTestId('value-credit')).toHaveText('FROZEN');
+  await expect(page.getByTestId('evidence-map')).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+  await shot(page, 'backend-05-mobile');
+  expect(errors).toEqual([]);
+  await context.close();
 });

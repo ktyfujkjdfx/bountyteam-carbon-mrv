@@ -1156,6 +1156,10 @@ main {
   background: var(--map-canvas);
 }
 
+.map-stage {
+  position: relative;
+}
+
 .map-canvas {
   height: clamp(420px, 58vh, 720px);
   background:

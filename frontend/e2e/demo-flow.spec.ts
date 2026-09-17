@@ -118,3 +118,31 @@ test('HTTP mode without Backend shows explicit error and manual offline fallback
   await expect(page.getByTestId('fixture-banner')).toBeVisible();
   await expect(page.getByTestId('value-decision')).toHaveText('NO_RESTRICTION');
 });
+
+test('keyboard: methodology dialog and on-map before/after divider are operable without a mouse', async ({ page }) => {
+  await page.goto('/?api=fixture');
+  await expect(page.getByTestId('value-decision')).toHaveText('NO_RESTRICTION');
+
+  const methodology = page.getByTestId('open-methodology');
+  await methodology.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('methodology')).toBeVisible();
+  await expect(page.getByTestId('methodology')).toContainText('Вне контракта v1');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('methodology')).toBeHidden();
+
+  await page.getByTestId('map-compare').focus();
+  await page.keyboard.press('Enter');
+  const handle = page.getByTestId('map-compare-handle');
+  await page.keyboard.press('Tab');
+  await expect(handle).toBeFocused();
+  const focusRing = await handle.evaluate((el) => getComputedStyle(el).boxShadow);
+  expect(focusRing).not.toBe('none');
+  await expect(handle).toHaveAttribute('aria-valuenow', '50');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Shift+ArrowRight');
+  await expect(handle).toHaveAttribute('aria-valuenow', '62');
+  await page.keyboard.press('Home');
+  await expect(handle).toHaveAttribute('aria-valuenow', '0');
+  await expect(page.locator('.leaflet-overlay-pane img')).toHaveCount(2);
+});

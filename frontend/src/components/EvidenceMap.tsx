@@ -55,6 +55,7 @@ export function EvidenceMap({ client, plot, verification }: Props) {
   const afterOverlayRef = useRef<L.ImageOverlay | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mode, setMode] = useState<ViewMode>('single');
+  const [layersOpenByDefault] = useState(() => typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 901px)').matches);
   const [divider, setDivider] = useState(50);
   const [enabled, setEnabled] = useState<Record<LayerKey, boolean>>({
     boundary: true,
@@ -311,9 +312,10 @@ export function EvidenceMap({ client, plot, verification }: Props) {
 
   return (
     <section className="map-wrap" ref={wrapRef} aria-label="Карта участка и спутниковое evidence">
+      <div className="map-stage">
       <div className="map-canvas" ref={containerRef} data-testid="evidence-map" role="region" aria-label="Карта участка" />
 
-      <details className="map-overlay map-layers" open>
+      <details className="map-overlay map-layers" open={layersOpenByDefault}>
         <summary>Слои карты</summary>
         <div className="map-toolbar" role="group" aria-label="Слои карты">
           {LAYER_GROUPS.map(([title, keys]) => (
@@ -388,6 +390,7 @@ export function EvidenceMap({ client, plot, verification }: Props) {
 
       <div className="map-overlay map-readout" ref={readoutRef} aria-hidden="true">
         WGS84 · наведите курсор
+      </div>
       </div>
 
       {(plotBounds.error || loadingAny || overlayWarnings.length > 0 || geoWarnings.length > 0 || artifactErrors.length > 0) && (

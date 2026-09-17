@@ -14,7 +14,7 @@ export default defineConfig({
   use: {
     baseURL: process.env.E2E_BASE_URL ?? `http://127.0.0.1:${port}`,
     channel,
-    viewport: { width: 1440, height: 900 },
+    viewport: { width: Number(process.env.E2E_WIDTH ?? 1440), height: Number(process.env.E2E_HEIGHT ?? 900) },
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },
