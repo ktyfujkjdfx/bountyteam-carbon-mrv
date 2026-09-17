@@ -14,7 +14,8 @@ from pyproj import Transformer
 from rasterio.warp import Resampling, reproject
 from shapely.geometry import shape
 
-from rs import PIPELINE_VERSION, components, firms as firms_mod, forestmask, gridmath, harmonize, indices, masks
+from rs import (PIPELINE_VERSION, components, firms as firms_mod, forestmask, gridmath, harmonize, indices,
+                masks, resample)
 from rs.contracts import digest
 
 PARAMETERS = {
@@ -47,30 +48,48 @@ def _load_scene_grids(scene, data_root, plot_id, dst_transform, dst_width, dst_h
     for asset in scene["assets"]:
         band = asset["band"]
         native_path = scene_dir / f"{band}.tif"
+        with rasterio.open(native_path) as src:
+            native = src.read(1)
+            plan = resample.plan(
+                src.transform, src.crs, native.shape,
+                dst_transform, dst_width, dst_height, f"EPSG:{dst_epsg}",
+            )
+            src_transform, src_crs = src.transform, src.crs
+
         if band == "SCL":
-            with rasterio.open(native_path) as src:
-                native = src.read(1)
+            # Categorical: an exact window slice when the grids coincide, GDAL
+            # nearest otherwise (a class must never be averaged).
+            sliced = resample.window_slice(native, plan, dst_width, dst_height) if plan else None
+            if sliced is not None:
+                bands[band] = sliced.astype("int16")
+                continue
             dst = np.zeros((dst_height, dst_width), dtype="float64")
             reproject(
                 source=native.astype("float64"),
                 destination=dst,
-                src_transform=src.transform,
-                src_crs=src.crs,
+                src_transform=src_transform,
+                src_crs=src_crs,
                 dst_transform=rasterio.Affine(*dst_transform),
                 dst_crs=f"EPSG:{dst_epsg}",
                 resampling=Resampling.nearest,
             )
             bands[band] = np.round(dst).astype("int16")
+        elif plan is not None:
+            # Exact path: average the integer DNs, then harmonize. Equivalent
+            # to harmonizing first, but the arithmetic is exact, so the result
+            # is bit-identical on every platform. See rs/resample.py.
+            mean_dn = resample.block_mean(native, plan, dst_width, dst_height)
+            bands[band] = harmonize.apply_scale_offset(
+                mean_dn, asset["scale_applied"], asset["offset_applied"]
+            )
         else:
-            with rasterio.open(native_path) as src:
-                dn = src.read(1)
-            reflectance = harmonize.apply_scale_offset(dn, asset["scale_applied"], asset["offset_applied"])
+            reflectance = harmonize.apply_scale_offset(native, asset["scale_applied"], asset["offset_applied"])
             dst = np.full((dst_height, dst_width), np.nan, dtype="float64")
             reproject(
                 source=reflectance,
                 destination=dst,
-                src_transform=src.transform,
-                src_crs=src.crs,
+                src_transform=src_transform,
+                src_crs=src_crs,
                 dst_transform=rasterio.Affine(*dst_transform),
                 dst_crs=f"EPSG:{dst_epsg}",
                 resampling=Resampling.average,

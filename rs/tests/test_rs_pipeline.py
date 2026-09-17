@@ -406,6 +406,36 @@ def test_geojson_coordinates_are_rounded_to_a_fixed_precision(tmp_path):
                 assert round(lat, determinism.COORDINATE_DECIMALS) == lat
 
 
+def test_block_mean_is_exact_integer_arithmetic():
+    from rs import resample
+
+    native = np.array([[1, 2, 10, 11],
+                       [3, 4, 12, 13],
+                       [5, 6, 20, 21],
+                       [7, 8, 22, 23]], dtype="uint16")
+    got = resample.block_mean(native, (0, 0, 2), 2, 2)
+    assert np.array_equal(got, np.array([[2.5, 11.5], [6.5, 21.5]]))
+    # exact in binary: /4 is a power of two, so there is no rounding to differ over
+    assert all(float(v).is_integer() or float(v * 4).is_integer() for v in got.ravel())
+
+
+def test_resample_plan_refuses_grids_that_do_not_line_up():
+    from rasterio.transform import Affine
+
+    from rs import resample
+
+    dst = (20, 0, 500000, 0, -20, 4000000)
+    aligned = Affine(10, 0, 499900, 0, -10, 4000100)
+    assert resample.plan(aligned, "EPSG:32635", (400, 400), dst, 10, 10, "EPSG:32635") == (10, 10, 2)
+    # different CRS
+    assert resample.plan(aligned, "EPSG:32634", (400, 400), dst, 10, 10, "EPSG:32635") is None
+    # half-pixel offset
+    shifted = Affine(10, 0, 499905, 0, -10, 4000100)
+    assert resample.plan(shifted, "EPSG:32635", (400, 400), dst, 10, 10, "EPSG:32635") is None
+    # destination runs past the cached window
+    assert resample.plan(aligned, "EPSG:32635", (12, 12), dst, 10, 10, "EPSG:32635") is None
+
+
 def test_preview_stretch_is_immune_to_last_ulp_input_noise():
     # Regression guard for a real cross-platform failure the CI matrix caught:
     # Resampling.average sums in a CPU-dependent order, so reflectance differed
@@ -575,6 +605,32 @@ def test_real_bundle_below_policy_area_threshold_is_not_over_claimed():
     result = validate_evidence(evidence)
     assert evidence["metrics"]["affected_area_ha"] < policy["freeze_min_area_ha"]
     assert result["decision"] == "REVIEW_REQUIRED"  # Backend's own recomputation, read-only here
+
+
+@pytest.mark.parametrize("bundle_name,request_name,_outcome,_tile", REAL_BUNDLES)
+def test_real_scenes_use_the_exact_resampling_path(bundle_name, request_name, _outcome, _tile):
+    # Guard against silently falling back to GDAL's warper, which was measured
+    # to differ between platforms and is what broke preview hashes on macOS.
+    from rs import resample
+
+    request_path = ROOT / "rs" / "configs" / request_name
+    if not request_path.exists():
+        pytest.skip(f"request not present: {request_path}")
+    request = read_json(request_path)
+    bounds = gridmath.bounds_wgs84(request["geometry"])
+    epsg = gridmath.utm_epsg((bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2)
+    transform, width, height, _ = gridmath.snapped_grid(request["geometry"], epsg, 20)
+    for side in ("before", "after"):
+        for asset in request[side]["assets"]:
+            path = (ROOT / request["data_root"] / request["plot_id"]
+                    / request[side]["scene_id"] / f"{asset['band']}.tif")
+            if not path.exists():
+                pytest.skip(f"cached source not present: {path}")
+            with rasterio.open(path) as src:
+                plan = resample.plan(src.transform, src.crs, (src.height, src.width),
+                                     transform, width, height, f"EPSG:{epsg}")
+            assert plan is not None, f"{asset['band']} would fall back to GDAL warping"
+            assert resample.describe(plan) in ("EXACT_SLICE", "EXACT_BLOCK_MEAN_2X")
 
 
 REAL_BUNDLE_FIRMS = [("no_change", "NOT_FOUND"), ("fire", "SUPPORTED"), ("evia_reserve_no_change", "NOT_FOUND")]

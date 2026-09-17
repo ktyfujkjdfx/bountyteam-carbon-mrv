@@ -119,6 +119,17 @@ things that otherwise vary:
 - **Fixed coordinate precision.** Reprojected GeoJSON coordinates are rounded
   to 7 decimals (~1 cm, far finer than the 20 m grid) because PROJ builds can
   disagree in the last ULP.
+- **Exact resampling instead of GDAL warping.** The Sentinel-2 assets and the
+  20 m analysis grid share a CRS and origin lattice, so 20 m → 20 m is a window
+  slice and 10 m → 20 m is an exact 2×2 block mean of integer DNs (sum in
+  int64, divide by 4 — exact in binary). `rasterio.warp.reproject`'s
+  `average` was measured to differ between platforms by ~6e-7 in reflectance,
+  which is invisible in dnbr.tif and in every metric but flipped ~0.6% of
+  preview samples across a uint8 boundary on macOS. `rs/resample.py` falls back
+  to GDAL only when the grids genuinely do not line up (different CRS,
+  non-integral offset, grid past the cached window), and
+  `test_real_scenes_use_the_exact_resampling_path` asserts the real scenes never
+  take that fallback. Categorical layers are never averaged.
 - **Rank-selected percentiles.** The preview stretch uses
   `np.percentile(..., method="nearest")` and `np.rint`, not interpolation and
   truncation. Interpolated cutoffs differ in the last ULP between x86-64 and
