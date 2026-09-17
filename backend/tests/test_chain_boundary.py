@@ -11,7 +11,7 @@ from backend.app.chain.mock import MockChainAdapter
 from backend.app.chain.web3_adapter import Web3ChainAdapter
 from backend.app.contracts import abi_sha256
 
-ANVIL_ORACLE_KEY = "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"  # public Anvil dev key #2
+DUMMY_KEY = "0x" + "11" * 32  # arbitrary non-funded value; real keys only come from the environment
 
 
 def _free_port() -> int:
@@ -78,6 +78,6 @@ def test_mock_adapter_is_marked_and_not_a_network():
 def test_private_keys_are_not_exposed_in_settings_repr():
     from backend.app.config import load_settings
     settings = load_settings({"BACKEND_DEMO_SESSION": "repr-demo-session-000",
-                              "BACKEND_PRIVATE_KEY_ORACLE": ANVIL_ORACLE_KEY})
-    assert settings.private_keys["oracle"] == ANVIL_ORACLE_KEY
-    assert ANVIL_ORACLE_KEY not in repr(settings)
+                              "BACKEND_PRIVATE_KEY_ORACLE": DUMMY_KEY})
+    assert settings.private_keys["oracle"] == DUMMY_KEY
+    assert DUMMY_KEY not in repr(settings)
