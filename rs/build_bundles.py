@@ -1,10 +1,10 @@
-"""One-off driver that acquires real Sentinel-2 data for the Dadia AOI
-(rs/configs/aoi_dadia.json) and produces both P0 evidence bundles.
+"""One-off driver that acquires real Sentinel-2 data for a configured AOI
+(default: rs/configs/aoi_dadia.json) and produces its evidence bundle(s).
 
-Usage: python -m rs.build_bundles [no_change|fire|all]
+Usage: python -m rs.build_bundles [scenario|all] [--config path/to/aoi.json]
 
 This is the concrete, reproducible instantiation of `rs/acquire.py` +
-`rs/verify.py` for the chosen real event; it is not itself part of the frozen
+`rs/verify.py` for a chosen real event; it is not itself part of the frozen
 contract path (`python -m rs.verify --request ... --output ...` is).
 """
 import json
@@ -16,7 +16,7 @@ from rs import acquire, stac, verify
 from rs.contracts import digest
 
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG_PATH = ROOT / "rs" / "configs" / "aoi_dadia.json"
+DEFAULT_CONFIG_PATH = ROOT / "rs" / "configs" / "aoi_dadia.json"
 # Not named "data"/"cache"/"runtime": those are gitignored repo-wide and this
 # cache of AOI-windowed source rasters is committed for offline reproducibility.
 DATA_ROOT = ROOT / "rs" / "sources"
@@ -29,7 +29,7 @@ def _scene_descriptor(config, scene_id, datetime_range):
     return acquire.build_scene_descriptor(item, local_paths)
 
 
-def build_scenario(config, name):
+def build_scenario(config, name, *, site_tag):
     scenario = config["scenarios"][name]
     plot_id = config["plot_id"]
     geometry = config["geometry"]
@@ -42,7 +42,8 @@ def build_scenario(config, name):
     if not forest_mask_path.exists():
         acquire.fetch_forest_mask_source(config["stac_bbox_hint"], DATA_ROOT, plot_id)
 
-    request_path = ROOT / "rs" / "configs" / f"request_{name}.json"
+    request_name = f"request_{name}" if not site_tag else f"request_{site_tag}_{name}"
+    request_path = ROOT / "rs" / "configs" / f"{request_name}.json"
     acquire.write_request(
         request_path,
         request_id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"{plot_id}:{name}")),
@@ -55,19 +56,34 @@ def build_scenario(config, name):
         dataset_kind="REAL",
     )
 
-    output_dir = ROOT / "rs" / "bundles" / name
+    bundle_name = name if not site_tag else f"{site_tag}_{name}"
+    output_dir = ROOT / "rs" / "bundles" / bundle_name
     evidence = verify.run(request_path, output_dir)
-    print(f"[{name}] outcome={evidence['outcome']} bundle={output_dir}")
+    print(f"[{site_tag}/{name}] outcome={evidence['outcome']} bundle={output_dir}")
     return evidence
 
 
 def main(argv=None):
     argv = argv or sys.argv[1:]
-    which = argv[0] if argv else "all"
-    config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    config_path = DEFAULT_CONFIG_PATH
+    positional = []
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--config":
+            config_path = Path(argv[i + 1])
+            i += 2
+        else:
+            positional.append(argv[i])
+            i += 1
+    which = positional[0] if positional else "all"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    # The original primary-AOI run kept unprefixed request_<scenario>.json /
+    # bundles/<scenario> paths; only additional (e.g. reserve) configs get a
+    # site tag, so re-running the default config never orphans those files.
+    site_tag = "" if config_path == DEFAULT_CONFIG_PATH else config_path.stem.replace("aoi_", "")
     names = list(config["scenarios"]) if which == "all" else [which]
     for name in names:
-        build_scenario(config, name)
+        build_scenario(config, name, site_tag=site_tag)
 
 
 if __name__ == "__main__":
