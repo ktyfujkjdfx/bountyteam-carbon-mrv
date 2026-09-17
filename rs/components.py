@@ -64,6 +64,14 @@ def rasterize_kept(kept, out_shape, grid_transform):
 
 
 def to_wgs84_geojson(kept, grid_epsg):
+    """Reprojected components as GeoJSON, with coordinates rounded.
+
+    The rounding is not cosmetic: PROJ builds can disagree in the last ULP, so
+    unrounded coordinates make the same component hash differently on Windows,
+    macOS and Linux. See rs/determinism.py.
+    """
+    from rs.determinism import round_geojson
+
     transformer = Transformer.from_crs(f"EPSG:{grid_epsg}", "EPSG:4326", always_xy=True)
     features = []
     for poly, pixel_count in kept:
@@ -78,4 +86,4 @@ def to_wgs84_geojson(kept, grid_epsg):
                 "geometry": mapping(wgs_poly),
             }
         )
-    return {"type": "FeatureCollection", "features": features}
+    return round_geojson({"type": "FeatureCollection", "features": features})

@@ -103,6 +103,55 @@ $env:PYTHONUTF8='1'  # Windows PowerShell
 .\.venv\Scripts\python.exe -m rs.verify --request rs/configs/request_evia_reserve_no_change.json --output rs/bundles/evia_reserve_no_change
 ```
 
+### Determinism
+
+Every byte a bundle contains is hashed, so the same inputs must produce the
+same SHA-256 on Windows, macOS and Linux. `rs/determinism.py` pins the three
+things that otherwise vary:
+
+- **No text mode.** `Path.write_text` translates `\n` to `\r\n` on Windows and
+  nowhere else, which silently changes every JSON hash. All bundle files are
+  written as bytes.
+- **Canonical serialization.** `verification.json`, `source-index.json`,
+  `affected_area.geojson` and `firms.geojson` are written as JCS (RFC 8785)
+  bytes through the shared `tools/contract_helpers.py`, so the file on disk
+  *is* the byte string Backend hashes into `evidence_hash`.
+- **Fixed coordinate precision.** Reprojected GeoJSON coordinates are rounded
+  to 7 decimals (~1 cm, far finer than the 20 m grid) because PROJ builds can
+  disagree in the last ULP.
+- **Pinned encoders.** PNGs are written with `compress_level=0`, `optimize=False`
+  and no `pnginfo`, so no `tIME`/`tEXt` chunk and no build-specific deflate
+  stream; the dNBR GeoTIFF states `zlevel`, `predictor`, `interleave` and
+  `tiled` explicitly instead of inheriting GDAL build defaults.
+
+`test_rebuilding_a_bundle_twice_gives_byte_identical_files` rebuilds a bundle
+twice and compares every file hash, and
+`test_real_bundle_rebuilds_byte_identically_on_this_platform` rebuilds each
+committed real bundle from the committed sources and requires every byte to
+match — which the CI matrix runs on `windows-latest`, `macos-latest` and
+`ubuntu-latest`.
+
+### Releasing bundles (two-step, so `code_commit` is a real claim)
+
+`method.code_commit` must name a commit that actually contains the pipeline
+that produced the bundle. One commit cannot do that, because the bundle has to
+exist before it can be committed. So:
+
+```bash
+git add rs/*.py rs/configs rs/sources rs/tests rs/README.md && git commit   # step 1: code + inputs
+.\.venv\Scripts\python.exe -m rs.release                                    # step 2: regenerate, stamping step 1's sha
+git add rs/bundles && git commit                                            # step 3: artifacts only
+```
+
+`rs.release` refuses to run while any RS code or input path is dirty
+(`rs/bundles/` excluded — it is the output), so the stamped sha always belongs
+to a tree that reproduces the bytes. Outside that flow, `rs.verify` records
+`code_commit` from HEAD only when the RS code is committed and records `null`
+otherwise, rather than naming a commit that cannot reproduce the bundle; pass
+`--code-commit <sha>` to set it explicitly.
+`test_real_bundle_code_commit_is_a_commit_that_contains_the_pipeline` checks
+each committed bundle's sha with `git ls-tree`.
+
 To re-acquire from scratch (network + AWS Open Data required):
 
 ```bash

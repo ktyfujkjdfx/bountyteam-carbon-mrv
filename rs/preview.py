@@ -43,5 +43,9 @@ def dnbr_preview(dnbr_array, valid_mask):
 
 
 def save_png(image, path):
-    image.save(path, format="PNG")
-    return image.size
+    """Deterministic PNG write; see rs/determinism.py for why it is pinned."""
+    from pathlib import Path
+
+    from rs import determinism
+
+    return determinism.write_png(image, Path(path))

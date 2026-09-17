@@ -1,15 +1,18 @@
 """Writes a pipeline result to an on-disk bundle: verification.json,
 source-index.json, and every artifact referenced by evidence['artifacts'].
+
+Every byte written here is hashed, so every writer goes through
+rs/determinism.py rather than text-mode `write_text`/`json.dumps`: the same
+inputs must produce the same SHA-256 on Windows, macOS and Linux alike.
 """
 import hashlib
-import json
 import shutil
 from pathlib import Path
 
 import numpy as np
 import rasterio
 
-from rs import gridmath, preview
+from rs import determinism, gridmath, preview
 
 
 def _sha_and_size(path):
@@ -18,6 +21,13 @@ def _sha_and_size(path):
 
 
 def _write_geotiff(path, array, transform, epsg, dtype, nodata=None):
+    """Write a GeoTIFF with the creation options pinned.
+
+    DEFLATE is kept (these rasters compress well) but `zlevel` is stated
+    explicitly instead of inherited from the GDAL build's default, and no
+    timestamp/software tag is written, so repeated writes of the same array
+    produce the same file.
+    """
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with rasterio.open(
         path,
@@ -31,6 +41,10 @@ def _write_geotiff(path, array, transform, epsg, dtype, nodata=None):
         transform=rasterio.Affine(*transform),
         nodata=nodata,
         compress="deflate",
+        zlevel=6,
+        predictor=1,
+        interleave="band",
+        tiled=False,
     ) as dst:
         dst.write(array, 1)
 
@@ -102,8 +116,7 @@ def write_bundle(evidence, artifacts_payload, request, output_dir):
         add_artifact("dnbr", "DNBR_RASTER", "dnbr.tif", "image/tiff")
 
         affected_geojson = _affected_geojson(artifacts_payload)
-        geojson_path = output_dir / "affected_area.geojson"
-        geojson_path.write_text(json.dumps(affected_geojson, ensure_ascii=False), encoding="utf-8")
+        determinism.write_json(output_dir / "affected_area.geojson", affected_geojson)
         add_artifact("affected_area", "AFFECTED_AREA", "affected_area.geojson", "application/geo+json")
 
         dnbr_preview_img = preview.dnbr_preview(artifacts_payload["dnbr"], artifacts_payload["footprint"] & artifacts_payload["forest_mask"])
@@ -113,24 +126,30 @@ def write_bundle(evidence, artifacts_payload, request, output_dir):
 
     firms_points = artifacts_payload.get("firms_points") or []
     if evidence["firms"]["support"] == "SUPPORTED" and firms_points:
-        firms_geojson = {
-            "type": "FeatureCollection",
-            "features": [
-                {
-                    "type": "Feature",
-                    "properties": {k: v for k, v in point.items() if k not in ("longitude", "latitude")},
-                    "geometry": {"type": "Point", "coordinates": [float(point["longitude"]), float(point["latitude"])]},
-                }
-                for point in firms_points
-            ],
-        }
-        firms_path = output_dir / "firms.geojson"
-        firms_path.write_text(json.dumps(firms_geojson, ensure_ascii=False), encoding="utf-8")
+        firms_geojson = determinism.round_geojson(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {k: v for k, v in point.items() if k not in ("longitude", "latitude")},
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [float(point["longitude"]), float(point["latitude"])],
+                        },
+                    }
+                    for point in firms_points
+                ],
+            }
+        )
+        determinism.write_json(output_dir / "firms.geojson", firms_geojson)
         add_artifact("firms-points", "FIRMS_POINTS", "firms.geojson", "application/geo+json")
 
     evidence["artifacts"] = artifacts
-    (output_dir / "source-index.json").write_text(json.dumps(source_index, indent=2), encoding="utf-8")
-    (output_dir / "verification.json").write_text(json.dumps(evidence, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    determinism.write_json(output_dir / "source-index.json", source_index)
+    # Canonical (JCS) bytes: the file on disk is exactly what Backend hashes
+    # into evidence_hash, so the two can never drift apart by formatting.
+    determinism.write_json(output_dir / "verification.json", evidence)
     return evidence
 
 

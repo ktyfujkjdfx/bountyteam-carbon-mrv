@@ -334,6 +334,102 @@ def test_reproducible_rerun_produces_identical_canonical_bytes(tmp_path):
     )
 
 
+# --- byte-level determinism (see rs/determinism.py) ---
+
+
+def _file_hashes(bundle_dir):
+    """SHA-256 of every file in a bundle, keyed by POSIX-style relative path."""
+    from rs.contracts import sha_bytes
+
+    return {
+        path.relative_to(bundle_dir).as_posix(): sha_bytes(path.read_bytes())
+        for path in sorted(bundle_dir.rglob("*"))
+        if path.is_file()
+    }
+
+
+def test_rebuilding_a_bundle_twice_gives_byte_identical_files(tmp_path):
+    # The whole-bundle version of the reproducibility claim: not just equal
+    # JSON values, but the same bytes in every artifact, so the SHA-256 that
+    # Backend re-checks on import cannot drift between two runs.
+    request_path = _build_offline_case(tmp_path, after_b12_boost=6000, disturbed_slice=np.s_[2:8, 2:7])
+    first, second = tmp_path / "run1", tmp_path / "run2"
+    fixed_commit = "0" * 40  # pin the one field that is allowed to vary by design
+    verify.run(request_path, first, code_commit=fixed_commit)
+    verify.run(request_path, second, code_commit=fixed_commit)
+
+    hashes_1, hashes_2 = _file_hashes(first), _file_hashes(second)
+    assert set(hashes_1) == set(hashes_2), "the two runs produced different file sets"
+    mismatched = [name for name in hashes_1 if hashes_1[name] != hashes_2[name]]
+    assert not mismatched, f"non-deterministic artifacts: {mismatched}"
+    # and the manifest each bundle declares must agree with the bytes on disk
+    for entry in read_json(first / "verification.json")["artifacts"]:
+        assert entry["sha256"] == hashes_1[entry["relative_path"]]
+
+
+def test_bundle_files_are_written_as_bytes_without_platform_newlines(tmp_path):
+    # Path.write_text would translate "\n" to "\r\n" on Windows and nowhere
+    # else, which silently changes every hash. Canonical JSON has no newline
+    # at all, so a CR anywhere in these files means text mode crept back in.
+    request_path = _build_offline_case(tmp_path, after_b12_boost=6000, disturbed_slice=np.s_[2:8, 2:7])
+    bundle_dir = tmp_path / "bundle"
+    verify.run(request_path, bundle_dir, code_commit="0" * 40)
+    for name in ("verification.json", "source-index.json", "affected_area.geojson"):
+        data = (bundle_dir / name).read_bytes()
+        assert b"\r" not in data and b"\n" not in data, f"{name} was written in text mode"
+
+
+def test_canonical_json_round_trips_through_the_shared_helper(tmp_path):
+    # verification.json on disk must BE the canonical bytes Backend hashes, so
+    # formatting can never make the file and its evidence_hash disagree.
+    from rs.contracts import canonical
+
+    request_path = _build_offline_case(tmp_path, after_b12_boost=0, disturbed_slice=np.s_[0:0, 0:0])
+    bundle_dir = tmp_path / "bundle"
+    verify.run(request_path, bundle_dir, code_commit="0" * 40)
+    raw = (bundle_dir / "verification.json").read_bytes()
+    assert raw == canonical(json.loads(raw.decode("utf-8")))
+
+
+def test_geojson_coordinates_are_rounded_to_a_fixed_precision(tmp_path):
+    from rs import determinism
+
+    request_path = _build_offline_case(tmp_path, after_b12_boost=6000, disturbed_slice=np.s_[2:8, 2:7])
+    bundle_dir = tmp_path / "bundle"
+    verify.run(request_path, bundle_dir, code_commit="0" * 40)
+    features = read_json(bundle_dir / "affected_area.geojson")["features"]
+    assert features
+    for feature in features:
+        for ring in feature["geometry"]["coordinates"]:
+            for lon, lat in ring:
+                assert round(lon, determinism.COORDINATE_DECIMALS) == lon
+                assert round(lat, determinism.COORDINATE_DECIMALS) == lat
+
+
+def test_png_encoding_is_pinned_and_carries_no_timestamp(tmp_path):
+    from PIL import Image
+
+    from rs import determinism
+
+    image = Image.fromarray(np.arange(48, dtype="uint8").reshape(4, 4, 3))
+    first, second = determinism.png_bytes(image), determinism.png_bytes(image)
+    assert first == second
+    # tIME is the PNG chunk that would embed "now" into every rebuild.
+    assert b"tIME" not in first and b"tEXt" not in first
+
+
+def test_code_commit_is_null_rather_than_a_commit_that_cannot_reproduce(monkeypatch):
+    # Recording HEAD while the pipeline has uncommitted edits would claim a
+    # commit whose code does not produce these bytes. Null is the honest answer.
+    monkeypatch.setattr(verify, "_git", lambda *args: "a" * 40 if args[0] == "rev-parse" else " M rs/pipeline.py")
+    assert verify.resolve_code_commit() is None
+    monkeypatch.setattr(verify, "_git", lambda *args: "a" * 40 if args[0] == "rev-parse" else "")
+    assert verify.resolve_code_commit() == "a" * 40
+    assert verify.resolve_code_commit("b" * 40) == "b" * 40
+    with pytest.raises(ValueError):
+        verify.resolve_code_commit("not-a-sha")
+
+
 # --- FIRMS attribution ---
 
 
@@ -497,6 +593,48 @@ def test_fire_bundle_satisfies_every_frozen_freeze_precondition():
     assert metrics["affected_fraction_of_baseline_forest"] >= policy["freeze_min_forest_fraction"]
     assert policy["require_firms_support"] and evidence["firms"]["support"] == "SUPPORTED"
     assert "decision" not in evidence and "credit_status" not in evidence
+
+
+@pytest.mark.parametrize("bundle_name,request_name,_outcome,_tile", REAL_BUNDLES)
+def test_real_bundle_rebuilds_byte_identically_on_this_platform(tmp_path, bundle_name, request_name, _outcome, _tile):
+    # The cross-platform half of the determinism claim. The committed bundles
+    # were generated on one OS; this rebuilds them from the committed sources
+    # on whatever OS is running and requires every byte to match. In CI that
+    # is Windows, macOS and Linux (see .github/workflows/cross-platform-readiness.yml).
+    bundle_dir = ROOT / "rs" / "bundles" / bundle_name
+    if not (bundle_dir / "verification.json").exists():
+        pytest.skip(f"real bundle not present: {bundle_dir}")
+    committed = read_json(bundle_dir / "verification.json")
+    rebuilt_dir = tmp_path / bundle_name
+    verify.run(ROOT / "rs" / "configs" / request_name, rebuilt_dir,
+               code_commit=committed["method"]["code_commit"])
+
+    committed_hashes, rebuilt_hashes = _file_hashes(bundle_dir), _file_hashes(rebuilt_dir)
+    assert set(committed_hashes) == set(rebuilt_hashes)
+    mismatched = [name for name in committed_hashes if committed_hashes[name] != rebuilt_hashes[name]]
+    assert not mismatched, f"{bundle_name} is not byte-reproducible here: {mismatched}"
+
+
+@pytest.mark.parametrize("bundle_name,request_name,_outcome,_tile", REAL_BUNDLES)
+def test_real_bundle_code_commit_is_a_commit_that_contains_the_pipeline(bundle_name, request_name, _outcome, _tile):
+    # method.code_commit is a reproducibility claim, so it must name a real
+    # commit whose tree actually holds the pipeline that produced the bundle -
+    # never a placeholder or a pre-RS commit.
+    import subprocess
+
+    bundle_dir = ROOT / "rs" / "bundles" / bundle_name
+    if not (bundle_dir / "verification.json").exists():
+        pytest.skip(f"real bundle not present: {bundle_dir}")
+    commit = read_json(bundle_dir / "verification.json")["method"]["code_commit"]
+    assert commit and len(commit) == 40
+    listing = subprocess.run(["git", "ls-tree", "-r", "--name-only", commit, "rs/"],
+                             capture_output=True, text=True, cwd=ROOT)
+    if listing.returncode != 0:
+        pytest.skip("not a git checkout with that commit available")
+    files = set(listing.stdout.split())
+    for required in ("rs/pipeline.py", "rs/bundle.py", "rs/verify.py", "rs/determinism.py",
+                     f"rs/configs/{request_name}"):
+        assert required in files, f"{commit} does not contain {required}"
 
 
 @pytest.mark.parametrize("bundle_name,request_name,_outcome,_tile", REAL_BUNDLES)
