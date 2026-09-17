@@ -3,6 +3,7 @@ VerificationEvidence dict plus the in-memory rasters/vectors bundle.py writes.
 
 Never returns evidence_hash or a token/credit state; those are Backend-owned.
 """
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -235,13 +236,24 @@ def compute_evidence(request, *, code_commit=None):
     if aoi_cloud_before is None or aoi_cloud_after is None:
         limitations.append("AOI cloud ratio could not be computed for one date (empty AOI footprint read).")
 
-    firms_support, firms_hotspot_count, firms_source_refs, firms_matched_id, firms_points = _resolve_firms(
-        geometry, before["acquired_at"], after["acquired_at"]
-    )
+    firms_result = _resolve_firms(geometry, before["acquired_at"], after["acquired_at"], data_root, plot_id)
+    firms_support = firms_result["support"]
+    firms_points = firms_result.pop("points")
     if firms_support == "NOT_CHECKED":
         limitations.append(
-            "FIRMS API MAP_KEY not configured (FIRMS_MAP_KEY env var); fire attribution left as NOT_CHECKED, "
-            "not fabricated. Backend policy routes unattributed disturbance to REVIEW_REQUIRED, not automatic freeze."
+            "No FIRMS source available: neither a cached archive under <data_root>/<plot_id>/firms/ nor a "
+            "FIRMS_MAP_KEY env var. Fire attribution left as NOT_CHECKED, not fabricated. Backend policy "
+            "routes unattributed disturbance to REVIEW_REQUIRED, not automatic freeze."
+        )
+    elif firms_support == "NOT_FOUND":
+        limitations.append(
+            "FIRMS checked against the archive for this window and AOI and found no qualifying hotspot; "
+            "absence of a thermal anomaly is not proof that no disturbance occurred."
+        )
+    else:
+        limitations.append(
+            "FIRMS hotspots are an independent thermal-anomaly signal, not a fire perimeter or ground truth; "
+            "they attribute the window, they do not delineate affected_area_ha."
         )
 
     evidence = {
@@ -300,14 +312,14 @@ def compute_evidence(request, *, code_commit=None):
         },
         "firms": {
             "support": firms_support,
-            "hotspot_count": firms_hotspot_count,
+            "hotspot_count": firms_result["hotspot_count"],
             "window_start": before["acquired_at"],
             "window_end": after["acquired_at"],
             "spatial_tolerance_m": 500,
-            "product": "VIIRS_SNPP_NRT",
-            "confidence_filter": ["nominal", "high"],
-            "source_refs": firms_source_refs,
-            "matched_points_artifact_id": firms_matched_id,
+            "product": firms_result["product"],
+            "confidence_filter": list(firms_mod.DEFAULT_CONFIDENCE_FILTER),
+            "source_refs": firms_result["source_refs"],
+            "matched_points_artifact_id": firms_result["matched_points_artifact_id"],
         },
         "artifacts": [],  # filled in by bundle.py
         "limitations": limitations,
@@ -316,17 +328,62 @@ def compute_evidence(request, *, code_commit=None):
     return evidence, artifacts_payload
 
 
-def _resolve_firms(geometry, window_start, window_end):
+def _firms_archive_paths(data_root, plot_id):
+    archive_dir = Path(data_root) / plot_id / "firms"
+    return sorted(archive_dir.glob("*.csv")) if archive_dir.is_dir() else []
+
+
+def _resolve_firms(geometry, window_start, window_end, data_root, plot_id):
+    """Attribute the observation window against FIRMS, offline archive first.
+
+    Returns the schema's `firms` fields plus the matched points bundle.py turns
+    into firms.geojson. NOT_CHECKED is reported whenever no source is reachable;
+    hotspots are never invented.
+    """
     start = datetime.strptime(window_start, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
     end = datetime.strptime(window_end, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-    bbox = gridmath.bounds_wgs84(geometry)
-    hotspots = firms_mod.fetch_hotspots(bbox, start, end)
-    if hotspots is None:
-        return "NOT_CHECKED", 0, [], None, []
-    matched = firms_mod.match_within_aoi(hotspots, geometry)
-    if not matched:
-        return "NOT_FOUND", 0, ["NASA FIRMS VIIRS_SNPP_NRT area API"], None, []
-    return "SUPPORTED", len(matched), ["NASA FIRMS VIIRS_SNPP_NRT area API"], "firms-points", matched
+    empty = {
+        "support": "NOT_CHECKED",
+        "hotspot_count": 0,
+        "product": "VIIRS_SNPP_NRT",
+        "source_refs": [],
+        "matched_points_artifact_id": None,
+        "points": [],
+    }
+
+    archive_paths = _firms_archive_paths(data_root, plot_id)
+    if archive_paths:
+        hotspots = firms_mod.load_archive(archive_paths)
+        product = "VIIRS_SNPP_ARCHIVE_C2"
+        source_refs = [
+            f"NASA FIRMS archive {path.name} sha256={_sha256_file(path)}" for path in archive_paths
+        ]
+    else:
+        bbox = gridmath.bounds_wgs84(geometry)
+        hotspots = firms_mod.fetch_hotspots(bbox, start, end)
+        if hotspots is None:
+            return empty
+        product = "VIIRS_SNPP_NRT"
+        source_refs = ["NASA FIRMS VIIRS_SNPP_NRT area API"]
+
+    in_window = firms_mod.filter_hotspots(hotspots, start, end)
+    matched = firms_mod.match_within_aoi(in_window, geometry)
+    return {
+        "support": "SUPPORTED" if matched else "NOT_FOUND",
+        "hotspot_count": len(matched),
+        "product": product,
+        "source_refs": source_refs,
+        "matched_points_artifact_id": "firms-points" if matched else None,
+        "points": matched,
+    }
+
+
+def _sha256_file(path):
+    digest_obj = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest_obj.update(chunk)
+    return digest_obj.hexdigest()
 
 
 def _project_coords(coords, transformer):

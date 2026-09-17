@@ -31,13 +31,36 @@ vector (not fetched in this environment). Treat the AOI boundary as
 `ASSUMPTION`-class; treat the computed outcome as this pipeline's own real
 measurement, confirmed empirically below.
 
-| Scenario | Before | After | Real result |
-|---|---|---|---|
-| `no_change` (T0→T1) | `S2A_35TMF_20220726_0_L2A` (2022-07-26) | `S2B_35TMF_20230805_0_L2A` (2023-08-05) | `NO_CHANGE`, dNBR mean 0.026, 0 ha affected after MMU |
-| `fire` (T1→T2) | `S2B_35TMF_20230805_0_L2A` (2023-08-05) | `S2A_35TMF_20230830_0_L2A` (2023-08-30) | `DISTURBANCE_DETECTED`, 84.24 ha / 6.0% of baseline forest affected |
+| Scenario | Before | After | Real result | FIRMS |
+|---|---|---|---|---|
+| `no_change` (T0→T1) | `S2A_35TMF_20220726_0_L2A` (2022-07-26) | `S2B_35TMF_20230805_0_L2A` (2023-08-05) | `NO_CHANGE`, dNBR mean 0.026, 0 ha affected after MMU | `NOT_FOUND` |
+| `fire` (T1→T2) | `S2B_35TMF_20230805_0_L2A` (2023-08-05) | `S2A_35TMF_20230830_0_L2A` (2023-08-30) | `DISTURBANCE_DETECTED`, 84.24 ha / 6.0% of baseline forest affected | `SUPPORTED`, 40 hotspots |
 
 Both scenes come from Element84 Earth Search (`sentinel-2-l2a` collection, AWS
 Open Data, no auth). Data source: `docs/roles/02_RS_PLAN.md`, primary provider.
+
+The 40 FIRMS hotspots matched for the `fire` scenario start on **2023-08-21**,
+the documented `EMSR686` ignition date, which is independent thermal
+confirmation that the detected dNBR signature is a fire and not a harvest,
+phenology shift or processing artefact. They are a thermal-anomaly signal only,
+not a perimeter: `affected_area_ha` still comes from the dNBR components.
+
+## FIRMS attribution (no API key required)
+
+Attribution uses NASA FIRMS' **open per-country yearly archive**
+(`https://firms.modaps.eosdis.nasa.gov/data/country/viirs-snpp/<year>/viirs-snpp_<year>_<country>.csv`),
+which needs no account and no `MAP_KEY`. The exact upstream file is cached under
+`rs/sources/<plot_id>/firms/` and its SHA-256 is recorded in
+`firms.source_refs`, so attribution reproduces offline and is independently
+checkable against the public file. Hotspots are filtered to the observation
+window (UTC `acq_date`/`acq_time`), to `nominal`/`high` confidence, and to
+within the frozen 500 m tolerance of the AOI.
+
+`rs/firms.py` still supports the near-real-time FIRMS "area" API through the
+optional `FIRMS_MAP_KEY` env var; the archive is preferred because it is keyless
+and reproducible. With neither source present, `support` is honestly
+`NOT_CHECKED` and no hotspot count is invented
+(`test_firms_is_not_checked_without_an_archive_or_map_key`).
 
 ## Reserve AOI (data-access insurance, not a second demo)
 
@@ -49,7 +72,11 @@ plot_id `GR-EVIA-PEFKI-RESERVE-001`, ~1539 ha, tile `34SFJ`.
 
 | Scenario | Before | After | Real result |
 |---|---|---|---|
-| `no_change` (pre-fire baseline pair) | `S2B_34SFJ_20200724_0_L2A` (2020-07-24, baseline `02.14`) | `S2A_34SFJ_20210727_0_L2A` (2021-07-27, baseline `03.01`) | `DISTURBANCE_DETECTED`: a small real 1.68 ha / 0.26%-of-baseline-forest signal (42 px), well under the 5 ha backend policy threshold |
+| `no_change` (pre-fire baseline pair) | `S2B_34SFJ_20200724_0_L2A` (2020-07-24, baseline `02.14`) | `S2A_34SFJ_20210727_0_L2A` (2021-07-27, baseline `03.01`) | `DISTURBANCE_DETECTED`: a small real 1.68 ha / 0.26%-of-baseline-forest signal (42 px), well under the 5 ha backend policy threshold; FIRMS `NOT_FOUND` |
+
+The window closes 2021-07-27, a week before the 2021-08-03 ignition, so FIRMS
+correctly finds no hotspot: the small signal is real but unattributed, exactly
+the case policy v1 routes to `REVIEW_REQUIRED` rather than a freeze.
 
 Reported honestly as `DISTURBANCE_DETECTED`, not forced to `NO_CHANGE`: 11
 smaller candidate components were correctly dropped by the 25-pixel MMU filter,
@@ -102,16 +129,21 @@ dark/burnt-pixel preservation, north-up 20 m UTM grid construction, exact
 pixel-area/MMU accounting, `NO_CHANGE` / `DISTURBANCE_DETECTED` /
 `INSUFFICIENT_DATA` classification on synthetic local rasters, forbidden-field
 absence, NaN/Infinity absence, OS-independent relative paths, run-to-run
-reproducibility, tampered-artifact rejection, and full schema + semantic
+reproducibility, tampered-artifact rejection, FIRMS window/confidence/500 m
+filtering and its `SUPPORTED` / `NOT_FOUND` / `NOT_CHECKED` branches, the frozen
+policy freeze preconditions on the fire bundle, and full schema + semantic
 validation (`tools/contract_helpers.validate_evidence`) of all three real
 committed bundles (primary no_change, primary fire, reserve).
 
 ## Known limitations
 
-- FIRMS attribution is honestly `NOT_CHECKED`: the NASA FIRMS area API needs a
-  free self-service `MAP_KEY` (`FIRMS_MAP_KEY` env var), not configured here.
-  Backend policy already routes unattributed disturbance to
-  `REVIEW_REQUIRED`, not an automatic freeze, so this does not block P0.
+- FIRMS is checked against the keyless yearly archive, not the near-real-time
+  API. For a demo over historical events that is strictly better (it is the
+  quality-controlled record and it reproduces offline), but it means a *live*
+  same-week observation would need the `FIRMS_MAP_KEY` NRT path instead.
+  `NOT_FOUND` means "no qualifying hotspot in this window and AOI", which is
+  not proof that no disturbance occurred - only that no thermal anomaly
+  attributes it.
 - `quality.temporal_comparability` uses a documented `DEMO_LOGIC` heuristic
   (day-of-year gap + AOI cloud ratio), not a phenology model.
 - Both AOI polygons are hand-picked boxes confirmed forested by ESA WorldCover,
@@ -130,10 +162,15 @@ committed bundles (primary no_change, primary fire, reserve).
 
 ## Next handoff
 
-Backend: import `rs/bundles/no_change`, `rs/bundles/fire`, and
-`rs/bundles/evia_reserve_no_change` via `python -m backend.tools.import_bundle`,
-confirm `NO_CHANGE`/`DISTURBANCE_DETECTED` policy evaluation (the reserve
-bundle should resolve to `REVIEW_REQUIRED`, not a freeze), and report back
-schema/semantic acceptance or a concrete diff. Frontend: aligned
+Backend: re-import `rs/bundles/no_change`, `rs/bundles/fire`, and
+`rs/bundles/evia_reserve_no_change` via `python -m backend.tools.import_bundle`.
+`feat/backend-api` already accepted all three at `feat/rs-pipeline@f094a6e`; the
+FIRMS change above is the missing input it asked for, so the **fire** bundle now
+carries `firms.support = SUPPORTED` with a `firms-points` artifact and should
+move from `REVIEW_REQUIRED / DISTURBANCE_UNATTRIBUTED` to a real
+`FREEZE_REQUESTED` under policy v1 (84.24 ha >= 5 ha, 6.0% >= 1%,
+`require_firms_support` satisfied). The other two bundles are unchanged in
+outcome and should stay `NO_RESTRICTION` and `REVIEW_REQUIRED` respectively.
+Frontend: aligned
 `before.png`/`after.png`/`dnbr_preview.png` in each bundle are ready for the
 dashboard once Backend serves them via `/api/v1/artifacts/{artifact_id}`.

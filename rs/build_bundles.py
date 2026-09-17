@@ -42,6 +42,11 @@ def build_scenario(config, name, *, site_tag):
     if not forest_mask_path.exists():
         acquire.fetch_forest_mask_source(config["stac_bbox_hint"], DATA_ROOT, plot_id)
 
+    # Keyless FIRMS archive covering every year the observation window touches.
+    if config.get("firms_country"):
+        years = range(int(before["acquired_at"][:4]), int(after["acquired_at"][:4]) + 1)
+        acquire.fetch_firms_archive(DATA_ROOT, plot_id, years, config["firms_country"])
+
     request_name = f"request_{name}" if not site_tag else f"request_{site_tag}_{name}"
     request_path = ROOT / "rs" / "configs" / f"{request_name}.json"
     acquire.write_request(

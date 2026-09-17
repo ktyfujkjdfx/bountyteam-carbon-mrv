@@ -9,13 +9,14 @@ National Park, Evros, Greece (primary) and northern Evia (reserve).
 """
 import json
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 import pytest
 import rasterio
 
-from rs import components, gridmath, harmonize, indices, masks, pipeline, verify
+from rs import components, firms, gridmath, harmonize, indices, masks, pipeline, verify
 from rs.contracts import check_schema, digest, read_json, validate_evidence
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -333,6 +334,78 @@ def test_reproducible_rerun_produces_identical_canonical_bytes(tmp_path):
     )
 
 
+# --- FIRMS attribution ---
+
+
+def _hotspot(lon, lat, date, time="1200", confidence="n"):
+    return {"longitude": str(lon), "latitude": str(lat), "acq_date": date, "acq_time": time,
+            "confidence": confidence}
+
+
+def test_firms_archive_url_is_keyless_and_per_country_year():
+    url = firms.archive_url(2023, "Greece")
+    assert url.startswith("https://firms.modaps.eosdis.nasa.gov/data/country/")
+    assert url.endswith("viirs-snpp_2023_Greece.csv")
+    assert "key" not in url.lower()  # the archive needs no MAP_KEY; the area API does
+
+
+def test_firms_confidence_labels_cover_archive_and_api_spellings():
+    # The yearly archive writes l/n/h, the area API writes low/nominal/high.
+    assert [firms.confidence_label(c) for c in ("l", "n", "h")] == ["low", "nominal", "high"]
+    assert firms.confidence_label("NOMINAL") == "nominal"
+    assert "low" not in firms.DEFAULT_CONFIDENCE_FILTER
+
+
+def test_firms_window_filter_drops_out_of_window_and_low_confidence():
+    start = datetime(2023, 8, 5, 9, 0, tzinfo=timezone.utc)
+    end = datetime(2023, 8, 30, 9, 0, tzinfo=timezone.utc)
+    rows = [
+        _hotspot(26.2, 41.13, "2023-08-22", "1008", "h"),   # kept
+        _hotspot(26.2, 41.13, "2023-08-23", "0130", "n"),   # kept
+        _hotspot(26.2, 41.13, "2023-08-23", "0130", "l"),   # dropped: low confidence
+        _hotspot(26.2, 41.13, "2023-08-04", "1200", "h"),   # dropped: before window
+        _hotspot(26.2, 41.13, "2023-09-01", "1200", "h"),   # dropped: after window
+    ]
+    kept = firms.filter_hotspots(rows, start, end)
+    assert [p["acq_date"] for p in kept] == ["2023-08-22", "2023-08-23"]
+    assert all(firms.confidence_label(p["confidence"]) != "low" for p in kept)
+
+
+def test_firms_window_filter_is_inclusive_at_the_exact_boundaries():
+    start = datetime(2023, 8, 5, 9, 0, tzinfo=timezone.utc)
+    end = datetime(2023, 8, 30, 9, 0, tzinfo=timezone.utc)
+    rows = [_hotspot(26.2, 41.13, "2023-08-05", "0900"), _hotspot(26.2, 41.13, "2023-08-30", "0900")]
+    assert len(firms.filter_hotspots(rows, start, end)) == 2
+
+
+def test_firms_spatial_match_honours_the_500m_tolerance():
+    aoi = {"type": "Polygon", "coordinates": [[[26.19, 41.11], [26.24, 41.11], [26.24, 41.15],
+                                               [26.19, 41.15], [26.19, 41.11]]]}
+    inside = _hotspot(26.21, 41.13, "2023-08-22")
+    just_outside = _hotspot(26.1932, 41.13, "2023-08-22")   # ~ -0.0068 deg lon, inside the buffer
+    far_away = _hotspot(26.05, 41.13, "2023-08-22")         # ~12 km west, far beyond it
+    matched = firms.match_within_aoi([inside, just_outside, far_away], aoi)
+    assert inside in matched and just_outside in matched and far_away not in matched
+    assert firms.SPATIAL_TOLERANCE_M == 500
+
+
+def test_firms_is_not_checked_without_an_archive_or_map_key(tmp_path, monkeypatch):
+    # No cached archive directory and no MAP_KEY must yield NOT_CHECKED with an
+    # explicit limitation - never an invented hotspot count.
+    monkeypatch.delenv("FIRMS_MAP_KEY", raising=False)
+    request_path = _build_offline_case(tmp_path, after_b12_boost=0, disturbed_slice=np.s_[0:0, 0:0])
+    evidence = verify.run(request_path, tmp_path / "bundle")
+    assert evidence["firms"] == {
+        "support": "NOT_CHECKED", "hotspot_count": 0,
+        "window_start": evidence["observation"]["before"]["acquired_at"],
+        "window_end": evidence["observation"]["after"]["acquired_at"],
+        "spatial_tolerance_m": 500, "product": "VIIRS_SNPP_NRT",
+        "confidence_filter": ["nominal", "high"], "source_refs": [],
+        "matched_points_artifact_id": None,
+    }
+    assert any("NOT_CHECKED" in line for line in evidence["limitations"])
+
+
 # --- the real bundles committed under rs/bundles/ ---
 
 REAL_BUNDLES = [
@@ -376,6 +449,54 @@ def test_real_bundle_below_policy_area_threshold_is_not_over_claimed():
     result = validate_evidence(evidence)
     assert evidence["metrics"]["affected_area_ha"] < policy["freeze_min_area_ha"]
     assert result["decision"] == "REVIEW_REQUIRED"  # Backend's own recomputation, read-only here
+
+
+REAL_BUNDLE_FIRMS = [("no_change", "NOT_FOUND"), ("fire", "SUPPORTED"), ("evia_reserve_no_change", "NOT_FOUND")]
+
+
+@pytest.mark.parametrize("bundle_name,expected_support", REAL_BUNDLE_FIRMS)
+def test_real_bundle_firms_support_matches_the_committed_points(bundle_name, expected_support):
+    # The keyless FIRMS archive is checked for every real bundle, so support is
+    # never NOT_CHECKED here; SUPPORTED must be backed by a real points artifact
+    # and NOT_FOUND must carry no count and no artifact.
+    bundle_dir = ROOT / "rs" / "bundles" / bundle_name
+    evidence_path = bundle_dir / "verification.json"
+    if not evidence_path.exists():
+        pytest.skip(f"real bundle not present: {evidence_path}")
+    block = read_json(evidence_path)["firms"]
+    assert block["support"] == expected_support
+    assert block["product"] == "VIIRS_SNPP_ARCHIVE_C2"
+    assert block["source_refs"] and all("sha256=" in ref for ref in block["source_refs"])
+    if expected_support == "NOT_FOUND":
+        assert block["hotspot_count"] == 0 and block["matched_points_artifact_id"] is None
+        assert not (bundle_dir / "firms.geojson").exists()
+        return
+    assert block["matched_points_artifact_id"] == "firms-points"
+    features = read_json(bundle_dir / "firms.geojson")["features"]
+    assert len(features) == block["hotspot_count"] > 0
+    start = datetime.strptime(block["window_start"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    end = datetime.strptime(block["window_end"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    for feature in features:
+        stamp = firms.acquired_at(feature["properties"])
+        assert start <= stamp <= end
+        assert firms.confidence_label(feature["properties"]["confidence"]) in block["confidence_filter"]
+
+
+def test_fire_bundle_satisfies_every_frozen_freeze_precondition():
+    # RS does not decide a freeze, but the fire bundle must carry everything
+    # policy v1 requires for Backend to be able to: area, forest fraction and
+    # independent FIRMS support. RS still emits no decision or credit state.
+    bundle_dir = ROOT / "rs" / "bundles" / "fire"
+    evidence_path = bundle_dir / "verification.json"
+    if not evidence_path.exists():
+        pytest.skip(f"real bundle not present: {evidence_path}")
+    evidence = read_json(evidence_path)
+    policy = read_json(ROOT / "config" / "policy.v1.json")
+    metrics = evidence["metrics"]
+    assert metrics["affected_area_ha"] >= policy["freeze_min_area_ha"]
+    assert metrics["affected_fraction_of_baseline_forest"] >= policy["freeze_min_forest_fraction"]
+    assert policy["require_firms_support"] and evidence["firms"]["support"] == "SUPPORTED"
+    assert "decision" not in evidence and "credit_status" not in evidence
 
 
 @pytest.mark.parametrize("bundle_name,request_name,_outcome,_tile", REAL_BUNDLES)

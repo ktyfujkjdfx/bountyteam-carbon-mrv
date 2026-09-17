@@ -6,6 +6,7 @@ a full scene. Cached files are the exact bytes later hashed into
 """
 import hashlib
 import json
+import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -13,7 +14,7 @@ import rasterio
 from rasterio.windows import from_bounds
 from rasterio.warp import transform_bounds
 
-from rs import forestmask, harmonize, stac
+from rs import firms, forestmask, harmonize, stac
 from rs.contracts import digest
 
 BANDS = ("B04", "B08", "B8A", "B12", "SCL")
@@ -71,6 +72,25 @@ def fetch_forest_mask_source(bbox_wgs84, data_root, plot_id):
     with rasterio.open(out_path, "w", **profile) as dst:
         dst.write(data, 1)
     return out_path
+
+
+def fetch_firms_archive(data_root, plot_id, years, country, product=firms.ARCHIVE_PRODUCT):
+    """Cache the keyless FIRMS per-country yearly archive files for `years`.
+
+    Stored as the untouched upstream bytes so `firms.source_refs` can carry a
+    checkable SHA-256, and so `rs.verify` never needs the network.
+    """
+    out_dir = Path(data_root) / plot_id / "firms"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for year in sorted(set(years)):
+        url = firms.archive_url(year, country, product)
+        out_path = out_dir / f"{product}_{year}_{country}.csv"
+        if not out_path.exists():
+            with urllib.request.urlopen(url, timeout=120) as response:
+                out_path.write_bytes(response.read())
+        paths.append(out_path)
+    return paths
 
 
 def build_scene_descriptor(item, local_paths):

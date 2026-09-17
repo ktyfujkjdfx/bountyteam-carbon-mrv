@@ -108,7 +108,7 @@
   "outcome": "DISTURBANCE_DETECTED",
   "method": {
     "pipeline_version": "1.0.0",
-    "code_commit": "c92133be76b20bea40b1e998d9d9f657a5326a12",
+    "code_commit": "f31b943c5104b91e00e8e47a889583990e52631d",
     "config_sha256": "0xf2c9820c7262e4530c581ea75be4b5b0e95c0ffa69806cf99e5f61a34169cc7b",
     "grid": {
       "epsg": 32634,
@@ -184,17 +184,20 @@
     "affected_pixel_count": 42
   },
   "firms": {
-    "support": "NOT_CHECKED",
+    "support": "NOT_FOUND",
     "hotspot_count": 0,
     "window_start": "2020-07-24T09:19:41Z",
     "window_end": "2021-07-27T09:29:39Z",
     "spatial_tolerance_m": 500,
-    "product": "VIIRS_SNPP_NRT",
+    "product": "VIIRS_SNPP_ARCHIVE_C2",
     "confidence_filter": [
       "nominal",
       "high"
     ],
-    "source_refs": [],
+    "source_refs": [
+      "NASA FIRMS archive viirs-snpp_2020_Greece.csv sha256=6b99b736b1954fd76ae6c65083a0f96ed7e294140fda60cc53dc670e795691a5",
+      "NASA FIRMS archive viirs-snpp_2021_Greece.csv sha256=57f48c9349e13cb054c799695f4f9f3711425291340aedbb0c798b2cc4e70b5f"
+    ],
     "matched_points_artifact_id": null
   },
   "artifacts": [
@@ -265,6 +268,6 @@
   ],
   "limitations": [
     "11 candidate disturbance component(s) below the 1 ha / 25-pixel minimum mapping unit were excluded from affected_area_ha and affected_pixel_count.",
-    "FIRMS API MAP_KEY not configured (FIRMS_MAP_KEY env var); fire attribution left as NOT_CHECKED, not fabricated. Backend policy routes unattributed disturbance to REVIEW_REQUIRED, not automatic freeze."
+    "FIRMS checked against the archive for this window and AOI and found no qualifying hotspot; absence of a thermal anomaly is not proof that no disturbance occurred."
   ]
 }
