@@ -66,6 +66,12 @@ export function App({ client, config }: Props) {
           {!config.demoSession && <strong className="warn"> · VITE_DEMO_SESSION не задан — Backend вернёт 401</strong>}
         </div>
       )}
+      {config.adapter === 'http' && health.data?.mode === 'CONTRACT_FIXTURE' && (
+        <div className="banner banner-fixture" role="note" data-testid="mock-ledger-banner">
+          <strong>Backend в режиме CONTRACT_FIXTURE.</strong> Chain = mock ledger Backend (chain {health.data.chain} относится к mock, не к
+          блокчейну). Receipts, tx hashes и anchors — не on-chain доказательство.
+        </div>
+      )}
 
       {health.error && (
         <div className="banner-error">
@@ -102,7 +108,17 @@ export function App({ client, config }: Props) {
             </>
           )}
         </div>
-        {plotId && <Dashboard key={`${scope}|${plotId}`} client={client} scope={scope} plotId={plotId} actor={actor} demoAuthorizationId={config.demoAuthorizationId} />}
+        {plotId && (
+          <Dashboard
+            key={`${scope}|${plotId}`}
+            client={client}
+            scope={scope}
+            plotId={plotId}
+            actor={actor}
+            demoAuthorizationId={config.demoAuthorizationId}
+            ledger={client.kind === 'fixture' ? 'fixture' : health.data?.mode === 'CONTRACT_FIXTURE' ? 'mock' : health.data ? 'chain' : 'unknown'}
+          />
+        )}
       </main>
     </div>
   );

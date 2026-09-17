@@ -17,7 +17,8 @@ import { CREDIT_META, TRANSACTION_META } from '../domain/status';
 import { formatUintString, formatUtc } from '../domain/format';
 import { useTrackedAction, type TrackedAction } from '../hooks/useTrackedAction';
 import type { ApiError } from '../api/errors';
-import { Badge, Empty, ErrorNotice, Field, Hash, Loading, StatusBadge } from './common';
+import { Empty, ErrorNotice, Field, Hash, LedgerNote, Loading, StatusBadge } from './common';
+import type { LedgerKind } from './Dashboard';
 
 export interface OperationReport {
   source: string;
@@ -38,6 +39,7 @@ interface Props {
   onChanged: () => void;
   onOperation: (report: OperationReport) => void;
   onRejected: (message: string) => void;
+  ledger: LedgerKind;
 }
 
 function OperationStatus({ action, label }: { action: TrackedAction<unknown, Operation>; label: string }) {
@@ -178,8 +180,9 @@ function BatchCard({
         <Field label="Выпуск / последнее наблюдение">
           {formatUtc(batch.issued_at)} / {formatUtc(batch.last_observed_at)}
         </Field>
-        <Field label="Evidence серии (выпуск)">
+        <Field label="Evidence hash серии (/credits)">
           <Hash value={batch.evidence_hash} />
+          <div className="muted small">Значение Backend для серии; связь с конкретной проверкой — во вкладке Proof (anchors).</div>
         </Field>
         <Field label="Chain state checked at">{formatUtc(batch.chain_state_checked_at)}</Field>
       </dl>
@@ -274,7 +277,7 @@ function BatchCard({
 }
 
 export function CreditsPanel(props: Props) {
-  const { client, scope, plot, actor, credits, creditsError, creditsLoading, onReloadCredits, demoAuthorizationId, onChanged, onOperation, onRejected } =
+  const { client, scope, plot, actor, credits, creditsError, creditsLoading, onReloadCredits, demoAuthorizationId, onChanged, onOperation, onRejected, ledger } =
     props;
   const [authorizationId, setAuthorizationId] = useState(demoAuthorizationId);
 
@@ -340,11 +343,7 @@ export function CreditsPanel(props: Props) {
           onRejected={onRejected}
         />
       ))}
-      {client.kind === 'fixture' && (
-        <p className="muted small">
-          <Badge tone="review">FIXTURE</Badge> Балансы, receipts и tx hashes эмулируются adapter-ом по golden fixtures; блокчейн не вызывается.
-        </p>
-      )}
+      <LedgerNote ledger={ledger} />
     </div>
   );
 }

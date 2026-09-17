@@ -44,7 +44,7 @@ export function ErrorNotice({
   compact?: boolean | undefined;
 }) {
   const offline = error.kind === 'network' || error.kind === 'timeout';
-  const hint = statusHint(error.status);
+  const hint = statusHint(error.status, error.code);
   return (
     <div className={`state state-error${compact ? ' compact' : ''}`} role="alert" data-testid="error-notice" data-status={error.status ?? error.kind}>
       <strong>
@@ -82,6 +82,21 @@ export function Section({ title, children, actions, id }: { title: string; child
       </header>
       <div className="panel-body">{children}</div>
     </section>
+  );
+}
+
+export function LedgerNote({ ledger }: { ledger: 'fixture' | 'mock' | 'chain' | 'unknown' }) {
+  if (ledger === 'chain') return null;
+  const text =
+    ledger === 'fixture'
+      ? 'FIXTURE adapter: балансы, receipts, tx hashes и anchors — синтетическая эмуляция в браузере; блокчейн не вызывался.'
+      : ledger === 'mock'
+        ? 'Backend CONTRACT_FIXTURE: receipts, tx hashes и anchors получены от mock ledger Backend — не on-chain доказательство.'
+        : 'Режим ledger Backend неизвестен (/health недоступен): не считайте receipts on-chain доказательством.';
+  return (
+    <p className="muted small" data-testid="ledger-note" data-ledger={ledger}>
+      <Badge tone="review">{ledger === 'fixture' ? 'FIXTURE' : ledger === 'mock' ? 'MOCK LEDGER' : 'LEDGER ?'}</Badge> {text}
+    </p>
   );
 }
 

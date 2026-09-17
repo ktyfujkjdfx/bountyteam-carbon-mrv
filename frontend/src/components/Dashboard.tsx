@@ -17,12 +17,15 @@ import { formatHa, formatUtc, shortHash } from '../domain/format';
 
 type Tab = 'evidence' | 'credits' | 'proof';
 
+export type LedgerKind = 'fixture' | 'mock' | 'chain' | 'unknown';
+
 interface Props {
   client: MrvApiClient;
   scope: string;
   plotId: string;
   actor: DemoActor;
   demoAuthorizationId: string;
+  ledger: LedgerKind;
 }
 
 const FREEZE_WATCH_MS = 120_000;
@@ -35,7 +38,7 @@ export function openOperationIds(events: Events | null): string[] {
   return [...new Set(open.map((e) => e.operation_id as string))];
 }
 
-export function Dashboard({ client, scope, plotId, actor, demoAuthorizationId }: Props) {
+export function Dashboard({ client, scope, plotId, actor, demoAuthorizationId, ledger }: Props) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [tab, setTab] = useState<Tab>('evidence');
   const [pinnedId, setPinnedId] = useState<string | null>(null);
@@ -222,9 +225,15 @@ export function Dashboard({ client, scope, plotId, actor, demoAuthorizationId }:
                   onChanged={refresh}
                   onOperation={onOperation}
                   onRejected={onRejected}
+                  ledger={ledger}
                 />
               )}
-              {tab === 'proof' && (shownVerification ? <ProofPanel client={client} verification={shownVerification} refreshKey={refreshKey} /> : <Empty>Нет proof.</Empty>)}
+              {tab === 'proof' &&
+                (shownVerification ? (
+                  <ProofPanel client={client} verification={shownVerification} refreshKey={refreshKey} ledger={ledger} />
+                ) : (
+                  <Empty>Нет proof.</Empty>
+                ))}
             </div>
           </section>
         </div>

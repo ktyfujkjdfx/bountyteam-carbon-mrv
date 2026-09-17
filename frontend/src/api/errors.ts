@@ -51,7 +51,14 @@ const STATUS_HINTS: Record<number, string> = {
   503: 'Backend временно не может надёжно принять операцию.',
 };
 
-export function statusHint(status: number | null): string | null {
+const CODE_HINTS: Record<string, string> = {
+  ARTIFACT_INTEGRITY_FAILED: 'Backend отказался отдавать файл: SHA-256 сохранённого артефакта не совпал с manifest.',
+  CHAIN_UNAVAILABLE: 'Сеть блокчейна недоступна; сохранённые операции Backend не потеряны.',
+  DEPLOYMENT_MISMATCH: 'Deployment контракта не совпадает с ожидаемым Backend.',
+};
+
+export function statusHint(status: number | null, code: string | null = null): string | null {
+  if (code && CODE_HINTS[code]) return CODE_HINTS[code];
   return status === null ? null : (STATUS_HINTS[status] ?? null);
 }
 

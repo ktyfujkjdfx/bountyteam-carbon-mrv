@@ -3,15 +3,17 @@ import type { MrvApiClient } from '../api/client';
 import { toApiError, type ApiError } from '../api/errors';
 import type { Verification, VerificationEvidence } from '../api/types';
 import { useResource } from '../hooks/useResource';
-import { Badge, Empty, ErrorNotice, Field, Hash, Loading } from './common';
+import { Badge, Empty, ErrorNotice, Field, Hash, LedgerNote, Loading } from './common';
+import type { LedgerKind } from './Dashboard';
 
 interface Props {
   client: MrvApiClient;
   verification: Verification;
   refreshKey: number;
+  ledger: LedgerKind;
 }
 
-export function ProofPanel({ client, verification, refreshKey }: Props) {
+export function ProofPanel({ client, verification, refreshKey, ledger }: Props) {
   const id = verification.verification_id;
   const proof = useResource((signal) => client.getProof(id, { signal }), [client, id, refreshKey]);
   const [canonical, setCanonical] = useState<{ data: VerificationEvidence | null; error: ApiError | null; loading: boolean }>({
@@ -95,9 +97,8 @@ export function ProofPanel({ client, verification, refreshKey }: Props) {
           ))}
         </ul>
       )}
-      {client.kind === 'fixture' && (
-        <p className="muted small">Fixture mode: anchors и tx hashes — синтетическая эмуляция, блокчейн не вызывался.</p>
-      )}
+      <LedgerNote ledger={ledger} />
+
     </div>
   );
 }

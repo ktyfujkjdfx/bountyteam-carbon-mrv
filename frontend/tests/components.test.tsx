@@ -123,7 +123,7 @@ describe('ProofPanel', () => {
   it('evidence without anchors shows no attributed anchor', async () => {
     const { client } = createFixtureBackend();
     const baseline = await client.getVerification('20000000-0000-4000-8000-000000000001');
-    render(<ProofPanel client={client} verification={baseline} refreshKey={0} />);
+    render(<ProofPanel client={client} verification={baseline} refreshKey={0} ledger="fixture" />);
     expect(await screen.findByTestId('no-anchors')).toHaveTextContent('не приписываются');
     expect(screen.getByTestId('proof-panel')).toHaveTextContent(baseline.evidence_hash);
   });
@@ -132,7 +132,7 @@ describe('ProofPanel', () => {
     const { client, controls } = createFixtureBackend();
     controls.failNext('getProof', { status: 503, code: 'DB', message: 'down' });
     const baseline = await client.getVerification('20000000-0000-4000-8000-000000000001');
-    render(<ProofPanel client={client} verification={baseline} refreshKey={0} />);
+    render(<ProofPanel client={client} verification={baseline} refreshKey={0} ledger="fixture" />);
     expect(screen.getByRole('status')).toHaveTextContent('Загрузка');
     const notice = await screen.findByTestId('error-notice');
     expect(notice).toHaveTextContent('HTTP 503');
@@ -155,6 +155,7 @@ function creditsProps(client: MrvApiClient, overrides: Partial<Parameters<typeof
     onChanged: vi.fn(),
     onOperation: vi.fn(),
     onRejected: vi.fn(),
+    ledger: 'fixture' as const,
     ...overrides,
   };
 }
@@ -241,6 +242,31 @@ describe('CreditsPanel', () => {
     expect(state).toHaveTextContent('SUBMITTED');
     expect(screen.getByTestId('op-status-buy')).toHaveTextContent('не финальный результат');
     expect(screen.queryByTestId('error-notice')).toBeNull();
+  });
+
+  it('SUBMITTED with a Backend diagnostic error (RECEIPT_PENDING) stays pending, not failed', async () => {
+    const { client: base } = createFixtureBackend();
+    const client = {
+      ...base,
+      buyCredits: vi.fn(async () => ({ operation_id: 'op', transaction_state: 'QUEUED' as const, status_url: '/api/v1/operations/op' })),
+      getOperation: vi.fn(async () => ({
+        ...operation('SUBMITTED'),
+        kind: 'BUY' as const,
+        error: { code: 'RECEIPT_PENDING', message: 'receipt not yet available', details: {} },
+      })),
+    } as unknown as MrvApiClient;
+    render(<CreditsPanel {...creditsProps(client)} />);
+    await userEvent.click(screen.getByTestId('buy-submit'));
+    expect(await screen.findByTestId('op-state-buy')).toHaveTextContent('SUBMITTED');
+    expect(screen.getByTestId('op-state-buy')).toHaveAttribute('data-tone', 'info');
+    expect(screen.getByTestId('op-status-buy')).toHaveTextContent('RECEIPT_PENDING');
+    expect(screen.getByTestId('op-status-buy')).toHaveTextContent('не финальный результат');
+    expect(screen.queryByTestId('error-notice')).toBeNull();
+  });
+
+  it('artifact integrity failure explains the hash mismatch instead of a generic 503', () => {
+    render(<ErrorNotice error={new ApiError({ kind: 'http', status: 503, code: 'ARTIFACT_INTEGRITY_FAILED', message: 'Stored artifact failed its hash check' })} />);
+    expect(screen.getByTestId('error-notice')).toHaveTextContent('SHA-256');
   });
 
   it('keeps last confirmed balances visible when a refresh fails', () => {
@@ -331,6 +357,16 @@ describe('App on golden fixtures', () => {
     controls.setOffline(false);
     await userEvent.click(within(firstNotice).getByRole('button', { name: 'Повторить' }));
     expect(await screen.findByTestId('value-decision')).toHaveTextContent('NO_RESTRICTION');
+  });
+
+  it('HTTP Backend in CONTRACT_FIXTURE mode labels its mock ledger receipts as not on-chain', async () => {
+    const { client } = createFixtureBackend({ timings: { jobQueuedMs: 0, jobRunningMs: 0, opQueuedMs: 0, opSubmittedMs: 0 } });
+    const backend = { ...client, kind: 'http', getHealth: async () => ({ api: 'UP', db: 'UP', worker: 'UP', chain: 'UP', deployment_id: '09791e2a-c20a-436b-94f5-c1567da0eb23', mode: 'CONTRACT_FIXTURE' }) } as MrvApiClient;
+    render(<App client={backend} config={resolveConfig({ VITE_API_MODE: 'http', VITE_DEMO_SESSION: 'x' }, '')} />);
+    expect(await screen.findByTestId('mock-ledger-banner')).toHaveTextContent('не on-chain');
+    expect(screen.queryByTestId('fixture-banner')).toBeNull();
+    await userEvent.click(await screen.findByTestId('tab-credits'));
+    expect(await screen.findByTestId('ledger-note')).toHaveAttribute('data-ledger', 'mock');
   });
 
   it('empty plot list shows empty state', async () => {
