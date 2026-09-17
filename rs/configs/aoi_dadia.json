@@ -1,0 +1,33 @@
+{
+  "_class": "ASSUMPTION",
+  "_note": "Primary real AOI: a ~1670 ha rectangle inside the Dadia-Lefkimi-Soufli Forest National Park core (Evros, Greece), chosen from public reporting of the August 2023 Evros wildfires (Copernicus EMS activation EMSR686, ignition 2023-08-21) that named Dadia National Park as burned. The exact sub-AOI boundary is NOT taken from an official EMSR686 damage-delineation vector (not fetched in this environment); it is a hand-picked box within the park confirmed forested by ESA WorldCover. Treat DISTURBANCE_DETECTED/NO_CHANGE from this AOI as this pipeline's own real measurement, not a restatement of EMSR686's official extent.",
+  "plot_id": "GR-EVROS-DADIA-001",
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [26.19, 41.11],
+        [26.24, 41.11],
+        [26.24, 41.15],
+        [26.19, 41.15],
+        [26.19, 41.11]
+      ]
+    ]
+  },
+  "stac_collection": "sentinel-2-l2a",
+  "stac_bbox_hint": [26.14, 41.08, 26.26, 41.18],
+  "scenarios": {
+    "no_change": {
+      "before_scene_id": "S2A_35TMF_20220726_0_L2A",
+      "before_datetime_range": "2022-07-01T00:00:00Z/2022-08-31T00:00:00Z",
+      "after_scene_id": "S2B_35TMF_20230805_0_L2A",
+      "after_datetime_range": "2023-07-15T00:00:00Z/2023-09-15T00:00:00Z"
+    },
+    "fire": {
+      "before_scene_id": "S2B_35TMF_20230805_0_L2A",
+      "before_datetime_range": "2023-07-15T00:00:00Z/2023-09-15T00:00:00Z",
+      "after_scene_id": "S2A_35TMF_20230830_0_L2A",
+      "after_datetime_range": "2023-07-15T00:00:00Z/2023-09-15T00:00:00Z"
+    }
+  }
+}

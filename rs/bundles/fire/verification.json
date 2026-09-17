@@ -1,0 +1,270 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_kind": "REAL",
+  "plot_id": "GR-EVROS-DADIA-001",
+  "plot_geometry_hash": "0x2726b0ee0a8828269da0d38a021803399c4c9b4b0340bcf85496b990ef580393",
+  "observation": {
+    "before": {
+      "scene_id": "S2B_35TMF_20230805_0_L2A",
+      "acquired_at": "2023-08-05T09:09:07Z",
+      "provider": "Element84 Earth Search (AWS Open Data)",
+      "collection": "sentinel-2-l2a",
+      "processing_baseline": "05.09",
+      "mgrs_tile": "35TMF",
+      "assets": [
+        {
+          "band": "B04",
+          "source_ref": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/35/T/MF/2023/8/S2B_35TMF_20230805_0_L2A/B04.tif",
+          "local_sha256": "0x6790206851d3c816bda3ca4e49daba58b76a7b2818708d0b5de97bc787cf194b",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "B08",
+          "source_ref": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/35/T/MF/2023/8/S2B_35TMF_20230805_0_L2A/B08.tif",
+          "local_sha256": "0x85147ff78e5f33eef3ffb62f44d9bff3635e9a576e382bb7eb530820b8729664",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "B8A",
+          "source_ref": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/35/T/MF/2023/8/S2B_35TMF_20230805_0_L2A/B8A.tif",
+          "local_sha256": "0xfb78e5d3565b6cac4b7a2f9e940d1d38e2525fd4c0340e5eaaabbf034f25b76b",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "B12",
+          "source_ref": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/35/T/MF/2023/8/S2B_35TMF_20230805_0_L2A/B12.tif",
+          "local_sha256": "0xdce2dbd32058b554d706e3138bb27ae37272354a021075d68c7cae4402d838b7",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "SCL",
+          "source_ref": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/35/T/MF/2023/8/S2B_35TMF_20230805_0_L2A/SCL.tif",
+          "local_sha256": "0x7ea1a0d5b60443bd4ec98ed90474b4218ee5d5e20df608f0717a0f41d07990e8",
+          "scale_applied": 1,
+          "offset_applied": 0,
+          "transform_origin": "PRODUCT_METADATA"
+        }
+      ]
+    },
+    "after": {
+      "scene_id": "S2A_35TMF_20230830_0_L2A",
+      "acquired_at": "2023-08-30T09:09:08Z",
+      "provider": "Element84 Earth Search (AWS Open Data)",
+      "collection": "sentinel-2-l2a",
+      "processing_baseline": "05.09",
+      "mgrs_tile": "35TMF",
+      "assets": [
+        {
+          "band": "B04",
+          "source_ref": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/35/T/MF/2023/8/S2A_35TMF_20230830_0_L2A/B04.tif",
+          "local_sha256": "0xc0105398fd48c04daaa8c5cdba288b6e56fe8ce17b33774e4c1693f1e0263f49",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "B08",
+          "source_ref": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/35/T/MF/2023/8/S2A_35TMF_20230830_0_L2A/B08.tif",
+          "local_sha256": "0x28ae33839f4b9e1e052759ce1d4db01e122d98c0fd183555bc955e4fa27e4d06",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "B8A",
+          "source_ref": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/35/T/MF/2023/8/S2A_35TMF_20230830_0_L2A/B8A.tif",
+          "local_sha256": "0xf8cb2cf4de2bf258d79faab9d92b215ae40ca50cd35879f13216864346c0c7f2",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "B12",
+          "source_ref": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/35/T/MF/2023/8/S2A_35TMF_20230830_0_L2A/B12.tif",
+          "local_sha256": "0x58943eb73e8d8c799d2f0c7d039041f967fc8b03008f56977ab85e937673e168",
+          "scale_applied": 0.0001,
+          "offset_applied": 0,
+          "transform_origin": "PROVIDER_HARMONIZED"
+        },
+        {
+          "band": "SCL",
+          "source_ref": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/35/T/MF/2023/8/S2A_35TMF_20230830_0_L2A/SCL.tif",
+          "local_sha256": "0xb166058d3410a4dafdcdddddda5478553c13d36fdc21a7330c643db4aa406259",
+          "scale_applied": 1,
+          "offset_applied": 0,
+          "transform_origin": "PRODUCT_METADATA"
+        }
+      ]
+    }
+  },
+  "outcome": "DISTURBANCE_DETECTED",
+  "method": {
+    "pipeline_version": "1.0.0",
+    "code_commit": "c42afe5d22b6b07440affb368d7b5df86cbf89b3",
+    "config_sha256": "0xf2c9820c7262e4530c581ea75be4b5b0e95c0ffa69806cf99e5f61a34169cc7b",
+    "grid": {
+      "epsg": 32635,
+      "resolution_m": 20,
+      "width": 213,
+      "height": 225,
+      "transform": [
+        20,
+        0,
+        431980,
+        0,
+        -20,
+        4555740
+      ]
+    },
+    "forest_mask": {
+      "source": "ESA WorldCover 10m v200",
+      "version": "v200",
+      "reference_year": 2021,
+      "sha256": "0xc846057c0d0bcd2bbeb9b548009236fbcdcc1c3d9bf280ccebf0f1399cd94b0f",
+      "interpretation_note": "Tree-cover class (10) only; a 10 m global land-cover product resampled to the 20 m analysis grid by nearest-neighbour, used identically for both dates in the pair."
+    },
+    "parameters": {
+      "ndvi_bands": [
+        "B08",
+        "B04"
+      ],
+      "nbr_bands": [
+        "B8A",
+        "B12"
+      ],
+      "disturbance_dnbr_min": 0.27,
+      "min_component_area_ha": 1,
+      "connectivity": 8,
+      "excluded_scl_classes": [
+        0,
+        1,
+        2,
+        3,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "resampling_continuous": "average",
+      "resampling_categorical": "nearest"
+    }
+  },
+  "quality": {
+    "paired_valid_aoi_ratio": 0.974675,
+    "paired_valid_forest_ratio": 0.966383,
+    "aoi_cloud_ratio_before": 0.0,
+    "aoi_cloud_ratio_after": 0.0,
+    "metadata_complete": true,
+    "grid_aligned": true,
+    "temporal_comparability": "YES",
+    "temporal_note": "Acquisitions 25 days apart in season; AOI cloud ratio < 0.3 on both dates."
+  },
+  "metrics": {
+    "plot_area_ha": 1863.781344,
+    "baseline_forest_area_ha": 1402.88,
+    "analysed_forest_area_ha": 1355.72,
+    "affected_area_ha": 84.24,
+    "affected_fraction_of_baseline_forest": 0.060048,
+    "ndvi_before_mean": 0.625089,
+    "ndvi_after_mean": 0.552425,
+    "dnbr_mean": 0.041963,
+    "dnbr_mean_scope": "PAIRED_VALID_BASELINE_FOREST",
+    "baseline_forest_pixel_count": 35072,
+    "paired_valid_forest_pixel_count": 33893,
+    "affected_pixel_count": 2106
+  },
+  "firms": {
+    "support": "NOT_CHECKED",
+    "hotspot_count": 0,
+    "window_start": "2023-08-05T09:09:07Z",
+    "window_end": "2023-08-30T09:09:08Z",
+    "spatial_tolerance_m": 500,
+    "product": "VIIRS_SNPP_NRT",
+    "confidence_filter": [
+      "nominal",
+      "high"
+    ],
+    "source_refs": [],
+    "matched_points_artifact_id": null
+  },
+  "artifacts": [
+    {
+      "artifact_id": "preview_before",
+      "role": "PREVIEW_BEFORE",
+      "relative_path": "before.png",
+      "media_type": "image/png",
+      "sha256": "0xbe2599b9ced617a1f30feae928b8156eb50e1d3f71148057586a368f767fc3be",
+      "size_bytes": 118295,
+      "bounds_wgs84": [
+        26.189875936826983,
+        41.10959993271551,
+        26.240140974644664,
+        41.15047809193155
+      ],
+      "width": 213,
+      "height": 225
+    },
+    {
+      "artifact_id": "preview_after",
+      "role": "PREVIEW_AFTER",
+      "relative_path": "after.png",
+      "media_type": "image/png",
+      "sha256": "0xf3e3497f2edb3c1fb2e2586de5c55d03b470bbb51662a2535951f467e3c167cc",
+      "size_bytes": 116705,
+      "bounds_wgs84": [
+        26.189875936826983,
+        41.10959993271551,
+        26.240140974644664,
+        41.15047809193155
+      ],
+      "width": 213,
+      "height": 225
+    },
+    {
+      "artifact_id": "dnbr",
+      "role": "DNBR_RASTER",
+      "relative_path": "dnbr.tif",
+      "media_type": "image/tiff",
+      "sha256": "0x6e4162c585bfb6bb3ff81379526cff875ffb04f898fe51c4abafeaef439a94d5",
+      "size_bytes": 178574
+    },
+    {
+      "artifact_id": "affected_area",
+      "role": "AFFECTED_AREA",
+      "relative_path": "affected_area.geojson",
+      "media_type": "application/geo+json",
+      "sha256": "0xe0077061e4a2f619711261690905bef9ac0ee6fc6557208528f005425cd6a281",
+      "size_bytes": 64288
+    },
+    {
+      "artifact_id": "dnbr_preview",
+      "role": "DNBR_PREVIEW",
+      "relative_path": "dnbr_preview.png",
+      "media_type": "image/png",
+      "sha256": "0xf553770279621ca2be255e54b1d8ca62bbfb878967e529ed1f8248c153a7a9e1",
+      "size_bytes": 8938,
+      "bounds_wgs84": [
+        26.189875936826983,
+        41.10959993271551,
+        26.240140974644664,
+        41.15047809193155
+      ],
+      "width": 213,
+      "height": 225
+    }
+  ],
+  "limitations": [
+    "79 candidate disturbance component(s) below the 1 ha / 25-pixel minimum mapping unit were excluded from affected_area_ha and affected_pixel_count.",
+    "FIRMS API MAP_KEY not configured (FIRMS_MAP_KEY env var); fire attribution left as NOT_CHECKED, not fabricated. Backend policy routes unattributed disturbance to REVIEW_REQUIRED, not automatic freeze."
+  ]
+}
