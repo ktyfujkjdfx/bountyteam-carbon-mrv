@@ -21,8 +21,8 @@ decision and is the only runtime oracle sender.
 | `test/*.t.sol` | Foundry unit, security and invariant tests |
 | `tools/compile.cjs` | solc-js 0.8.30 build (the same pipeline that produced the frozen ABI) |
 | `tools/check-abi.cjs` | Byte-identical ABI check against `contracts/contract-abi.json` + forge/solc-js bytecode equality |
-| `tools/deploy-local.cjs` | Deterministic Anvil deploy + role grants; writes the deployment manifest |
-| `scripts/e2e_local.py` | Backend-adapter integration smoke (web3.py, frozen ABI only) |
+| `tools/deploy-local.cjs` | Deterministic Anvil deploy + seed (role grants); writes the deployment manifest |
+| `scripts/e2e_local.py` | Backend-adapter-style integration smoke (web3.py, frozen ABI only; own throwaway Anvil) |
 | `foundry.toml`, `soldeer.lock` | Pinned compiler/EVM settings and `forge-std` 1.10.0 |
 
 ## Prerequisites
@@ -56,25 +56,37 @@ All commands run from `blockchain/` unless noted otherwise.
 | Compile only | `forge build` |
 | Tests only | `forge test` (`forge test -vvv` for traces) |
 | ABI compatibility only | `npm run check:abi` |
-| Deploy + grant roles (terminal 2) | `npm run deploy` |
-| Integration smoke (throwaway Anvil) | `../.venv/bin/python scripts/e2e_local.py` |
-| Smoke against the running deployment | `../.venv/bin/python scripts/e2e_local.py --use-existing` |
+| Deploy + seed roles (terminal 2) | `npm run deploy` |
+| Integration smoke (own throwaway Anvil) | `../.venv/bin/python scripts/e2e_local.py` |
 | CI (GitHub Actions) | `.github/workflows/blockchain.yml`: build, all forge tests, ABI check, Anvil deploy, schema validation, web3.py smoke |
 | Shared checks (repo root) | `python -m pytest -q && npm run check:abi && git diff --check` |
 
 `npm run deploy` always deploys a **new** contract. On a fresh Anvil the address is
 `0x5FbDB2315678afecb367f032d93F642f64180aa3`, but `deployment_id` is a new UUID every time.
 
+**What "seed" means here.** The deploy command is also the seed command. It assigns the
+issuer and oracle roles (owner → `setIssuer`, `setOracle`), checks both permission events,
+and relies on Anvil's pre-funded dev accounts. On purpose, it does **not** issue a demo batch.
+Issuance belongs to Backend: the issuance key is
+`SHA-256(JCS({plot_id, demo_authorization_id, deployment_id}))`, and the frozen demo
+authorization `SYNTHETIC-AUTH-001` is `single_use`. A pre-seeded batch would consume or
+contradict that authorization.
+
+`scripts/e2e_local.py` never touches the shared deployment. It starts its own Anvil on a
+free port, deploys into a temp dir, runs the flow, restarts that Anvil to prove restart
+detection, and writes `blockchain/runtime/e2e-evidence.json`. Backend remains the only
+runtime oracle sender on the shared deployment.
+
 ## Deployment handoff to Backend
 
-`npm run deploy` writes two public files to the repository-root `runtime/` directory.
-`runtime/` is gitignored, and neither file contains a private key.
+`npm run deploy` writes two public files. Both `runtime/` directories are gitignored, and
+neither file contains a private key.
 
 1. `runtime/deployment.json` validates against `contracts/deployment.schema.json`:
    `deployment_id`, `chain_id` (`"31337"`), `contract_address`, `deployment_tx_hash`,
    `contract_code_hash` (keccak256 of the runtime code, the same value as `EXTCODEHASH`),
    `abi_sha256`, and `roles`.
-2. `runtime/deployment.build.json` holds the details that do not fit the schema: source
+2. `blockchain/runtime/deployment.build.json` (Team Lead decision #4) holds the details that do not fit the schema: source
    commit and dirty flag, source SHA-256s, compiler `0.8.30+commit.73712a01`, settings
    (`cancun`, optimizer 200 runs, no CBOR metadata), deploy block number and hash,
    genesis block hash, and role-grant tx hashes.
@@ -102,7 +114,7 @@ recipient are always different from the seller, and the contract rejects a selle
 own batch.
 
 You can override them with `OWNER=… ISSUER=… ORACLE=… BUYER=… RECIPIENT=…`. `RPC_URL` and
-`DEPLOYMENT_DIR` are also configurable. The script refuses any chain ID other than 31337
+`DEPLOYMENT_DIR` (manifest) and `DEPLOYMENT_BUILD_DIR` (build info) are also configurable. The script refuses any chain ID other than 31337
 (`EXPECTED_CHAIN_ID`).
 
 **How Backend gets its configuration without committed secrets.** Backend reads
@@ -153,10 +165,15 @@ from that receipt, **and** `getBatch`/`balanceOf` readback matches.
 
 ### Manual reproduction: ACTIVE → FROZEN → transfer revert (`cast`)
 
-With `anvil` running and `npm run deploy` done (from `blockchain/`):
+This sends `freeze` from the oracle account, so run it **only on a separate verification
+Anvil**, never on the deployment Backend uses as the single oracle sender. From `blockchain/`:
 
 ```bash
-REG=$(node -p "require('../runtime/deployment.json').contract_address")
+anvil --port 8546 --chain-id 31337 --silent &          # verification chain, not the shared 8545
+export ETH_RPC_URL=http://127.0.0.1:8546
+VERIFY_DIR=$(mktemp -d)
+RPC_URL=$ETH_RPC_URL DEPLOYMENT_DIR=$VERIFY_DIR DEPLOYMENT_BUILD_DIR=$VERIFY_DIR npm run deploy
+REG=$(node -p "require('$VERIFY_DIR/deployment.json').contract_address")
 ISSUER=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
 ORACLE=0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
 BUYER=0x90F79bf6EB2c4f870365E785982E1f101E93b906
@@ -180,11 +197,12 @@ cast call --from $BUYER $REG "transfer(uint256,address,uint256)" 1 $RECIPIENT 1
 cast call --from $ORACLE $REG "freeze(uint256,bytes32,bytes32,uint64,uint8)" \
   1 $(cast keccak fire-evidence-2) $(cast keccak fire-decision-2) $OBS 1
 cast call $REG "balanceOf(uint256,address)(uint256)" 1 $BUYER          # still 7
+kill %1                                                  # stop the verification Anvil
 ```
 
-The same flow runs automatically, with receipts, decoded events, readback, mined reverted
-transactions with zero logs and Anvil-restart detection, in `scripts/e2e_local.py`. That
-script writes `runtime/e2e-evidence.json`.
+The same flow runs automatically in `scripts/e2e_local.py`, with receipts, decoded events,
+readback, stale-observation and unknown-batch reverts, mined reverted transactions with zero
+logs, and Anvil-restart detection.
 
 ## Implemented invariants
 
@@ -217,5 +235,8 @@ script writes `runtime/e2e-evidence.json`.
   wall-clock time).
 - The owner cannot be changed, and there is no on-chain getter for roles. The deployment
   manifest and permission events are the source of truth.
-- `scripts/e2e_local.py` uses synthetic hashes, not Backend's canonical JCS/SHA-256
-  derivations.
+- `scripts/e2e_local.py` is Blockchain-side evidence that the handed-off ABI and manifest are
+  enough for a web3.py adapter. It is not Backend's real adapter, and it uses synthetic hashes
+  instead of Backend's canonical JCS/SHA-256 derivations. Joint Backend adapter integration is
+  the next handoff step.
+- The deploy/seed step does not issue a demo batch; issuance is Backend's (see above).
