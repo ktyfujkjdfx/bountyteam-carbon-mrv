@@ -1,5 +1,5 @@
 import type { Plot, PlotSummary, Verification } from '../api/types';
-import { COMPUTATION_META, DATASET_META } from '../domain/status';
+import { COMPUTATION_META, DATASET_META, metaFor } from '../domain/status';
 import { formatNumber, formatUtc, shortHash } from '../domain/format';
 import { GeometryError, geometryBounds } from '../domain/geo';
 import { Badge, StatusBadge } from './common';
@@ -47,8 +47,8 @@ export function ProjectHeader({ plot, plots, onSelectPlot, latest }: Props) {
           )}
           {latest && (
             <span className="badge-row" data-testid="data-mode-badges">
-              <StatusBadge meta={DATASET_META[latest.evidence.dataset_kind]} testId="dataset-kind" />
-              <StatusBadge meta={COMPUTATION_META[latest.computation_mode]} testId="computation-mode" />
+              <StatusBadge meta={metaFor(DATASET_META, latest.evidence.dataset_kind)} testId="dataset-kind" />
+              <StatusBadge meta={metaFor(COMPUTATION_META, latest.computation_mode)} testId="computation-mode" />
               <Badge tone="neutral" title="Исторический replay, не текущее наблюдение">
                 {latest.observation_mode}
               </Badge>

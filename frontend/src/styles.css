@@ -760,6 +760,14 @@ main {
   color: var(--blocked-fg);
 }
 
+.state-error.fatal {
+  max-width: 720px;
+  margin: var(--sp-8) auto;
+  padding: var(--sp-6);
+  gap: var(--sp-3);
+  font-size: var(--fs-md);
+}
+
 .state-warn {
   background: var(--review-bg);
   border-color: rgba(229, 189, 104, 0.25);

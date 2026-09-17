@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { MrvApiClient } from './api/client';
 import { switchAdapterHref, type AppConfig } from './api/config';
 import { DEMO_ACTORS, type DemoActor, type Health } from './api/types';
-import { HEALTH_MODE_META } from './domain/status';
+import { HEALTH_MODE_META, metaFor } from './domain/status';
 import { useResource } from './hooks/useResource';
 import { Dashboard, type LedgerKind } from './components/Dashboard';
 import { MethodologyDialog } from './components/MethodologyDialog';
@@ -69,7 +69,7 @@ export function App({ client, config }: Props) {
         </nav>
         <div className="topbar-right" data-testid="mode-badges">
           {health.data && <SystemHealth health={health.data} ledger={ledger} />}
-          {health.data && <StatusBadge meta={HEALTH_MODE_META[health.data.mode]} testId="health-mode" />}
+          {health.data && <StatusBadge meta={metaFor(HEALTH_MODE_META, health.data.mode)} testId="health-mode" />}
           <label className="field-inline">
             Demo-актор
             <select className="select" value={actor} onChange={(e) => setActor(e.target.value as DemoActor)} data-testid="actor-select">

@@ -20,6 +20,42 @@ export interface StatusMeta {
   label: string;
   tone: Tone;
   hint: string;
+  unknown?: boolean;
+}
+
+export const UNKNOWN_VALUE_HINT = 'Неизвестное значение от Backend — значение отсутствует в текущем API-контракте.';
+
+const MAX_UNKNOWN_LABEL = 64;
+
+export function isKnownKey<K extends string>(table: Readonly<Record<K, unknown>>, value: unknown): value is K {
+  return typeof value === 'string' && Object.hasOwn(table, value);
+}
+
+// Renders a received value as plain text for display; never "undefined"/"null"/"[object Object]".
+export function describeReceived(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    const text = String(value);
+    return text.length > MAX_UNKNOWN_LABEL ? `${text.slice(0, MAX_UNKNOWN_LABEL)}…` : text;
+  }
+  return 'UNKNOWN';
+}
+
+export function unknownMeta(value: unknown): StatusMeta {
+  return { label: `UNKNOWN: ${describeReceived(value)}`, tone: 'neutral', hint: UNKNOWN_VALUE_HINT, unknown: true };
+}
+
+// Contract drift must degrade to a neutral, explicit label instead of crashing the dashboard.
+export function metaFor<K extends string>(table: Readonly<Record<K, StatusMeta>>, value: unknown): StatusMeta {
+  return isKnownKey(table, value) ? table[value] : unknownMeta(value);
+}
+
+export function labelFor<K extends string>(table: Readonly<Record<K, string>>, value: unknown): string {
+  return isKnownKey(table, value) ? table[value] : `Неизвестное значение: ${describeReceived(value)}`;
+}
+
+export function toneFor<K extends string>(table: Readonly<Record<K, Tone>>, value: unknown): Tone {
+  return isKnownKey(table, value) ? table[value] : 'neutral';
 }
 
 export type StatusLayer = 'outcome' | 'quality' | 'decision' | 'operation' | 'credit' | 'job';

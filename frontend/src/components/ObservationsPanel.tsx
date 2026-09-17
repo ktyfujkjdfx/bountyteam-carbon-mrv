@@ -3,7 +3,7 @@ import type { MrvApiClient } from '../api/client';
 import type { ApiError } from '../api/errors';
 import { isTerminalJob } from '../api/polling';
 import type { DemoActor, History, Job, ScenarioId, VerifyRequest } from '../api/types';
-import { DECISION_META, JOB_META, OUTCOME_META, QUALITY_META } from '../domain/status';
+import { DECISION_META, JOB_META, OUTCOME_META, QUALITY_META, metaFor } from '../domain/status';
 import { formatUtc } from '../domain/format';
 import { useTrackedAction } from '../hooks/useTrackedAction';
 import { Empty, ErrorNotice, Loading, StatusBadge } from './common';
@@ -80,7 +80,7 @@ export function ObservationsPanel(props: Props) {
           {verify.phase === 'submitting' && <Loading label="Отправка задания…" />}
           {job && (
             <div>
-              <StatusBadge meta={JOB_META[job.state]} testId="job-state" /> <span className="mono small">{job.job_id}</span>
+              <StatusBadge meta={metaFor(JOB_META, job.state)} testId="job-state" /> <span className="mono small">{job.job_id}</span>
               {job.state !== 'SUCCEEDED' && job.state !== 'FAILED' && <span className="muted small"> — 202 принят, это ещё не результат</span>}
               {job.error && (
                 <div className="warn small">
@@ -121,9 +121,9 @@ export function ObservationsPanel(props: Props) {
                 </span>
                 <span className="small muted">обработано {formatUtc(item.processed_at)}</span>
                 <span className="badge-row">
-                  <StatusBadge meta={OUTCOME_META[item.outcome]} />
-                  <StatusBadge meta={QUALITY_META[item.evidence_quality]} />
-                  <StatusBadge meta={DECISION_META[item.decision]} />
+                  <StatusBadge meta={metaFor(OUTCOME_META, item.outcome)} />
+                  <StatusBadge meta={metaFor(QUALITY_META, item.evidence_quality)} />
+                  <StatusBadge meta={metaFor(DECISION_META, item.decision)} />
                 </span>
               </button>
             </li>

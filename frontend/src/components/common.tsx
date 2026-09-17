@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { ApiError } from '../api/errors';
 import { statusHint } from '../api/errors';
-import type { StatusMeta, Tone } from '../domain/status';
+import { unknownMeta, type StatusMeta, type Tone } from '../domain/status';
 
 export function Badge({ tone, children, title }: { tone: Tone; children: ReactNode; title?: string }) {
   return (
@@ -11,10 +11,27 @@ export function Badge({ tone, children, title }: { tone: Tone; children: ReactNo
   );
 }
 
-export function StatusBadge({ meta, testId }: { meta: StatusMeta; testId?: string }) {
+export function StatusBadge({ meta, testId }: { meta: StatusMeta | null | undefined; testId?: string }) {
+  const safe = meta ?? unknownMeta(undefined);
   return (
-    <span className={`badge tone-${meta.tone}`} title={meta.hint} data-testid={testId} data-tone={meta.tone}>
-      {meta.label}
+    <span
+      className={`badge tone-${safe.tone}`}
+      title={safe.hint}
+      data-testid={testId}
+      data-tone={safe.tone}
+      data-unknown={safe.unknown ? 'true' : undefined}
+    >
+      {safe.label}
+      {safe.unknown && <span className="visually-hidden"> — {safe.hint}</span>}
+    </span>
+  );
+}
+
+export function UnknownValueNote({ meta }: { meta: StatusMeta }) {
+  if (!meta.unknown) return null;
+  return (
+    <span className="status-hint warn" role="note" data-testid="unknown-value-note">
+      {meta.hint}
     </span>
   );
 }

@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { createClient, resolveConfig } from './api/config';
+import { RootErrorBoundary } from './components/RootErrorBoundary';
 import './styles.css';
 
 const root = document.getElementById('root');
@@ -13,7 +14,9 @@ createClient(config).then(
   (client) => {
     createRoot(root).render(
       <StrictMode>
-        <App client={client} config={config} />
+        <RootErrorBoundary>
+          <App client={client} config={config} />
+        </RootErrorBoundary>
       </StrictMode>,
     );
   },

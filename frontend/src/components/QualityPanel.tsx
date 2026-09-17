@@ -1,5 +1,5 @@
 import type { CreditBatch, Plot, Verification } from '../api/types';
-import { QUALITY_META } from '../domain/status';
+import { QUALITY_META, metaFor } from '../domain/status';
 import { formatRatio } from '../domain/format';
 import { StatusBadge } from './common';
 
@@ -51,7 +51,7 @@ export function QualityPanel({ verification, plot, batch }: Props) {
 
   const { quality } = verification.evidence;
   const score = verification.evidence_quality_score;
-  const meta = QUALITY_META[verification.evidence_quality];
+  const meta = metaFor(QUALITY_META, verification.evidence_quality);
 
   return (
     <div data-testid="quality-panel">

@@ -30,7 +30,12 @@ Not shown because API v1 does not provide them: control area, leakage buffer, ca
 token ids, NDVI time series. Missing numeric values render as `N/A`, never as zero.
 
 Screenshots: [`docs/screenshots/`](docs/screenshots/) — real Dadia before/after and disturbance, real Evia
-review-required, synthetic no-change / freeze-requested / FROZEN registry, artifact integrity failure, mobile.
+review-required, synthetic no-change / freeze-requested / FROZEN registry, artifact integrity failure, unknown-enum contract drift, mobile.
+
+Unknown enum values (contract drift) never crash the UI: every status table is read through `metaFor` in
+[src/domain/status.ts](src/domain/status.ts), which falls back to a neutral `UNKNOWN: <received>` badge with a plain
+explanation, and [RootErrorBoundary](src/components/RootErrorBoundary.tsx) keeps `#root` populated with a recovery UI
+for any unexpected render error.
 
 ## Commands
 
@@ -49,7 +54,7 @@ npm run preview        # serve dist at http://127.0.0.1:4173
 | `gen:api` / `check:api` | `src/api/generated/openapi.ts` is regenerated from `contracts/openapi.yaml`, check fails on drift |
 | `lint` | ESLint strict TS + React hooks rules; literal `SIGNING` forbidden in `src/` |
 | `typecheck` | `strict`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess` |
-| `test` | 91 tests: status mapping vs schema enums, both adapters, polling, geometry, artifact pairing, components, golden-fixture flow |
+| `test` | 110 tests: status mapping vs schema enums, both adapters, polling, geometry, artifact pairing, components, unknown-enum resilience, root error boundary, golden-fixture flow |
 | `build` + `check:dist` | offline `dist/` with relative paths, no remote hosts, no GeoTIFF |
 | `e2e` | full demo flow in a real browser + HTTP failure → manual offline fallback; `e2e/backend-integration.spec.ts` (opt-in) runs the real SPA against a live Backend incl. CORS |
 

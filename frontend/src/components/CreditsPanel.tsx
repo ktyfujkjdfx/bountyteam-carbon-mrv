@@ -13,7 +13,7 @@ import {
   type Plot,
   type TransferRequest,
 } from '../api/types';
-import { CREDIT_META, TRANSACTION_META } from '../domain/status';
+import { CREDIT_META, TRANSACTION_META, metaFor } from '../domain/status';
 import { formatUintString, formatUtc } from '../domain/format';
 import { useTrackedAction, type TrackedAction } from '../hooks/useTrackedAction';
 import type { ApiError } from '../api/errors';
@@ -50,7 +50,7 @@ function OperationStatus({ action, label }: { action: TrackedAction<unknown, Ope
       {action.phase === 'submitting' && <Loading label="Отправка запроса в Backend…" />}
       {op && (
         <div>
-          <StatusBadge meta={TRANSACTION_META[op.transaction_state]} testId={`op-state-${label}`} /> {op.kind}{' '}
+          <StatusBadge meta={metaFor(TRANSACTION_META, op.transaction_state)} testId={`op-state-${label}`} /> {op.kind}{' '}
           <span className="mono small">{op.operation_id}</span>
           {op.transaction_state === 'SUBMITTED' && <div className="muted small">Receipt ещё не подтверждён — это не финальный результат.</div>}
           {op.tx_hash && (
@@ -150,6 +150,7 @@ function BatchCard({
   }, [transfer.phase, transfer.error, onRejected]);
 
   const frozen = batch.credit_status === 'FROZEN';
+  const creditMeta = metaFor(CREDIT_META, batch.credit_status);
   const buyValid = POSITIVE_UINT_STRING.test(buyAmount);
   const transferValid = POSITIVE_UINT_STRING.test(transferAmount) && toActor !== actor;
 
@@ -157,7 +158,7 @@ function BatchCard({
     <article className={`registry-record${frozen ? ' frozen' : ''}`} data-testid={`batch-${batch.batch_id}`}>
       <header className="batch-header">
         <h3>Запись реестра · серия #{batch.batch_id}</h3>
-        <StatusBadge meta={CREDIT_META[batch.credit_status]} testId="batch-credit-status" />
+        <StatusBadge meta={creditMeta} testId="batch-credit-status" />
       </header>
       <div className="batch-state">
         <div className="label">Credit state · readback /credits</div>
@@ -170,7 +171,9 @@ function BatchCard({
             прототипа, не юридическое аннулирование; балансы сохранены.
           </p>
         ) : (
-          <p className="small muted">{CREDIT_META[batch.credit_status].hint}</p>
+          <p className={creditMeta.unknown ? 'small warn' : 'small muted'} data-testid={creditMeta.unknown ? 'unknown-value-note' : undefined}>
+            {creditMeta.hint}
+          </p>
         )}
       </div>
       <div className="batch-body">

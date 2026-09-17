@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import type { MrvApiClient } from '../api/client';
 import { toApiError, type ApiError } from '../api/errors';
 import type { ApiEvent, Events } from '../api/types';
-import type { Tone } from '../domain/status';
+import { toneFor, type Tone } from '../domain/status';
 import { formatUtc, shortHash } from '../domain/format';
 import { Badge, Empty, ErrorNotice, Loading } from './common';
 
@@ -94,7 +94,7 @@ export function JournalPanel({ client, plotId, events, eventsError, eventsLoadin
               <span className="timeline-time">{formatUtc(event.occurred_at)}</span>
               <div className="timeline-body">
                 <span>
-                  <Badge tone={KIND_TONE[event.kind]}>{event.kind}</Badge>
+                  <Badge tone={toneFor(KIND_TONE, event.kind)}>{event.kind}</Badge>
                 </span>
                 <span>{event.message}</span>
                 <span className="mono">

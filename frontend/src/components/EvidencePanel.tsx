@@ -9,6 +9,8 @@ import {
   OUTCOME_META,
   QUALITY_META,
   REASON_LABELS,
+  labelFor,
+  metaFor,
 } from '../domain/status';
 import { formatCount, formatHa, formatNumber, formatRatio, formatUtc } from '../domain/format';
 import { Badge, Field, Hash, StatusBadge } from './common';
@@ -63,8 +65,8 @@ export function EvidencePanel({ verification }: { verification: Verification }) 
   return (
     <div className="evidence" data-testid="evidence-panel">
       <div className="badge-row" style={{ marginBottom: 12 }}>
-        <StatusBadge meta={DATASET_META[evidence.dataset_kind]} testId="evidence-dataset-kind" />
-        <StatusBadge meta={COMPUTATION_META[verification.computation_mode]} testId="evidence-computation-mode" />
+        <StatusBadge meta={metaFor(DATASET_META, evidence.dataset_kind)} testId="evidence-dataset-kind" />
+        <StatusBadge meta={metaFor(COMPUTATION_META, verification.computation_mode)} testId="evidence-computation-mode" />
         <Badge tone="neutral" title="Исторический replay, не текущее наблюдение">
           {verification.observation_mode}
         </Badge>
@@ -78,19 +80,19 @@ export function EvidencePanel({ verification }: { verification: Verification }) 
       <div className="evidence-headline">
         <div>
           <div className="label">RS outcome</div>
-          <StatusBadge meta={OUTCOME_META[evidence.outcome]} />
+          <StatusBadge meta={metaFor(OUTCOME_META, evidence.outcome)} />
         </div>
         <div>
           <div className="label">Evidence quality (Backend)</div>
-          <StatusBadge meta={QUALITY_META[verification.evidence_quality]} />
+          <StatusBadge meta={metaFor(QUALITY_META, verification.evidence_quality)} />
         </div>
         <div>
           <div className="label">Решение Backend</div>
-          <StatusBadge meta={DECISION_META[verification.decision]} />
+          <StatusBadge meta={metaFor(DECISION_META, verification.decision)} />
         </div>
         <div>
           <div className="label">Причина</div>
-          <span className="small">{REASON_LABELS[verification.reason]}</span>
+          <span className="small">{labelFor(REASON_LABELS, verification.reason)}</span>
         </div>
       </div>
 
@@ -182,7 +184,7 @@ export function EvidencePanel({ verification }: { verification: Verification }) 
       </Group>
 
       <Group title="FIRMS · тепловые аномалии" summary={`${firms.support} · ${firms.hotspot_count}`}>
-        <StatusBadge meta={FIRMS_META[firms.support]} testId="firms-support" />
+        <StatusBadge meta={metaFor(FIRMS_META, firms.support)} testId="firms-support" />
         <dl className="fields" style={{ marginTop: 8 }}>
           <Field label="Hotspots">{firms.hotspot_count}</Field>
           <Field label="Окно">

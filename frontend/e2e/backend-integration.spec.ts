@@ -195,3 +195,55 @@ test('mobile viewport keeps status, map and critical state readable', async ({ b
   expect(errors).toEqual([]);
   await context.close();
 });
+
+test('unknown enum values injected into live Backend responses never blank the dashboard', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+
+  // Rewrite real Backend payloads on the wire: the SPA must degrade, not crash.
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (!/\/credits$|\/history$|\/verifications\/[0-9a-f-]+$/.test(path)) return route.fallback();
+    const response = await route.fetch();
+    if (!String(response.headers()['content-type'] ?? '').includes('json')) return route.fulfill({ response });
+    const data = await response.json();
+    if (path.endsWith('/credits')) {
+      for (const item of data.items ?? []) item.credit_status = 'SUSPENDED_PENDING_REVIEW';
+    } else if (path.endsWith('/history')) {
+      for (const item of data.items ?? []) {
+        item.outcome = 'WILDFIRE_V2';
+        item.decision = 'ESCALATE_TO_AUDITOR';
+      }
+    } else {
+      data.evidence.outcome = 'WILDFIRE_V2';
+      data.decision = 'ESCALATE_TO_AUDITOR';
+      data.reason = 'NEW_REASON_CODE';
+    }
+    return route.fulfill({ response, json: data });
+  });
+
+  await page.goto('/');
+  await openSyntheticPlot(page);
+
+  await expect(page.getByTestId('value-outcome')).toContainText('UNKNOWN: WILDFIRE_V2');
+  await expect(page.getByTestId('value-decision')).toContainText('UNKNOWN: ESCALATE_TO_AUDITOR');
+  await expect(page.getByTestId('value-decision')).toHaveAttribute('data-tone', 'neutral');
+  await expect(page.getByTestId('value-credit')).toContainText('UNKNOWN: SUSPENDED_PENDING_REVIEW');
+  await expect(page.getByTestId('unknown-value-note').first()).toContainText('отсутствует в текущем API-контракте');
+  await expect(page.getByTestId('history')).toContainText('UNKNOWN: WILDFIRE_V2');
+
+  // Map, balances, proof and journal survive the drift.
+  await expect(page.getByTestId('evidence-map')).toBeVisible();
+  await expect(page.getByTestId('journal')).toBeVisible();
+  await expect(page.locator('.leaflet-overlay-pane img')).toHaveCount(1);
+  await page.getByTestId('tab-credits').click();
+  await expect(page.getByTestId('actor-balance')).toBeVisible();
+  await expect(page.getByTestId('transfer-submit')).toBeDisabled();
+  await page.getByTestId('tab-proof').click();
+  await expect(page.getByTestId('proof-panel')).toBeVisible();
+
+  await expect(page.getByTestId('root-error-boundary')).toHaveCount(0);
+  expect(await page.locator('#root').innerHTML()).not.toBe('');
+  expect(pageErrors).toEqual([]);
+  await shot(page, 'backend-06-unknown-enum-drift');
+});
