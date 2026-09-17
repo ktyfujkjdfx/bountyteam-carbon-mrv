@@ -1,0 +1,36 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+cache_path = "cache"
+libs = ["dependencies"]
+# Same compiler/EVM as the frozen specification (contracts/abi-build.json).
+solc_version = "0.8.30"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+bytecode_hash = "none"
+cbor_metadata = false
+remappings = [
+    "shared-contracts/=../contracts/",
+    "forge-std/=dependencies/forge-std-1.10.0/src/",
+]
+allow_paths = ["../contracts"]
+fs_permissions = [{ access = "read", path = "../contracts" }, { access = "read", path = "./out" }]
+
+[fuzz]
+runs = 512
+seed = "0xb0b"
+
+[invariant]
+runs = 128
+depth = 32
+fail_on_revert = false
+
+[dependencies]
+forge-std = "1.10.0"
+
+[soldeer]
+remappings_generate = false
+remappings_regenerate = false
