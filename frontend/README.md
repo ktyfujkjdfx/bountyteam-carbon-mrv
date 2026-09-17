@@ -27,9 +27,9 @@ npm run preview        # serve dist at http://127.0.0.1:4173
 | `gen:api` / `check:api` | `src/api/generated/openapi.ts` is regenerated from `contracts/openapi.yaml`, check fails on drift |
 | `lint` | ESLint strict TS + React hooks rules; literal `SIGNING` forbidden in `src/` |
 | `typecheck` | `strict`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess` |
-| `test` | 85 tests: status mapping vs schema enums, both adapters, polling, geometry, components, golden-fixture flow |
+| `test` | 88 tests: status mapping vs schema enums, both adapters, polling, geometry, components, golden-fixture flow |
 | `build` + `check:dist` | offline `dist/` with relative paths, no remote hosts, no GeoTIFF |
-| `e2e` | full demo flow in a real browser + HTTP failure → manual offline fallback |
+| `e2e` | full demo flow in a real browser + HTTP failure → manual offline fallback; `e2e/backend-integration.spec.ts` (opt-in) runs the real SPA against a live Backend incl. CORS |
 
 ## Adapter selection (config only, never automatic)
 
@@ -57,10 +57,16 @@ in `tests/fixtureAdapter.test.ts`.
 
 ## Backend handoff (Integration Owner)
 
-1. Start Backend on `http://127.0.0.1:8000` with the `/api/v1` routes from the frozen OpenAPI.
-2. Allow CORS from `http://127.0.0.1:5173` (dev) and `http://127.0.0.1:4173` (preview): methods
-   `GET, POST, OPTIONS`; headers `Content-Type, X-Demo-Session, X-Demo-Actor, Idempotency-Key`.
-   The SPA sends `credentials: 'omit'`, so no cookies are needed.
+1. Start Backend (see `backend/README.md`), e.g. CONTRACT_FIXTURE:
+   ```powershell
+   $env:PYTHONUTF8='1'; $env:BACKEND_MODE='CONTRACT_FIXTURE'
+   $env:BACKEND_DEMO_SESSION='<at least 16 characters>'
+   $env:BACKEND_CORS_ORIGINS='http://127.0.0.1:5173,http://127.0.0.1:4173'
+   .\.venv\Scripts\python.exe -m backend.migrate; .\.venv\Scripts\python.exe -m backend.tools.seed; .\.venv\Scripts\python.exe -m backend.serve
+   ```
+2. CORS is closed by default; `BACKEND_CORS_ORIGINS` must list the exact SPA origin
+   (`localhost` ≠ `127.0.0.1`). The SPA sends `credentials: 'omit'`; it needs methods `GET, POST`
+   and headers `Content-Type, X-Demo-Session, X-Demo-Actor, Idempotency-Key`.
 3. Frontend `.env.local`:
    ```
    VITE_API_MODE=http
@@ -68,6 +74,16 @@ in `tests/fixtureAdapter.test.ts`.
    VITE_DEMO_SESSION=<value accepted by Backend>
    ```
 4. `npm run dev` and open `http://127.0.0.1:5173/?api=http`.
+5. Browser integration against the running Backend (uses a fresh Backend DB; the demo authorization is single-use):
+   ```powershell
+   $env:VITE_API_MODE='http'; $env:VITE_API_BASE_URL='http://127.0.0.1:8000/api/v1'; $env:VITE_DEMO_SESSION='<session>'
+   npm run build
+   $env:E2E_BACKEND_URL='http://127.0.0.1:8000/api/v1'; $env:E2E_DEMO_SESSION='<session>'
+   npx playwright test e2e/backend-integration.spec.ts
+   ```
+
+In Backend `CONTRACT_FIXTURE` mode `/health.chain` and receipts describe Backend's **mock ledger**;
+the UI shows a “MOCK LEDGER / не on-chain” banner and note whenever `/health.mode` is `CONTRACT_FIXTURE`.
 
 Frontend relies on: `status_url` / `artifacts[].url` beginning with `/api/v1/`; `/credits.credit_status`
 as the only source of ACTIVE/FROZEN; oracle FREEZE operations appearing in `/events` as
