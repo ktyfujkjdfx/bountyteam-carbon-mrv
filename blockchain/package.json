@@ -1,0 +1,14 @@
+{
+  "name": "bountyteam-chain-registry",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CarbonCreditRegistry P0: Foundry tests + solc-js ABI check + local Anvil deploy. Uses solc from the root lockfile.",
+  "scripts": {
+    "chain": "anvil --port 8545 --chain-id 31337",
+    "build": "forge build",
+    "test": "forge test",
+    "check:abi": "forge build && node tools/check-abi.cjs",
+    "deploy": "node tools/deploy-local.cjs",
+    "verify": "forge test && node tools/check-abi.cjs"
+  }
+}
