@@ -1,0 +1,145 @@
+import type { ReactNode } from 'react';
+import type { ApiError } from '../api/errors';
+import { statusHint } from '../api/errors';
+import { unknownMeta, type StatusMeta, type Tone } from '../domain/status';
+
+export function Badge({ tone, children, title }: { tone: Tone; children: ReactNode; title?: string }) {
+  return (
+    <span className={`badge tone-${tone}`} title={title}>
+      {children}
+    </span>
+  );
+}
+
+export function StatusBadge({ meta, testId }: { meta: StatusMeta | null | undefined; testId?: string }) {
+  const safe = meta ?? unknownMeta(undefined);
+  return (
+    <span
+      className={`badge tone-${safe.tone}`}
+      title={safe.hint}
+      data-testid={testId}
+      data-tone={safe.tone}
+      data-unknown={safe.unknown ? 'true' : undefined}
+    >
+      {safe.label}
+      {safe.unknown && <span className="visually-hidden"> — {safe.hint}</span>}
+    </span>
+  );
+}
+
+export function UnknownValueNote({ meta }: { meta: StatusMeta }) {
+  if (!meta.unknown) return null;
+  return (
+    <span className="status-hint warn" role="note" data-testid="unknown-value-note">
+      {meta.hint}
+    </span>
+  );
+}
+
+export function Loading({ label = 'Загрузка…' }: { label?: string }) {
+  return (
+    <div className="state state-loading" role="status" aria-live="polite">
+      <span className="spinner" aria-hidden="true" />
+      {label}
+    </div>
+  );
+}
+
+export function Skeleton({ label, height, className }: { label: string; height: number | string; className?: string }) {
+  return (
+    <div className={`skeleton${className ? ` ${className}` : ''}`} style={{ height }} role="status" aria-live="polite">
+      <span className="skeleton-label">{label}</span>
+    </div>
+  );
+}
+
+export function NotAvailable({ reason = 'поле не передано Backend' }: { reason?: string }) {
+  return (
+    <span className="metric-na" title={reason} aria-label={`N/A — ${reason}`}>
+      N/A
+    </span>
+  );
+}
+
+export function Empty({ children }: { children: ReactNode }) {
+  return <div className="state state-empty">{children}</div>;
+}
+
+export function ErrorNotice({
+  error,
+  onRetry,
+  title,
+  compact,
+}: {
+  error: ApiError;
+  onRetry?: (() => void) | undefined;
+  title?: string | undefined;
+  compact?: boolean | undefined;
+}) {
+  const offline = error.kind === 'network' || error.kind === 'timeout';
+  const hint = statusHint(error.status, error.code);
+  return (
+    <div className={`state state-error${compact ? ' compact' : ''}`} role="alert" data-testid="error-notice" data-status={error.status ?? error.kind}>
+      <strong>
+        {title ?? (offline ? 'Backend недоступен' : 'Ошибка API')}
+        {error.status !== null ? ` · HTTP ${error.status}` : ''}
+        {error.code ? ` · ${error.code}` : ''}
+      </strong>
+      <span>{error.message}</span>
+      {hint && <span className="muted">{hint}</span>}
+      {error.requestId && <span className="muted mono">request_id: {error.requestId}</span>}
+      {onRetry && (
+        <span>
+          <button type="button" className="btn btn-small btn-secondary" onClick={onRetry}>
+            Повторить
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function Field({ label, children, mono }: { label: string; children: ReactNode; mono?: boolean }) {
+  return (
+    <div className="field">
+      <dt>{label}</dt>
+      <dd className={mono ? 'mono' : undefined}>{children}</dd>
+    </div>
+  );
+}
+
+export function Section({ title, children, actions, id }: { title: string; children: ReactNode; actions?: ReactNode; id?: string }) {
+  return (
+    <section className="panel" aria-labelledby={id ? `${id}-title` : undefined} id={id}>
+      <header className="panel-header">
+        <h2 id={id ? `${id}-title` : undefined}>{title}</h2>
+        {actions}
+      </header>
+      <div className="panel-body">{children}</div>
+    </section>
+  );
+}
+
+export function LedgerNote({ ledger }: { ledger: 'fixture' | 'mock' | 'chain' | 'unknown' }) {
+  if (ledger === 'chain') return null;
+  const text =
+    ledger === 'fixture'
+      ? 'FIXTURE adapter: балансы, receipts, tx hashes и anchors — синтетическая эмуляция в браузере; блокчейн не вызывался.'
+      : ledger === 'mock'
+        ? 'Backend CONTRACT_FIXTURE: receipts, tx hashes и anchors получены от mock ledger Backend — не on-chain доказательство.'
+        : 'Режим ledger Backend неизвестен (/health недоступен): не считайте receipts on-chain доказательством.';
+  return (
+    <p className="muted small" data-testid="ledger-note" data-ledger={ledger}>
+      <Badge tone="review">{ledger === 'fixture' ? 'FIXTURE' : ledger === 'mock' ? 'MOCK LEDGER' : 'LEDGER ?'}</Badge> {text}
+    </p>
+  );
+}
+
+export function Hash({ value, label }: { value: string | null | undefined; label?: string }) {
+  if (!value) return <span className="muted">—</span>;
+  return (
+    <code className="hash" title={value} aria-label={label ?? value}>
+      {value}
+    </code>
+  );
+}

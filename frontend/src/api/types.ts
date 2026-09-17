@@ -1,0 +1,60 @@
+import type { components } from './generated/openapi';
+
+type Schemas = components['schemas'];
+
+export type Health = Schemas['Health'];
+export type Plots = Schemas['Plots'];
+export type PlotSummary = Schemas['PlotSummary'];
+export type Plot = Schemas['Plot'];
+export type VerifyRequest = Schemas['VerifyRequest'];
+export type JobAccepted = Schemas['JobAccepted'];
+export type Job = Schemas['Job'];
+export type Verification = Schemas['Verification'];
+export type VerificationEvidence = Schemas['VerificationEvidence'];
+export type EvidenceArtifact = Schemas['EvidenceArtifact'];
+export type EvidenceScene = Schemas['EvidenceScene'];
+export type ArtifactLink = Schemas['ArtifactLink'];
+export type Proof = Schemas['Proof'];
+export type Anchor = Schemas['Anchor'];
+export type History = Schemas['History'];
+export type HistoryItem = Schemas['HistoryItem'];
+export type Credits = Schemas['Credits'];
+export type CreditBatch = Schemas['CreditBatch'];
+export type IssueRequest = Schemas['IssueRequest'];
+export type BuyRequest = Schemas['BuyRequest'];
+export type TransferRequest = Schemas['TransferRequest'];
+export type OperationAccepted = Schemas['OperationAccepted'];
+export type Operation = Schemas['Operation'];
+export type Receipt = Schemas['Receipt'];
+export type Events = Schemas['Events'];
+export type ApiEvent = Schemas['Event'];
+export type ErrorEnvelope = Schemas['Error'];
+export type ErrorDetail = Schemas['ErrorDetail'];
+
+export type DemoActor = CreditBatch['actor'];
+export type ScenarioId = VerifyRequest['scenario_id'];
+export type RsOutcome = VerificationEvidence['outcome'];
+export type EvidenceQuality = Verification['evidence_quality'];
+export type Decision = Verification['decision'];
+export type DecisionReason = Verification['reason'];
+export type TransactionState = Operation['transaction_state'];
+export type JobState = Job['state'];
+export type CreditStatus = CreditBatch['credit_status'];
+export type OperationKind = Operation['kind'];
+export type ArtifactRole = ArtifactLink['role'];
+export type DatasetKind = VerificationEvidence['dataset_kind'];
+export type ComputationMode = Verification['computation_mode'];
+export type HealthMode = Health['mode'];
+export type EventKind = ApiEvent['kind'];
+export type FirmsSupport = VerificationEvidence['firms']['support'];
+
+export const DEMO_ACTORS = ['issuer', 'buyer', 'recipient'] as const satisfies readonly DemoActor[];
+export const SCENARIO_IDS = ['baseline', 'post_fire', 'insufficient'] as const satisfies readonly ScenarioId[];
+export const TERMINAL_JOB_STATES = ['SUCCEEDED', 'FAILED'] as const satisfies readonly JobState[];
+export const TERMINAL_TRANSACTION_STATES = ['CONFIRMED', 'FAILED'] as const satisfies readonly TransactionState[];
+
+export const UINT_STRING = /^(0|[1-9][0-9]{0,77})$/;
+export const POSITIVE_UINT_STRING = /^[1-9][0-9]{0,77}$/;
+export const ARTIFACT_URL = /^\/api\/v1\/artifacts\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$/;
+export const JOB_STATUS_URL = /^\/api\/v1\/jobs\//;
+export const OPERATION_STATUS_URL = /^\/api\/v1\/operations\//;
