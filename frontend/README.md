@@ -9,6 +9,28 @@ contract-compatible fixture adapter.
 
 React 19 + TypeScript 5.9 (strict) + Vite 8, Leaflet 1.9 without remote tiles, Vitest + Testing Library,
 Playwright (system Microsoft Edge, no browser download). Node `24.19.0` (root `.nvmrc`).
+IBM Plex Sans / Plex Mono are bundled via `@fontsource` (OFL-1.1), so the offline `dist` loads no remote fonts.
+
+## Interface
+
+One map-first monitoring workspace (desktop-first, collapses to a single column ≤ 900 px):
+
+| Area | Content (Backend fields only) |
+|---|---|
+| Top bar | wordmark, methodology dialog, service health, `/health.mode`, demo actor |
+| Source bar | FIXTURE adapter, Backend URL, CONTRACT_FIXTURE → MOCK LEDGER disclaimer |
+| Project header | `plot_id`, name, centroid of the real geometry, area, last scene date/provider, `dataset_kind` / `computation_mode` / `observation_mode` |
+| Status pipeline | RS outcome → evidence quality → decision → transaction state → credit status (`/credits` readback only) |
+| Left rail | Evidence Quality Score (coverage indicator, not a probability) with quality fields; action gate from `can_*` / `action_block_reason`; scenarios and history |
+| Map | graticule, cursor WGS84 readout, scale, overlay layer panel (plot boundary, previews, dNBR preview, affected area, FIRMS points — only when the artifact exists), on-map before/after divider (pointer, touch, keyboard) |
+| Right rail | MRV evidence sections (scenes, quality, SCL mask, forest metrics, dNBR legend, FIRMS, method, limitations, artifacts, decision record) · registry record · proof/anchors |
+| Journal | observation → decision → transaction → event timeline plus local log of Backend rejections |
+
+Not shown because API v1 does not provide them: control area, leakage buffer, carbon/tCO₂e estimates,
+token ids, NDVI time series. Missing numeric values render as `N/A`, never as zero.
+
+Screenshots: [`docs/screenshots/`](docs/screenshots/) — real Dadia before/after and disturbance, real Evia
+review-required, synthetic no-change / freeze-requested / FROZEN registry, artifact integrity failure, mobile.
 
 ## Commands
 
@@ -27,7 +49,7 @@ npm run preview        # serve dist at http://127.0.0.1:4173
 | `gen:api` / `check:api` | `src/api/generated/openapi.ts` is regenerated from `contracts/openapi.yaml`, check fails on drift |
 | `lint` | ESLint strict TS + React hooks rules; literal `SIGNING` forbidden in `src/` |
 | `typecheck` | `strict`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess` |
-| `test` | 88 tests: status mapping vs schema enums, both adapters, polling, geometry, components, golden-fixture flow |
+| `test` | 91 tests: status mapping vs schema enums, both adapters, polling, geometry, artifact pairing, components, golden-fixture flow |
 | `build` + `check:dist` | offline `dist/` with relative paths, no remote hosts, no GeoTIFF |
 | `e2e` | full demo flow in a real browser + HTTP failure → manual offline fallback; `e2e/backend-integration.spec.ts` (opt-in) runs the real SPA against a live Backend incl. CORS |
 
@@ -81,6 +103,17 @@ in `tests/fixtureAdapter.test.ts`.
    $env:E2E_BACKEND_URL='http://127.0.0.1:8000/api/v1'; $env:E2E_DEMO_SESSION='<session>'
    npx playwright test e2e/backend-integration.spec.ts
    ```
+
+6. Optional real evidence on the same stand (Backend CLIs, no contract change):
+   ```powershell
+   .\.venv\Scripts\python.exe -m backend.tools.seed --rs-request rs/configs/request_fire.json --name 'Dadia-Lefkimi-Soufli Forest NP, Evros'
+   .\.venv\Scripts\python.exe -m backend.tools.import_bundle --bundle rs/bundles/no_change --computation-mode COMPUTED
+   .\.venv\Scripts\python.exe -m backend.tools.import_bundle --bundle rs/bundles/fire --computation-mode COMPUTED
+   .\.venv\Scripts\python.exe -m backend.tools.seed --rs-request rs/configs/request_evia_reserve_no_change.json --name 'Pefki reserve AOI, North Evia'
+   .\.venv\Scripts\python.exe -m backend.tools.import_bundle --bundle rs/bundles/evia_reserve_no_change --computation-mode COMPUTED
+   ```
+   Backend namespaces reused artifact ids (`<rs id>.<sha prefix>`); the SPA pairs `artifacts[]` with
+   `evidence.artifacts[]` by role + sha256, so real previews keep their `bounds_wgs84`.
 
 In Backend `CONTRACT_FIXTURE` mode `/health.chain` and receipts describe Backend's **mock ledger**;
 the UI shows a “MOCK LEDGER / не on-chain” banner and note whenever `/health.mode` is `CONTRACT_FIXTURE`.
