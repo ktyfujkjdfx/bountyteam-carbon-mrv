@@ -1,0 +1,4 @@
+# Cached FIRMS archive CSVs are upstream bytes, not source text: their SHA-256
+# is recorded in firms.source_refs and re-checked by rs.verify, so any EOL
+# normalisation on checkout would break offline reproducibility on Windows.
+sources/*/firms/*.csv -text
