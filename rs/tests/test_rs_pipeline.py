@@ -1,9 +1,11 @@
-"""RS-specific tests: harmonization, masks, grid, components, and the full
-compute-evidence-and-bundle path on small synthetic local rasters (no network).
+"""RS-specific tests: harmonization, masks, grid, indices, components, and the
+full compute-evidence-and-bundle path on small synthetic local rasters (no
+network required to run this file).
 
-Two additional tests validate the actual REAL bundles committed under
-rs/data/bundles/{no_change,fire}, produced by `python -m rs.build_bundles`
-against real Sentinel-2 L2A scenes over Dadia National Park, Evros, Greece.
+Several tests additionally validate the REAL bundles committed under
+rs/bundles/{no_change,fire,evia_reserve_no_change}, produced by
+`python -m rs.build_bundles` against real Sentinel-2 L2A scenes over Dadia
+National Park, Evros, Greece (primary) and northern Evia (reserve).
 """
 import json
 import uuid
@@ -13,7 +15,7 @@ import numpy as np
 import pytest
 import rasterio
 
-from rs import components, gridmath, harmonize, masks, pipeline, verify
+from rs import components, gridmath, harmonize, indices, masks, pipeline, verify
 from rs.contracts import check_schema, digest, read_json, validate_evidence
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -71,6 +73,30 @@ def test_cloud_ratio_counts_only_8_9_10_not_all_excluded():
     scl = np.array([[3, 8], [9, 4]])  # 3 excluded-but-not-"cloud"; 4 valid
     footprint = np.ones_like(scl, dtype=bool)
     assert masks.cloud_ratio(scl, footprint) == pytest.approx(0.5)  # only the two class-8/9 pixels
+
+
+# --- indices: NDVI/NBR/dNBR formulas, matching the frozen band choice ---
+
+def test_ndvi_nbr_dnbr_formulas():
+    b04, b08 = np.array([1000.0]), np.array([3000.0])
+    assert indices.ndvi(b08, b04) == pytest.approx([(3000 - 1000) / (3000 + 1000)])
+
+    b8a, b12 = np.array([4000.0]), np.array([1000.0])
+    nbr_before = indices.nbr(b8a, b12)
+    assert nbr_before == pytest.approx([(4000 - 1000) / (4000 + 1000)])
+
+    nbr_after = indices.nbr(np.array([1500.0]), np.array([4000.0]))
+    dnbr = indices.dnbr(nbr_before, nbr_after)
+    # dNBR = NBR_before - NBR_after; burn signature (NIR down, SWIR up) must
+    # yield a large POSITIVE dNBR, matching rs.indices.dnbr_class thresholds.
+    assert dnbr[0] > 0.27
+    assert indices.dnbr_class(float(dnbr[0])) in ("moderate-high", "high")
+
+
+def test_dnbr_index_handles_zero_denominator_without_crashing():
+    zero = np.array([0.0])
+    result = indices.nbr(zero, zero)
+    assert np.isnan(result[0])  # explicit NaN, not a ZeroDivisionError/warning crash
 
 
 # --- grid: north-up 20 m UTM, matching the frozen v1 grid contract ---
@@ -267,6 +293,29 @@ def test_no_nan_or_infinity_and_relative_paths_use_forward_slashes(tmp_path):
     assert "NaN" not in raw and "Infinity" not in raw
     for artifact in evidence["artifacts"]:
         assert "\\" not in artifact["relative_path"]
+
+
+def test_request_with_reversed_observation_dates_is_rejected(tmp_path):
+    request_path = _build_offline_case(tmp_path, after_b12_boost=0, disturbed_slice=np.s_[0:0, 0:0])
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    request["before"], request["after"] = request["after"], request["before"]
+    request_path.write_text(json.dumps(request), encoding="utf-8")
+    with pytest.raises(ValueError):
+        verify.run(request_path, tmp_path / "bundle")
+
+
+def test_source_index_hashes_match_declared_asset_hashes(tmp_path):
+    request_path = _build_offline_case(tmp_path, after_b12_boost=6000, disturbed_slice=np.s_[2:8, 2:7])
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    bundle_dir = tmp_path / "bundle"
+    verify.run(request_path, bundle_dir)
+    source_index = json.loads((bundle_dir / "source-index.json").read_text(encoding="utf-8"))
+    declared_hashes = {a["local_sha256"] for scene in (request["before"], request["after"]) for a in scene["assets"]}
+    assert declared_hashes <= set(source_index)
+    from rs.contracts import sha_bytes
+
+    for hash_value, relative_path in source_index.items():
+        assert sha_bytes((bundle_dir / relative_path).read_bytes()) == hash_value
 
 
 def test_reproducible_rerun_produces_identical_canonical_bytes(tmp_path):
