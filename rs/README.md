@@ -39,11 +39,20 @@ measurement, confirmed empirically below.
 Both scenes come from Element84 Earth Search (`sentinel-2-l2a` collection, AWS
 Open Data, no auth). Data source: `docs/roles/02_RS_PLAN.md`, primary provider.
 
-The 37 FIRMS hotspots matched for the `fire` scenario start on **2023-08-21**,
-the documented `EMSR686` ignition date, which is independent thermal
-confirmation that the detected dNBR signature is a fire and not a harvest,
-phenology shift or processing artefact. They are a thermal-anomaly signal only,
-not a perimeter: `affected_area_ha` still comes from the dNBR components.
+The 37 FIRMS hotspots matched for the `fire` scenario fall on **2023-08-22 to
+2023-08-25**, the days immediately after the documented `EMSR686` ignition on
+2023-08-21 — independent thermal confirmation that the detected dNBR signature
+is a fire and not a harvest, phenology shift or processing artefact. The
+2023-08-21 detections themselves are **not** matched: the nearest is 579 m from
+this AOI's damage mask, just outside the 500 m tolerance, which is consistent
+with a fire that ignited elsewhere in the park and reached this particular
+rectangle the following day.
+
+The rule is deliberately narrow. 5,103 hotspots pass the window and confidence
+filters across the whole country file; 37 survive the 500 m damage-mask test
+(the closest rejected one is 546 m away). Matching against the AOI instead would
+have returned 40, and the matched set is a thermal-anomaly signal only, not a
+perimeter: `affected_area_ha` still comes from the dNBR components.
 
 ## FIRMS attribution (no API key required)
 
