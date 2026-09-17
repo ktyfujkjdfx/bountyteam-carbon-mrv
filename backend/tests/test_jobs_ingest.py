@@ -197,6 +197,35 @@ def test_rs_cli_failure_is_reported_not_hidden(tmp_path):
     assert job["state"] == "FAILED" and job["error"]["details"]["exit_code"] == 4
 
 
+def test_reused_rs_artifact_ids_across_bundles_are_accepted_and_served(harness, tmp_path):
+    """Real RS bundles reuse per-bundle ids (e.g. preview_before) with different bytes across runs."""
+    first = import_evidence(harness.ctx, fixture_evidence("no_change"), FIXTURES, computation_mode="CACHED_REPLAY")
+    bundle = tmp_path / "second"
+    shutil.copytree(FIXTURES, bundle)
+    evidence = fixture_evidence("no_change")
+    preview = next(a for a in evidence["artifacts"] if a["role"] == "PREVIEW_BEFORE")
+    path = bundle / preview["relative_path"]
+    path.write_bytes(path.read_bytes() + b"\x00")  # different bytes, same artifact_id
+    data = path.read_bytes()
+    from backend.app.contracts import sha256_hex
+    preview.update(sha256=sha256_hex(data), size_bytes=len(data))
+    evidence["limitations"] = ["Second synthetic run with a regenerated preview"]
+    second = import_evidence(harness.ctx, evidence, bundle, computation_mode="COMPUTED")
+    assert second.created and second.evidence_hash != first.evidence_hash
+    links = {v: harness.api.get(f"/verifications/{v}", "Verification")["artifacts"]
+             for v in (first.verification_id, second.verification_id)}
+    old = next(a for a in links[first.verification_id] if a["role"] == "PREVIEW_BEFORE")
+    new = next(a for a in links[second.verification_id] if a["role"] == "PREVIEW_BEFORE")
+    assert old["artifact_id"] == preview["artifact_id"] and new["artifact_id"] != old["artifact_id"]
+    for link in (old, new):
+        served = harness.client.get(link["url"], headers=harness.api.headers())
+        assert served.status_code == 200 and sha256_hex(served.content) == link["sha256"]
+    assert new["sha256"] == preview["sha256"]
+    # Identical bytes under the same id are shared, not duplicated.
+    unchanged = next(a for a in links[second.verification_id] if a["role"] == "AFFECTED_AREA")
+    assert unchanged["artifact_id"] == next(a for a in evidence["artifacts"] if a["role"] == "AFFECTED_AREA")["artifact_id"]
+
+
 def test_artifact_store_integrity_checked_on_serve(harness):
     job = harness.verify("baseline")
     link = harness.api.get(f"/verifications/{job['verification_id']}", "Verification")["artifacts"][0]

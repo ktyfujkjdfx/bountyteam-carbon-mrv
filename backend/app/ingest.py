@@ -72,6 +72,22 @@ def _store_artifact(ctx: AppContext, bundle_root: Path, artifact: dict) -> str:
     return name
 
 
+def _public_artifact_id(conn: sqlite3.Connection, artifact: dict) -> str:
+    """Public /artifacts/{id} key.
+
+    RS artifact_id values are unique within one bundle only; real runs reuse ids such as
+    "preview_before". The evidence id is kept when free or bound to identical bytes;
+    otherwise a deterministic content-namespaced id is published. Consumers use the
+    Verification.artifacts[].url and match evidence entries by role/sha256.
+    """
+    candidates = (artifact["artifact_id"], f"{artifact['artifact_id'][:80]}.{artifact['sha256'][2:14]}")
+    for candidate in candidates:
+        row = conn.execute("SELECT sha256 FROM artifacts WHERE artifact_id=?", (candidate,)).fetchone()
+        if row is None or row["sha256"] == artifact["sha256"]:
+            return candidate
+    raise EvidenceRejected("Artifact id collision with different bytes", {"artifact_id": artifact["artifact_id"]})
+
+
 def import_evidence(ctx: AppContext, evidence_source: bytes | dict, bundle_root: Path, *,
                     computation_mode: str, expected_plot_id: str | None = None) -> ImportResult:
     """Accept one RS evidence bundle or raise EvidenceRejected (no decision, no transaction)."""
@@ -113,12 +129,7 @@ def import_evidence(ctx: AppContext, evidence_source: bytes | dict, bundle_root:
             audit(conn, "EVIDENCE_DUPLICATE", existing["verification_id"], evidence_hash=evidence_hash)
             return ImportResult(existing["verification_id"], False, evidence_hash, existing["decision"],
                                 existing["reason"], existing["decision_hash"])
-        for artifact in evidence["artifacts"]:
-            row = conn.execute("SELECT sha256 FROM artifacts WHERE artifact_id=?",
-                               (artifact["artifact_id"],)).fetchone()
-            if row is not None and row["sha256"] != artifact["sha256"]:
-                raise EvidenceRejected("artifact_id already bound to different bytes",
-                                       {"artifact_id": artifact["artifact_id"]})
+        public_ids = {a["artifact_id"]: _public_artifact_id(conn, a) for a in evidence["artifacts"]}
         verification_id = str(uuid.uuid4())
         conn.execute(
             "INSERT INTO verifications (verification_id, plot_id, geometry_hash, evidence_hash, canonical_bytes, "
@@ -130,10 +141,11 @@ def import_evidence(ctx: AppContext, evidence_source: bytes | dict, bundle_root:
              result["decision"], result["reason"], json.dumps(record), decision_hash, ctx.policy.version,
              "HISTORICAL_REPLAY", computation_mode))
         for artifact in evidence["artifacts"]:
+            public_id = public_ids[artifact["artifact_id"]]
             conn.execute("INSERT OR IGNORE INTO artifacts VALUES (?,?,?,?,?,?)",
-                         (artifact["artifact_id"], artifact["role"], artifact["media_type"], artifact["sha256"],
+                         (public_id, artifact["role"], artifact["media_type"], artifact["sha256"],
                           artifact["size_bytes"], stored[artifact["artifact_id"]]))
-            conn.execute("INSERT INTO verification_artifacts VALUES (?,?)", (verification_id, artifact["artifact_id"]))
+            conn.execute("INSERT INTO verification_artifacts VALUES (?,?)", (verification_id, public_id))
         label = f"{evidence['dataset_kind']}/{computation_mode}"
         record_event(conn, plot_id=plot_id, kind="VERIFICATION", verification_id=verification_id,
                      dedupe_key="verification:" + verification_id,
