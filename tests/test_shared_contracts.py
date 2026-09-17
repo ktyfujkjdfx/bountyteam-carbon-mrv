@@ -1,5 +1,6 @@
 """Contract-pack tests only: do NOT claim runtime API/contract deployment or real RS accuracy."""
 import sys
+import codecs
 from pathlib import Path
 from copy import deepcopy
 import json
@@ -22,6 +23,28 @@ from contract_helpers import (read_json,canonical,digest,sha_bytes,check_schema,
 
 LABELS=['no_change','fire','insufficient']
 
+@pytest.fixture(autouse=True)
+def require_explicit_utf8_for_repository_text(monkeypatch):
+    """Catch locale-dependent I/O even when the host or CI uses UTF-8 mode."""
+    original_open = Path.open
+    original_read_text = Path.read_text
+
+    def checked_read_text(path, encoding=None, errors=None):
+        # Path.read_text resolves None to UTF-8 before calling open in UTF-8 mode.
+        if path.resolve().is_relative_to(ROOT):
+            assert encoding is not None, f'Explicit UTF-8 encoding required: {path}'
+        return original_read_text(path, encoding=encoding, errors=errors)
+
+    def checked_open(path, mode='r', buffering=-1, encoding=None, errors=None, newline=None):
+        if 'b' not in mode and path.resolve().is_relative_to(ROOT):
+            assert encoding is not None, f'Explicit UTF-8 encoding required: {path}'
+            assert codecs.lookup(encoding).name == 'utf-8', f'Expected UTF-8: {path}'
+        return original_open(path, mode, buffering, encoding, errors, newline)
+
+    monkeypatch.setattr(Path, 'open', checked_open)
+    monkeypatch.setattr(Path, 'read_text', checked_read_text)
+
+
 def fixture(label='fire'): return read_json(ROOT/'fixtures'/('verification_'+label+'.json'))
 
 @pytest.mark.parametrize('name',['verification','rs-request','deployment','api-models'])
@@ -29,7 +52,7 @@ def test_schemas_are_valid_2020_12(name):
     Draft202012Validator.check_schema(read_json(ROOT/'contracts'/(name+'.schema.json')))
 
 def test_openapi_validates():
-    validate_openapi(yaml.safe_load((ROOT/'contracts/openapi.yaml').read_text()))
+    validate_openapi(yaml.safe_load((ROOT/'contracts/openapi.yaml').read_text(encoding="utf-8")))
 
 @pytest.mark.parametrize('label',LABELS)
 def test_golden_evidence_schema_semantics_files_hashes(label):
@@ -50,7 +73,7 @@ def test_rs_request_valid(label):
 
 @pytest.mark.parametrize('case',read_json(ROOT/'fixtures/http_examples.json')['cases'],ids=lambda x:x['name'])
 def test_http_examples_match_models_and_routes(case):
-    oas=yaml.safe_load((ROOT/'contracts/openapi.yaml').read_text())
+    oas=yaml.safe_load((ROOT/'contracts/openapi.yaml').read_text(encoding="utf-8"))
     operation=oas['paths'][case['path']][case['method'].lower()]
     assert str(case['status']) in operation['responses']
     check_api(case['body'],case['response_schema'])
@@ -62,7 +85,7 @@ def test_http_examples_match_models_and_routes(case):
         assert operation['requestBody']['content']['application/json']['schema']['$ref']=='#/components/schemas/'+case['request_schema']
 
 def test_no_public_freeze_and_all_mutations_protected():
-    oas=yaml.safe_load((ROOT/'contracts/openapi.yaml').read_text())
+    oas=yaml.safe_load((ROOT/'contracts/openapi.yaml').read_text(encoding="utf-8"))
     assert not any('freeze' in p for p in oas['paths'])
     for path,item in oas['paths'].items():
         if 'post' in item:
@@ -211,7 +234,7 @@ def test_abi_is_compiler_produced_and_consistent():
     assert [p['name'] for p in functions['getBatch']['outputs'][0]['components']]==['plotId','issuanceKey','seller','totalSupply','creditStatus','unitPriceWei','evidenceHash','decisionHash','issuedAt','frozenAt','lastObservedAt']
     # solc omits constructors from an abstract contract ABI. The constructor is
     # nevertheless compiler-checked in the Solidity specification source.
-    source=(ROOT/'contracts/contract-interface.sol').read_text()
+    source=(ROOT/'contracts/contract-interface.sol').read_text(encoding="utf-8")
     assert 'constructor(address initialOwner)' in source
     assert 'if (initialOwner == address(0)) revert InvalidAddress();' in source
 
