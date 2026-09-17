@@ -643,13 +643,29 @@ def test_real_bundle_rebuilds_byte_identically_on_this_platform(tmp_path, bundle
     assert set(committed_hashes) == set(rebuilt_hashes)
     mismatched = [name for name in committed_hashes if committed_hashes[name] != rebuilt_hashes[name]]
     if mismatched:
-        # Name what actually drifted: a preview-only difference and a drift in
+        # Name what actually drifted. A preview-only difference and a drift in
         # the measured science are very different bugs, and the file list alone
-        # cannot tell them apart (verification.json embeds artifact hashes).
+        # cannot tell them apart (verification.json embeds artifact hashes), so
+        # also report how far apart the raster bytes are: a handful of pixels
+        # off by one grey level is a quantisation boundary, a broad difference
+        # is a different computation.
         rebuilt = read_json(rebuilt_dir / "verification.json")
         fields = sorted(k for k in set(committed) | set(rebuilt) if committed.get(k) != rebuilt.get(k))
+        detail = []
+        for name in mismatched:
+            if not name.endswith(".png"):
+                continue
+            from PIL import Image
+
+            a = np.asarray(Image.open(bundle_dir / name)).astype("int32")
+            b = np.asarray(Image.open(rebuilt_dir / name)).astype("int32")
+            if a.shape != b.shape:
+                detail.append(f"{name}: shape {a.shape} vs {b.shape}")
+                continue
+            diff = np.abs(a - b)
+            detail.append(f"{name}: {int((diff > 0).sum())}/{diff.size} samples differ, max={int(diff.max())}")
         pytest.fail(f"{bundle_name} is not byte-reproducible here: files={mismatched} "
-                    f"verification.json fields={fields}")
+                    f"verification.json fields={fields} | {' ; '.join(detail)}")
 
 
 @pytest.mark.parametrize("bundle_name,request_name,_outcome,_tile", REAL_BUNDLES)
