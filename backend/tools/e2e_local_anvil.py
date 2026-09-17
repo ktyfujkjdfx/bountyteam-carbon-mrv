@@ -1,10 +1,12 @@
-"""python -m backend.tools.e2e_local_anvil [--blockchain-ref REF] [--port N] [--evidence-out FILE]
+"""python -m backend.tools.e2e_local_anvil [--real-dadia] [--blockchain-ref REF] [--port N] [--evidence-out FILE]
 
 Reproducible real-chain E2E for the Backend <-> Blockchain boundary:
-  1. take the Blockchain module from the working tree (`--blockchain-ref worktree`) or read-only
-     from a git ref (default origin/feat/chain-registry) via `git archive` into a temp dir;
+  1. take the merged Blockchain module from this working tree (default `--blockchain-ref worktree`)
+     or read-only from another git ref (e.g. origin/main) via `git archive` into a temp dir;
   2. start a throwaway Anvil (chain id 31337) and deploy with blockchain/tools/deploy-local.cjs;
-  3. run backend/tests/test_e2e.py::test_e2e_local_anvil against that deployment:
+  3. run backend/tests/test_e2e.py::test_e2e_local_anvil (and with --real-dadia also
+     test_e2e_real_dadia_anvil: real RS Dadia bundles -> FREEZE_REQUESTED -> confirmed freeze,
+     restart while SUBMITTED, repeat import, BatchNotActive) against that deployment:
      issue -> buy -> transfer (receipt timeout + backend restart) -> fire decision -> oracle
      freeze -> direct transfer revert, with receipt/event/readback checks.
 Anvil's public dev keys are read from Anvil's own startup output at runtime; nothing is written
@@ -66,11 +68,13 @@ def _anvil_keys(log: Path, timeout: float = 10.0) -> dict[str, str]:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--blockchain-ref", default="origin/feat/chain-registry",
+    parser.add_argument("--blockchain-ref", default="worktree",
                         help="git ref to export, or 'worktree' to use the checked-out blockchain/ directory")
     parser.add_argument("--port", type=int, default=8547, help="throwaway Anvil port (not the shared 8545)")
     parser.add_argument("--evidence-out", help="write receipts/readback/proof evidence JSON here")
     parser.add_argument("--keep", action="store_true", help="keep the temp dir for inspection")
+    parser.add_argument("--real-dadia", action="store_true",
+                        help="also run the real RS Dadia bundles (rs/bundles, merged RS) to a confirmed freeze")
     args = parser.parse_args(argv)
     for tool in ("anvil", "node", "npm", "git"):
         if shutil.which(tool) is None:
@@ -113,10 +117,14 @@ def main(argv=None) -> int:
         test_env = {**os.environ, "PYTHONUTF8": "1", "BACKEND_E2E_RPC_URL": rpc,
                     "BACKEND_E2E_DEPLOYMENT": str(manifest), "BACKEND_E2E_EVIDENCE_OUT": str(evidence),
                     **{f"BACKEND_E2E_KEY_{role.upper()}": key for role, key in keys.items()}}
+        real = evidence.with_name(evidence.stem + "-real-dadia" + evidence.suffix)
+        test_env["BACKEND_E2E_REAL_EVIDENCE_OUT"] = str(real)
+        tests = "test_e2e_local_anvil or test_e2e_real_dadia_anvil" if args.real_dadia else "test_e2e_local_anvil"
         result = subprocess.run([sys.executable, "-m", "pytest", "backend/tests/test_e2e.py", "-q", "-rs",
-                                 "-k", "test_e2e_local_anvil"], cwd=REPO_ROOT, env=test_env, check=False)
-        if result.returncode == 0 and evidence.exists():
-            print("evidence:", evidence)
+                                 "-k", tests], cwd=REPO_ROOT, env=test_env, check=False)
+        for path in (evidence, real):
+            if result.returncode == 0 and path.exists():
+                print("evidence:", path)
         return result.returncode
     finally:
         if anvil is not None:

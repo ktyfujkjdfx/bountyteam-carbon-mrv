@@ -122,19 +122,18 @@ Batches are stored per `deployment_id`. A new deployment never reuses old batche
 - **Artifact IDs:** RS `artifact_id` values only need to be unique within a bundle. When a later
   bundle reuses an ID with different bytes, Backend publishes a deterministic namespaced ID
   (`<artifact_id>.<first 12 hex of sha256>`). Consumers use `Verification.artifacts[].url`.
-- **Verified against `feat/rs-pipeline@f094a6e`** (real bundles, no edits; plots registered from
-  the request geometry and hash). All three bundles are accepted as REAL/COMPUTED, and served
-  artifacts pass hash checks.
+- **Verified against the merged RS module (`main@740cf43`, bundles `code_commit` `fb92384`).**
+  All bundles are real, accepted with no edits, and match the frozen reference validator.
 
-  | Bundle | Quality | Decision |
+  | Bundle | FIRMS | Decision |
   |---|---|---|
-  | Dadia `no_change` | SUFFICIENT (97) | `NO_RESTRICTION` |
-  | Dadia `fire` | SUFFICIENT (97); 84.24 ha, 6.0% of forest | `REVIEW_REQUIRED / DISTURBANCE_UNATTRIBUTED` |
-  | Evia `evia_reserve_no_change` | SUFFICIENT (100); 1.68 ha | `REVIEW_REQUIRED / BELOW_POLICY_THRESHOLD` |
+  | Dadia `no_change` | `NOT_FOUND` | `NO_RESTRICTION / NO_SIGNIFICANT_CHANGE` |
+  | Dadia `fire` | `SUPPORTED`, 37 hotspots ≤ 500 m of the damage mask | `FREEZE_REQUESTED / FIRE_REVERSAL` |
+  | Evia `evia_reserve_no_change` | `NOT_FOUND` | `REVIEW_REQUIRED / BELOW_POLICY_THRESHOLD` |
 
-  The Dadia fire bundle has FIRMS `NOT_CHECKED`, so frozen policy v1 does not auto-freeze it.
-  A real freeze demo needs RS to deliver `firms.support = SUPPORTED` with a matched-points
-  artifact.
+  Reproduce with `python -m backend.tools.seed --rs-request rs/configs/request_fire.json`, then
+  `python -m backend.tools.import_bundle --bundle rs/bundles/<name> --computation-mode COMPUTED`.
+  The Evia bundle needs `rs/configs/request_evia_reserve_no_change.json` instead.
 
 ### Blockchain
 - **ABI and events:** the adapter uses only the frozen `contracts/contract-abi.json` and exact
@@ -196,9 +195,21 @@ The real Anvil E2E (`backend/tests/test_e2e.py::test_e2e_local_anvil`) runs when
 are set. It is skipped otherwise. One reproducible command (needs `anvil`, `node`, `npm`) does it all:
 
 ```bash
-./.venv/bin/python -m backend.tools.e2e_local_anvil                          # Blockchain from origin/feat/chain-registry (read-only export)
-./.venv/bin/python -m backend.tools.e2e_local_anvil --blockchain-ref worktree # after the Blockchain PR is merged
+./.venv/bin/python -m backend.tools.e2e_local_anvil --real-dadia     # merged blockchain/ from this tree + merged rs/bundles
+./.venv/bin/python -m backend.tools.e2e_local_anvil --blockchain-ref origin/main --evidence-out /tmp/e2e.json
 ```
+
+`--real-dadia` also runs `test_e2e_real_dadia_anvil`:
+1. Import the merged RS bundles: real Dadia `no_change` gives `NO_RESTRICTION`.
+2. Issue and buy.
+3. Import the real Dadia fire (FIRMS `SUPPORTED`, 37 hotspots), which gives `FREEZE_REQUESTED / FIRE_REVERSAL`.
+4. Send one oracle freeze. The backend is restarted while it is `SUBMITTED`, and it confirms with the same tx hash.
+5. Check receipt status 1, exactly one `Frozen` event and readback `FROZEN`.
+6. Re-import the fire bundle: `created: false` and no second freeze.
+7. A direct transfer reverts with `BatchNotActive`.
+
+`config/demo-authorizations.json` only authorizes `SYNTHETIC-PLOT-001`, so the test writes a
+**test-only** authorization for the real plot into its temp dir. `config/` is never changed.
 
 The runner:
 1. Starts a throwaway Anvil on port 8547 and deploys with `blockchain/tools/deploy-local.cjs`.

@@ -185,3 +185,107 @@ def test_e2e_local_anvil(tmp_path):
     if evidence_path:
         import json
         Path(evidence_path).write_text(json.dumps({"deployment": identity.deployment.__dict__, **result}, indent=2))
+
+
+REAL_PLOT = "GR-EVROS-DADIA-001"
+RS_ROOT = Path(__file__).resolve().parents[2] / "rs"
+
+
+def _anvil_harness(tmp_path, **overrides) -> Harness:
+    keys = {role: os.environ[f"BACKEND_E2E_KEY_{role.upper()}"] for role in ("issuer", "oracle", "buyer", "recipient")}
+    return Harness(tmp_path, mode="LOCAL_DEMO", chain_adapter="web3", rpc_url=ANVIL,
+                   deployment_path=Path(os.environ["BACKEND_E2E_DEPLOYMENT"]), private_keys=keys, **overrides)
+
+
+@pytest.mark.skipif(not ANVIL, reason="set BACKEND_E2E_RPC_URL, BACKEND_E2E_DEPLOYMENT and BACKEND_E2E_KEY_* "
+                                      "to run against a real local Anvil deployment")
+def test_e2e_real_dadia_anvil(tmp_path):
+    """Merged RS real Dadia bundles through Backend policy to a confirmed on-chain freeze.
+
+    config/demo-authorizations.json only authorizes SYNTHETIC-PLOT-001, so this test writes a
+    TEST-ONLY authorization for the real plot into tmp_path; it never touches config/.
+    """
+    import json
+
+    from backend.app.ingest import import_evidence, register_plot
+    from backend.tools.seed import plot_from_rs_request
+
+    auth = tmp_path / "e2e-test-only-authorizations.json"
+    auth.write_text(json.dumps({"mode": "E2E_TEST_ONLY", "authorizations": [{
+        "demo_authorization_id": "E2E-TEST-DADIA-AUTH", "plot_id": REAL_PLOT, "amount": "100",
+        "unit_price_wei": "1000000000000000", "issuer_actor": "issuer", "seller_actor": "issuer",
+        "single_use": True, "certified_carbon_units": False}]}), encoding="utf-8")
+    h = _anvil_harness(tmp_path / "state", authorizations_path=auth)
+    assert h.chain.identity().ok, h.chain.identity().reason
+    register_plot(h.ctx, plot_from_rs_request(json.loads((RS_ROOT / "configs/request_fire.json").read_text()),
+                                              name="Dadia (Evros) wildfire AOI"))
+
+    def load(bundle: str):
+        root = RS_ROOT / "bundles" / bundle
+        return import_evidence(h.ctx, (root / "verification.json").read_bytes(), root, computation_mode="COMPUTED",
+                               expected_plot_id=REAL_PLOT)
+
+    baseline = load("no_change")
+    assert (baseline.decision, baseline.reason) == ("NO_RESTRICTION", "NO_SIGNIFICANT_CHANGE")
+    issue = h.api.post(f"/plots/{REAL_PLOT}/issue", {"demo_authorization_id": "E2E-TEST-DADIA-AUTH"}, "issuer",
+                       "real-dadia-issue", "OperationAccepted")
+    issue_op = _poll_operation(h, issue["operation_id"])
+    assert issue_op["transaction_state"] == "CONFIRMED", issue_op
+    batch_id = issue_op["batch_id"]
+    buy = h.api.post(f"/batches/{batch_id}/buy", {"amount": "10"}, "buyer", "real-dadia-buy", "OperationAccepted")
+    assert _poll_operation(h, buy["operation_id"])["transaction_state"] == "CONFIRMED"
+
+    fire = load("fire")
+    fire_view = h.api.get(f"/verifications/{fire.verification_id}", "Verification")
+    assert (fire.decision, fire.reason) == ("FREEZE_REQUESTED", "FIRE_REVERSAL")
+    assert fire_view["evidence"]["dataset_kind"] == "REAL" and fire_view["computation_mode"] == "COMPUTED"
+    assert (fire_view["evidence"]["firms"]["support"], fire_view["evidence"]["firms"]["hotspot_count"]) == ("SUPPORTED", 37)
+
+    # Freeze submitted but not mined, backend restarted: the same signed freeze must confirm.
+    AnvilMining.hold(h)
+    h.run(3)
+    freezes = h.operations("FREEZE")
+    assert len(freezes) == 1 and freezes[0]["transaction_state"] == "SUBMITTED"
+    pending_hash, signed_before = freezes[0]["tx_hash"], _signed_rows(h)
+    h = h.restart()
+    h.run(3)
+    assert h.operations("FREEZE")[0]["transaction_state"] == "SUBMITTED" and _signed_rows(h) == signed_before
+    AnvilMining.release(h)
+    freeze_op = _poll_operation(h, freezes[0]["operation_id"])
+    assert freeze_op["transaction_state"] == "CONFIRMED" and freeze_op["tx_hash"] == pending_hash
+    receipt = freeze_op["receipt"]
+    assert receipt["status"] == 1 and receipt["event_names"] == ["Frozen"] and receipt["state_readback_ok"] is True
+    with h.ctx.db.reader() as conn:
+        event = json.loads(conn.execute("SELECT decoded_event_json FROM operations WHERE operation_id=?",
+                                        (freeze_op["operation_id"],)).fetchone()[0])
+    assert event["name"] == "Frozen" and event["args"]["evidenceHash"] == fire.evidence_hash
+    assert event["args"]["decisionHash"] == fire.decision_hash and event["args"]["reasonCode"] == 1
+    readback = h.chain.get_batch(int(batch_id))
+    assert (readback.credit_status, readback.evidence_hash, readback.decision_hash) == (
+        "FROZEN", fire.evidence_hash, fire.decision_hash)
+    credits = h.api.get(f"/plots/{REAL_PLOT}/credits", "Credits", actor="buyer")["items"][0]
+    assert (credits["credit_status"], credits["seller_balance"], credits["actor_balance"]) == ("FROZEN", "90", "10")
+
+    # Idempotency: re-importing the same fire bundle creates nothing and sends no second freeze.
+    again = load("fire")
+    h.run(3)
+    oracle = h.chain.signer_address("oracle")
+    assert again.created is False and again.verification_id == fire.verification_id
+    assert len(h.operations("FREEZE")) == 1
+    assert h.count("operation_signed_transactions", "sender_address=?", (oracle,)) == 1
+    with pytest.raises(ContractRevert) as direct:
+        h.chain.simulate("buyer", ContractCall("transfer", (int(batch_id), h.chain.signer_address("recipient"), 1)))
+    assert direct.value.error_name == "BatchNotActive"
+    proof = h.api.get(f"/verifications/{fire.verification_id}/proof", "Proof")
+    assert proof["integrity_ok"] and [(a["event_name"], a["evidence_hash"]) for a in proof["anchors"]] == [
+        ("Frozen", fire.evidence_hash)]
+
+    evidence_path = os.environ.get("BACKEND_E2E_REAL_EVIDENCE_OUT")
+    if evidence_path:
+        Path(evidence_path).write_text(json.dumps({
+            "deployment": h.chain.identity().deployment.__dict__, "plot_id": REAL_PLOT, "batch_id": batch_id,
+            "baseline": baseline.__dict__, "fire": fire.__dict__, "issue": issue_op, "freeze": freeze_op,
+            "frozen_event": event, "readback": readback.__dict__, "credits_buyer": credits,
+            "repeat_import_created": again.created, "freeze_operations": len(h.operations("FREEZE")),
+            "oracle_signed_transactions": 1, "direct_transfer_revert": direct.value.error_name,
+            "restart_same_tx_hash": freeze_op["tx_hash"] == pending_hash}, indent=2))
