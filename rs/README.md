@@ -39,23 +39,48 @@ measurement, confirmed empirically below.
 Both scenes come from Element84 Earth Search (`sentinel-2-l2a` collection, AWS
 Open Data, no auth). Data source: `docs/roles/02_RS_PLAN.md`, primary provider.
 
+## Reserve AOI (data-access insurance, not a second demo)
+
+Per manifest section 1 ("one backup site as insurance, not a second mandatory
+demonstration"): **northern Evia island, Greece**, the August 2021 wildfire
+(started 2021-08-03, ~50,000 ha, the largest in modern Greek recorded history)
+that burned the pine forest around Pefki/Gouves. AOI: `rs/configs/aoi_evia_reserve.json`,
+plot_id `GR-EVIA-PEFKI-RESERVE-001`, ~1539 ha, tile `34SFJ`.
+
+| Scenario | Before | After | Real result |
+|---|---|---|---|
+| `no_change` (pre-fire baseline pair) | `S2B_34SFJ_20200724_0_L2A` (2020-07-24, baseline `02.14`) | `S2A_34SFJ_20210727_0_L2A` (2021-07-27, baseline `03.01`) | `DISTURBANCE_DETECTED`: a small real 1.68 ha / 0.26%-of-baseline-forest signal (42 px), well under the 5 ha backend policy threshold |
+
+Reported honestly as `DISTURBANCE_DETECTED`, not forced to `NO_CHANGE`: 11
+smaller candidate components were correctly dropped by the 25-pixel MMU filter,
+and the surviving 1.68 ha is far below `freeze_min_area_ha=5` in
+`config/policy.v1.json`, so Backend policy recomputation resolves it to
+`REVIEW_REQUIRED`, never a freeze — see
+`test_real_bundle_below_policy_area_threshold_is_not_over_claimed`. Both scenes
+predate the 2022-01-25 BOA offset baseline change (`04.00`), so this pair is
+also the real-data regression test for the **no-offset** harmonization branch
+(`rs/harmonize.py::from_baseline`) — `dnbr_mean` over the whole 650 ha analysed
+forest is 0.0004, i.e. no systematic bias from that code path.
+
 ## Reproduce it
 
-Cached AOI-windowed source bands are committed under `rs/sources/` (~13 MB;
+Cached AOI-windowed source bands are committed under `rs/sources/` (~21 MB;
 never a full scene/SAFE archive) together with the finished bundles under
-`rs/bundles/{no_change,fire}/`, so the exact same result reproduces with **no
-internet connection**:
+`rs/bundles/`, so the exact same results reproduce with **no internet
+connection**:
 
 ```bash
 $env:PYTHONUTF8='1'  # Windows PowerShell
 .\.venv\Scripts\python.exe -m rs.verify --request rs/configs/request_no_change.json --output rs/bundles/no_change
 .\.venv\Scripts\python.exe -m rs.verify --request rs/configs/request_fire.json --output rs/bundles/fire
+.\.venv\Scripts\python.exe -m rs.verify --request rs/configs/request_evia_reserve_no_change.json --output rs/bundles/evia_reserve_no_change
 ```
 
 To re-acquire from scratch (network + AWS Open Data required):
 
 ```bash
 .\.venv\Scripts\python.exe -m rs.build_bundles all
+.\.venv\Scripts\python.exe -m rs.build_bundles all --config rs/configs/aoi_evia_reserve.json
 ```
 
 Backend imports either bundle directory with:
@@ -77,8 +102,9 @@ dark/burnt-pixel preservation, north-up 20 m UTM grid construction, exact
 pixel-area/MMU accounting, `NO_CHANGE` / `DISTURBANCE_DETECTED` /
 `INSUFFICIENT_DATA` classification on synthetic local rasters, forbidden-field
 absence, NaN/Infinity absence, OS-independent relative paths, run-to-run
-reproducibility, and full schema + semantic validation
-(`tools/contract_helpers.validate_evidence`) of both real committed bundles.
+reproducibility, tampered-artifact rejection, and full schema + semantic
+validation (`tools/contract_helpers.validate_evidence`) of all three real
+committed bundles (primary no_change, primary fire, reserve).
 
 ## Known limitations
 
@@ -88,19 +114,26 @@ reproducibility, and full schema + semantic validation
   `REVIEW_REQUIRED`, not an automatic freeze, so this does not block P0.
 - `quality.temporal_comparability` uses a documented `DEMO_LOGIC` heuristic
   (day-of-year gap + AOI cloud ratio), not a phenology model.
-- The AOI polygon is a hand-picked box, not an official fire-perimeter vector
-  (see above); the reserve AOI from the RS plan (section 6B) was not selected
-  in this pass — primary real data was already sufficient for both branches.
-- Reserve/fallback provider (`sentinel-2-c1-l2a`, or a different AOI) and the
-  `insufficient` scenario against real cloudy data are not built in this pass;
+- Both AOI polygons are hand-picked boxes confirmed forested by ESA WorldCover,
+  not official fire-perimeter delineation vectors (not fetched in this
+  environment); treat their boundaries as `ASSUMPTION`-class, and the computed
+  outcomes as this pipeline's own real measurement.
+- Reserve/fallback provider (`sentinel-2-c1-l2a`) and a real-data
+  `INSUFFICIENT_DATA` run (real cloudy scene) are not built in this pass;
   `rs/tests/test_rs_pipeline.py::test_insufficient_data_when_coverage_below_gate`
   covers the `INSUFFICIENT_DATA` branch on synthetic local rasters instead.
+- Every real bundle here uses `COMPUTED` mode: each `python -m rs.verify` run
+  recomputes indices/masks/components from the cached local source rasters
+  rather than replaying a stored decision, and reproduces bit-identical
+  scientific fields (`rs/tests/test_rs_pipeline.py::test_reproducible_rerun_produces_identical_canonical_bytes`).
+  The schema has no `CACHED_REPLAY` field; RS has not needed that fallback.
 
 ## Next handoff
 
-Backend: import `rs/bundles/no_change` and `rs/bundles/fire` via
-`python -m backend.tools.import_bundle`, confirm `NO_CHANGE`/`DISTURBANCE_DETECTED`
-policy evaluation, and report back schema/semantic acceptance or a concrete
-diff. Frontend: aligned `before.png`/`after.png`/`dnbr_preview.png` in each
-bundle are ready for the dashboard once Backend serves them via
-`/api/v1/artifacts/{artifact_id}`.
+Backend: import `rs/bundles/no_change`, `rs/bundles/fire`, and
+`rs/bundles/evia_reserve_no_change` via `python -m backend.tools.import_bundle`,
+confirm `NO_CHANGE`/`DISTURBANCE_DETECTED` policy evaluation (the reserve
+bundle should resolve to `REVIEW_REQUIRED`, not a freeze), and report back
+schema/semantic acceptance or a concrete diff. Frontend: aligned
+`before.png`/`after.png`/`dnbr_preview.png` in each bundle are ready for the
+dashboard once Backend serves them via `/api/v1/artifacts/{artifact_id}`.
