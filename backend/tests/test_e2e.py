@@ -111,6 +111,13 @@ def _financial_flow(h: Harness, suffix: str, mining) -> dict:
     fire = h.verify("post_fire", key=f"e2e-fire-{suffix}")
     fire_view = h.api.get(f"/verifications/{fire['verification_id']}", "Verification")
     assert (fire_view["decision"], fire_view["reason"]) == ("FREEZE_REQUESTED", "FIRE_REVERSAL")
+    # The freeze demo runs on the synthetic contract fixture and says so everywhere it is exposed.
+    assert fire_view["evidence"]["dataset_kind"] == "SYNTHETIC"
+    assert fire_view["evidence"]["plot_id"].startswith("SYNTHETIC")
+    assert (fire_view["computation_mode"], fire_view["observation_mode"]) == ("CACHED_REPLAY", "HISTORICAL_REPLAY")
+    journal = h.api.get(f"/events?plot_id={PLOT}&limit=100", "Events")["items"]
+    assert any(e["kind"] == "VERIFICATION" and e["verification_id"] == fire["verification_id"]
+               and "SYNTHETIC/CACHED_REPLAY" in e["message"] for e in journal)
     h.run(2)
     freezes = h.operations("FREEZE")
     assert len(freezes) == 1
