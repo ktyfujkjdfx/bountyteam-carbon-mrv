@@ -5,8 +5,10 @@
 Blockchain module and is skipped unless configured:
 
   BACKEND_E2E_RPC_URL=http://127.0.0.1:8545
-  BACKEND_E2E_DEPLOYMENT=blockchain/runtime/deployment.json
+  BACKEND_E2E_DEPLOYMENT=runtime/deployment.json
   BACKEND_E2E_KEY_ISSUER / _ORACLE / _BUYER / _RECIPIENT = local Anvil dev keys
+
+`python -m backend.tools.e2e_local_anvil` sets all of this up reproducibly.
 """
 from __future__ import annotations
 
@@ -41,8 +43,36 @@ def _negative_flow(h: Harness) -> None:
                status=409)
 
 
-def _financial_flow(h: Harness, suffix: str) -> dict:
-    """issue -> buy -> transfer -> fire evidence decision -> oracle freeze -> direct transfer revert."""
+def _signed_rows(h: Harness) -> list[tuple]:
+    with h.ctx.db.reader() as conn:
+        return [tuple(r) for r in conn.execute("SELECT operation_id, sender_address, nonce, tx_hash, raw_transaction "
+                                               "FROM operation_signed_transactions ORDER BY sender_address, nonce")]
+
+
+class MockMining:
+    @staticmethod
+    def hold(h: Harness) -> None:
+        h.chain.set_controls(hold_mining=True)
+
+    @staticmethod
+    def release(h: Harness) -> None:
+        h.chain.set_controls(hold_mining=False)
+        h.chain.mine()
+
+
+class AnvilMining:
+    @staticmethod
+    def hold(h: Harness) -> None:
+        h.chain.w3.provider.make_request("evm_setAutomine", [False])
+
+    @staticmethod
+    def release(h: Harness) -> None:
+        h.chain.w3.provider.make_request("evm_setAutomine", [True])
+        h.chain.w3.provider.make_request("evm_mine", [])
+
+
+def _financial_flow(h: Harness, suffix: str, mining) -> dict:
+    """issue -> buy -> transfer (timeout + restart) -> fire decision -> oracle freeze -> direct transfer revert."""
     baseline = h.verify("baseline", key=f"e2e-baseline-{suffix}")
     assert h.api.get(f"/verifications/{baseline['verification_id']}", "Verification")["decision"] == "NO_RESTRICTION"
     plot = h.api.get(f"/plots/{PLOT}", "Plot", actor="issuer")
@@ -59,9 +89,22 @@ def _financial_flow(h: Harness, suffix: str) -> dict:
     replay = h.api.post(f"/batches/{batch_id}/buy", {"amount": "10"}, "buyer", f"e2e-buy-{suffix}", "OperationAccepted")
     assert replay == buy  # double click: same operation, no second payment
     assert _poll_operation(h, buy["operation_id"])["transaction_state"] == "CONFIRMED"
+    # Receipt timeout + backend restart while the transfer is pending: same signed bytes, no new nonce.
+    mining.hold(h)
     transfer = h.api.post(f"/batches/{batch_id}/transfer", {"to_actor": "recipient", "amount": "3"}, "buyer",
                           f"e2e-transfer-{suffix}", "OperationAccepted")
-    assert _poll_operation(h, transfer["operation_id"])["transaction_state"] == "CONFIRMED"
+    h.run(3)
+    pending = h.api.get(f"/operations/{transfer['operation_id']}", "Operation")
+    assert pending["transaction_state"] == "SUBMITTED" and pending["receipt"] is None and pending["tx_hash"]
+    signed_before = _signed_rows(h)
+    h = h.restart()
+    h.run(3)
+    assert h.api.get(f"/operations/{transfer['operation_id']}", "Operation")["transaction_state"] == "SUBMITTED"
+    assert _signed_rows(h) == signed_before
+    mining.release(h)
+    confirmed = _poll_operation(h, transfer["operation_id"])
+    assert confirmed["transaction_state"] == "CONFIRMED" and confirmed["tx_hash"] == pending["tx_hash"]
+    assert _signed_rows(h) == signed_before
     before = h.api.get(f"/plots/{PLOT}/credits", "Credits", actor="buyer")["items"][0]
     assert (before["credit_status"], before["seller_balance"], before["actor_balance"]) == ("ACTIVE", "90", "7")
 
@@ -94,14 +137,16 @@ def _financial_flow(h: Harness, suffix: str) -> dict:
     events = h.api.get(f"/events?plot_id={PLOT}&limit=100", "Events")["items"]
     kinds = [e["kind"] for e in events]
     assert kinds.count("TX_CONFIRMED") == 4 and "TX_FAILED" not in kinds
-    return {"batch_id": batch_id, "issue": issue_op, "freeze": freeze_op, "credits": after, "proof": proof,
-            "fire_evidence_hash": fire_view["evidence_hash"]}
+    return {"harness": h, "batch_id": batch_id, "issue": issue_op, "transfer": confirmed, "freeze": freeze_op,
+            "credits": after, "proof": proof, "fire_evidence_hash": fire_view["evidence_hash"],
+            "signed_transactions": len(_signed_rows(h))}
 
 
 def test_e2e_contract_fixture_mock_chain(tmp_path):
-    h = Harness(tmp_path)
-    result = _financial_flow(h, "mock")
+    result = _financial_flow(Harness(tmp_path), "mock", MockMining)
+    h = result.pop("harness")
     assert result["fire_evidence_hash"] == EXPECTED["fire"]["evidence_hash"]
+    assert result["signed_transactions"] == 4  # issue, buy, transfer, freeze: no duplicates after restart
     assert h.api.get("/health", "Health")["mode"] == "CONTRACT_FIXTURE"
 
 
@@ -123,7 +168,10 @@ def test_e2e_local_anvil(tmp_path):
                 deployment_path=Path(os.environ["BACKEND_E2E_DEPLOYMENT"]), private_keys=keys)
     identity = h.chain.identity()
     assert identity.ok, identity.reason
-    result = _financial_flow(h, "anvil")
+    result = _financial_flow(h, "anvil", AnvilMining)
+    h = result.pop("harness")
+    h.worker.tick()  # heartbeat for /health worker UP
+    assert result["signed_transactions"] == 4
     assert h.api.get("/health", "Health") == {"api": "UP", "db": "UP", "worker": "UP", "chain": "UP",
                                               "deployment_id": identity.deployment.deployment_id, "mode": "LOCAL_DEMO"}
     evidence_path = os.environ.get("BACKEND_E2E_EVIDENCE_OUT")
