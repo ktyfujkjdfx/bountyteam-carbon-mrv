@@ -116,6 +116,22 @@ Batches are stored per `deployment_id`. A new deployment never reuses old batche
 - **Computed mode:** `BACKEND_RS_MODE=rs_cli` runs `python -m rs.verify --request <scenario rs_request> --output <job dir>`
   per job and marks the result `COMPUTED`. Real scenes need `config/scenarios.json` entries
   (Team Lead/RS config).
+- **Artifact IDs:** RS `artifact_id` values only need to be unique within a bundle. When a later
+  bundle reuses an ID with different bytes, Backend publishes a deterministic namespaced ID
+  (`<artifact_id>.<first 12 hex of sha256>`). Consumers use `Verification.artifacts[].url`.
+- **Verified against `feat/rs-pipeline@f094a6e`** (real bundles, no edits; plots registered from
+  the request geometry and hash). All three bundles are accepted as REAL/COMPUTED, and served
+  artifacts pass hash checks.
+
+  | Bundle | Quality | Decision |
+  |---|---|---|
+  | Dadia `no_change` | SUFFICIENT (97) | `NO_RESTRICTION` |
+  | Dadia `fire` | SUFFICIENT (97); 84.24 ha, 6.0% of forest | `REVIEW_REQUIRED / DISTURBANCE_UNATTRIBUTED` |
+  | Evia `evia_reserve_no_change` | SUFFICIENT (100); 1.68 ha | `REVIEW_REQUIRED / BELOW_POLICY_THRESHOLD` |
+
+  The Dadia fire bundle has FIRMS `NOT_CHECKED`, so frozen policy v1 does not auto-freeze it.
+  A real freeze demo needs RS to deliver `firms.support = SUPPORTED` with a matched-points
+  artifact.
 
 ### Blockchain
 - **ABI and events:** the adapter uses only the frozen `contracts/contract-abi.json` and exact
