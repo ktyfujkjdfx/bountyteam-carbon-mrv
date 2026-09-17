@@ -3,3 +3,5 @@ out/
 cache/
 dependencies/
 broadcast/
+# Local deployment build info and smoke evidence (generated; never committed)
+runtime/

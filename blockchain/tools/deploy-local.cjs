@@ -4,20 +4,23 @@
 // * Uses Anvil's unlocked default accounts through eth_sendTransaction: no private key or mnemonic
 //   is read, printed or written anywhere.
 // * Refuses to run against anything except a local chain (chain ID 31337 by default).
-// * Writes runtime/deployment.json (validated by contracts/deployment.schema.json, public data only)
-//   and runtime/deployment.build.json (compiler/settings/source/receipts for the Backend handoff).
+// * Writes <repo>/runtime/deployment.json (validated by contracts/deployment.schema.json, public data
+//   only) and blockchain/runtime/deployment.build.json (fields the schema does not allow:
+//   compiler/settings/source/receipts for the Backend handoff; Team Lead decision #4).
 //
 // Env: RPC_URL (default http://127.0.0.1:8545), DEPLOYMENT_DIR (default <repo>/runtime),
+//      DEPLOYMENT_BUILD_DIR (default <repo>/blockchain/runtime),
 //      EXPECTED_CHAIN_ID (default 31337), OWNER/ISSUER/ORACLE/BUYER/RECIPIENT address overrides.
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const {execFileSync} = require('node:child_process');
-const {ROOT, compile, checkAgainstFrozen} = require('./compile.cjs');
+const {BLOCKCHAIN, ROOT, compile, checkAgainstFrozen} = require('./compile.cjs');
 
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
 const DEPLOYMENT_DIR = path.resolve(process.env.DEPLOYMENT_DIR || path.join(ROOT, 'runtime'));
+const DEPLOYMENT_BUILD_DIR = path.resolve(process.env.DEPLOYMENT_BUILD_DIR || path.join(BLOCKCHAIN, 'runtime'));
 const EXPECTED_CHAIN_ID = BigInt(process.env.EXPECTED_CHAIN_ID || '31337');
 const ROLE_NAMES = ['owner', 'issuer', 'oracle', 'buyer', 'recipient'];
 
@@ -152,10 +155,13 @@ async function main() {
     private_keys_included: false,
   };
 
+  const manifestPath = path.join(DEPLOYMENT_DIR, 'deployment.json');
+  const buildPath = path.join(DEPLOYMENT_BUILD_DIR, 'deployment.build.json');
   fs.mkdirSync(DEPLOYMENT_DIR, {recursive: true});
-  fs.writeFileSync(path.join(DEPLOYMENT_DIR, 'deployment.json'), JSON.stringify(deployment, null, 2) + '\n');
-  fs.writeFileSync(path.join(DEPLOYMENT_DIR, 'deployment.build.json'), JSON.stringify(buildInfo, null, 2) + '\n');
-  console.log(JSON.stringify({ok: true, deployment_dir: DEPLOYMENT_DIR, ...deployment}, null, 2));
+  fs.mkdirSync(DEPLOYMENT_BUILD_DIR, {recursive: true});
+  fs.writeFileSync(manifestPath, JSON.stringify(deployment, null, 2) + '\n');
+  fs.writeFileSync(buildPath, JSON.stringify(buildInfo, null, 2) + '\n');
+  console.log(JSON.stringify({ok: true, manifest: manifestPath, build_info: buildPath, ...deployment}, null, 2));
 }
 
 main().catch(err => {

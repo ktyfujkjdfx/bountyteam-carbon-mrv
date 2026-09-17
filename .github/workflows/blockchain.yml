@@ -100,7 +100,7 @@ jobs:
 
           schema = json.loads(Path("contracts/deployment.schema.json").read_text())
           manifest = json.loads(Path("runtime/deployment.json").read_text())
-          build = json.loads(Path("runtime/deployment.build.json").read_text())
+          build = json.loads(Path("blockchain/runtime/deployment.build.json").read_text())
           frozen = json.loads(Path("contracts/abi-build.json").read_text())
 
           Draft202012Validator(schema, format_checker=FormatChecker()).validate(manifest)
@@ -129,13 +129,13 @@ jobs:
 
       - name: web3.py integration smoke (fresh Anvil) and deterministic deployment
         run: |
-          python blockchain/scripts/e2e_local.py --evidence-out runtime/e2e-evidence.json
+          python blockchain/scripts/e2e_local.py --evidence-out blockchain/runtime/e2e-evidence.json
           python - <<'EOF'
           import json
           from pathlib import Path
 
           first = json.loads(Path("runtime/deployment.json").read_text())
-          second = json.loads(Path("runtime/e2e-evidence.json").read_text())["deployment"]
+          second = json.loads(Path("blockchain/runtime/e2e-evidence.json").read_text())["deployment"]
           for field in ("chain_id", "contract_address", "contract_code_hash", "abi_sha256", "roles"):
               assert first[field] == second[field], f"non-deterministic deployment field {field}: {first[field]} != {second[field]}"
           assert first["deployment_id"] != second["deployment_id"], "each deployment must get a new deployment_id"
@@ -149,7 +149,7 @@ jobs:
           name: blockchain-local-evidence
           path: |
             runtime/deployment.json
-            runtime/deployment.build.json
-            runtime/e2e-evidence.json
+            blockchain/runtime/deployment.build.json
+            blockchain/runtime/e2e-evidence.json
           if-no-files-found: ignore
           retention-days: 7
