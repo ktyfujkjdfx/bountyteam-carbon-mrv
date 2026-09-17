@@ -1,0 +1,7 @@
+# Backend runtime and role-test dependencies. Install on top of the shared baseline:
+#   python -m pip install -r requirements-contracts.txt -r backend/requirements-backend.txt
+# web3 matches blockchain/requirements-chain.txt so both roles use one adapter stack.
+fastapi==0.141.1
+uvicorn==0.53.0
+httpx==0.28.1
+web3==7.16.0
