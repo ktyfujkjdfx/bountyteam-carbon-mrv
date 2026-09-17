@@ -237,6 +237,28 @@ def test_artifact_store_integrity_checked_on_serve(harness):
     assert response.status_code == 503 and response.json()["error"]["code"] == "ARTIFACT_INTEGRITY_FAILED"
 
 
+def test_seed_from_rs_request_registers_same_geometry_version(tmp_path):
+    from backend.app.context import create_context
+    from backend.app.ingest import register_plot
+    from backend.tools.seed import plot_from_rs_request
+    from .conftest import make_settings
+    ctx = create_context(make_settings(tmp_path))
+    plot = plot_from_rs_request(read_json(FIXTURES / "rs_request_fire.json"), name="Synthetic AOI")
+    reference = read_json(FIXTURES / "plot.json")
+    assert plot["geometry_hash"] == reference["geometry_hash"] and plot["geometry"] == reference["geometry"]
+    assert abs(plot["area_ha"] - reference["area_ha"]) / reference["area_ha"] < 0.01  # geodesic vs 20 m UTM grid
+    assert register_plot(ctx, plot) is True
+    assert register_plot(ctx, {**plot, "area_ha": reference["area_ha"]}) is False  # same geometry version: no-op
+    tampered = read_json(FIXTURES / "rs_request_fire.json")
+    tampered["plot_geometry_hash"] = "0x" + "4" * 64
+    try:
+        register_plot(ctx, plot_from_rs_request(tampered))
+    except EvidenceRejected:
+        pass
+    else:
+        raise AssertionError("request with wrong geometry hash registered")
+
+
 def test_plot_registration_refuses_geometry_change(harness):
     plot = read_json(FIXTURES / "plot.json")
     plot["geometry"]["coordinates"][0][1][0] += 0.001

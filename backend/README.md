@@ -104,6 +104,9 @@ Batches are stored per `deployment_id`. A new deployment never reuses old batche
 ## Handoffs
 
 ### RS
+- **Register the plot first:** `python -m backend.tools.seed --rs-request <request.json> [--name NAME] [--area-ha HA]`.
+  It uses the request's approved geometry and `plot_geometry_hash` (checked against JCS SHA-256).
+  By default the area is the WGS84 geodesic area.
 - **Import command:** `python -m backend.tools.import_bundle --bundle <bundle_dir> [--evidence <file>] [--computation-mode COMPUTED|CACHED_REPLAY] [--plot-id ID]`.
   The bundle root must contain `source-index.json` and every relative artifact and source path.
 - **Accepted:** exit code 0 and `{"accepted": true, "created", "verification_id", "evidence_hash", "decision", "reason", "decision_hash"}`.
@@ -184,7 +187,20 @@ git diff --check
 
 The real Anvil E2E (`backend/tests/test_e2e.py::test_e2e_local_anvil`) runs when
 `BACKEND_E2E_RPC_URL`, `BACKEND_E2E_DEPLOYMENT` and `BACKEND_E2E_KEY_{ISSUER,ORACLE,BUYER,RECIPIENT}`
-are set. It is skipped otherwise.
+are set. It is skipped otherwise. One reproducible command (needs `anvil`, `node`, `npm`) does it all:
+
+```bash
+./.venv/bin/python -m backend.tools.e2e_local_anvil                          # Blockchain from origin/feat/chain-registry (read-only export)
+./.venv/bin/python -m backend.tools.e2e_local_anvil --blockchain-ref worktree # after the Blockchain PR is merged
+```
+
+The runner:
+1. Starts a throwaway Anvil on port 8547 and deploys with `blockchain/tools/deploy-local.cjs`.
+2. Reads the public dev keys from Anvil's own output, so no key is stored.
+3. Runs issue → buy → transfer, holding mining and restarting the backend while the transfer is
+   `SUBMITTED`, so it must confirm with the same bytes and nonce.
+4. Continues with fire decision → oracle freeze → direct transfer revert.
+5. Writes receipts, readback and proof to `--evidence-out`.
 
 ## Known limitations
 
