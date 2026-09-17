@@ -284,20 +284,66 @@ def test_reproducible_rerun_produces_identical_canonical_bytes(tmp_path):
     )
 
 
-# --- the two real bundles committed under rs/data/bundles/ ---
+# --- the real bundles committed under rs/bundles/ ---
 
-@pytest.mark.parametrize("scenario,expected_outcome", [("no_change", "NO_CHANGE"), ("fire", "DISTURBANCE_DETECTED")])
-def test_real_dadia_bundle_is_schema_and_semantically_valid(scenario, expected_outcome):
-    bundle_dir = ROOT / "rs" / "bundles" / scenario
+REAL_BUNDLES = [
+    ("no_change", "request_no_change.json", "NO_CHANGE", "35TMF"),
+    ("fire", "request_fire.json", "DISTURBANCE_DETECTED", "35TMF"),
+    ("evia_reserve_no_change", "request_evia_reserve_no_change.json", "DISTURBANCE_DETECTED", "34SFJ"),
+]
+
+
+@pytest.mark.parametrize("bundle_name,request_name,expected_outcome,expected_tile", REAL_BUNDLES)
+def test_real_bundle_is_schema_and_semantically_valid(bundle_name, request_name, expected_outcome, expected_tile):
+    bundle_dir = ROOT / "rs" / "bundles" / bundle_name
     evidence_path = bundle_dir / "verification.json"
     if not evidence_path.exists():
         pytest.skip(f"real bundle not present: {evidence_path}")
     evidence = read_json(evidence_path)
     assert evidence["dataset_kind"] == "REAL"
     assert evidence["outcome"] == expected_outcome
-    request = read_json(ROOT / "rs" / "configs" / f"request_{scenario}.json")
+    request = read_json(ROOT / "rs" / "configs" / request_name)
     result = validate_evidence(evidence, bundle_dir, request["geometry"])
     assert result["evidence_quality"] in ("SUFFICIENT", "REVIEW_REQUIRED", "INSUFFICIENT")
     for scene in (evidence["observation"]["before"], evidence["observation"]["after"]):
         assert not scene["scene_id"].startswith("SYNTHETIC")
-        assert scene["provider"] and scene["mgrs_tile"] == "35TMF"
+        assert scene["provider"] and scene["mgrs_tile"] == expected_tile
+
+
+def test_real_bundle_below_policy_area_threshold_is_not_over_claimed():
+    # The Evia reserve pair legitimately finds a small (1.68 ha) real
+    # disturbance well under the 5 ha backend policy freeze threshold: RS must
+    # report it as DISTURBANCE_DETECTED (honest), not suppress it as
+    # NO_CHANGE, and must not itself decide REVIEW_REQUIRED/FREEZE_REQUESTED.
+    bundle_dir = ROOT / "rs" / "bundles" / "evia_reserve_no_change"
+    evidence_path = bundle_dir / "verification.json"
+    if not evidence_path.exists():
+        pytest.skip(f"real bundle not present: {evidence_path}")
+    evidence = read_json(evidence_path)
+    assert evidence["outcome"] == "DISTURBANCE_DETECTED"
+    assert evidence["metrics"]["affected_area_ha"] < 5
+    assert "decision" not in evidence and "credit_status" not in evidence
+    policy = read_json(ROOT / "config" / "policy.v1.json")
+    result = validate_evidence(evidence)
+    assert evidence["metrics"]["affected_area_ha"] < policy["freeze_min_area_ha"]
+    assert result["decision"] == "REVIEW_REQUIRED"  # Backend's own recomputation, read-only here
+
+
+@pytest.mark.parametrize("bundle_name,request_name,_outcome,_tile", REAL_BUNDLES)
+def test_real_bundle_rejects_tampered_artifact(tmp_path, bundle_name, request_name, _outcome, _tile):
+    # Equivalent of Backend's import-time integrity check on one of OUR real
+    # bundles: flipping a byte in a committed artifact must fail validation.
+    bundle_dir = ROOT / "rs" / "bundles" / bundle_name
+    if not (bundle_dir / "verification.json").exists():
+        pytest.skip(f"real bundle not present: {bundle_dir}")
+    import shutil
+
+    copy_dir = tmp_path / "bundle"
+    shutil.copytree(bundle_dir, copy_dir)
+    evidence = read_json(copy_dir / "verification.json")
+    request = read_json(ROOT / "rs" / "configs" / request_name)
+    tampered_artifact = next(a for a in evidence["artifacts"] if a["media_type"] in ("image/png", "image/tiff"))
+    with (copy_dir / tampered_artifact["relative_path"]).open("ab") as handle:
+        handle.write(b"TAMPERED")
+    with pytest.raises(ValueError):
+        validate_evidence(evidence, copy_dir, request["geometry"])
