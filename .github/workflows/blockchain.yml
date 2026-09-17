@@ -1,0 +1,155 @@
+name: Blockchain
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "blockchain/**"
+      - "contracts/**"
+      - ".github/workflows/blockchain.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: blockchain-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: "1"
+  FOUNDRY_VERSION: v1.8.3
+  RPC_URL: http://127.0.0.1:8545
+
+jobs:
+  foundry:
+    name: foundry (build, test, ABI, local deploy, smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Install Node.js dependencies (pinned solc)
+        run: npm ci --ignore-scripts
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements-contracts.txt -r blockchain/requirements-chain.txt
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1.9.1
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+          cache: false
+
+      - name: Show toolchain versions
+        run: |
+          forge --version
+          anvil --version
+          node --version
+          python --version
+
+      - name: Install locked Solidity dependencies
+        working-directory: blockchain
+        run: forge soldeer install
+
+      - name: Compile
+        working-directory: blockchain
+        run: forge build --sizes
+
+      - name: Foundry tests (unit + invariants)
+        working-directory: blockchain
+        run: forge test -vv
+
+      - name: ABI compatibility with frozen contracts-v1.0.0
+        working-directory: blockchain
+        run: node tools/check-abi.cjs
+
+      - name: Deploy to local Anvil
+        run: |
+          anvil --port 8545 --chain-id 31337 --silent &
+          for i in $(seq 1 50); do
+            cast chain-id --rpc-url "$RPC_URL" >/dev/null 2>&1 && break
+            sleep 0.2
+          done
+          test "$(cast chain-id --rpc-url "$RPC_URL")" = "31337"
+          node blockchain/tools/deploy-local.cjs
+
+      - name: Validate deployment manifest
+        run: |
+          python - <<'EOF'
+          import json
+          from pathlib import Path
+          from jsonschema import Draft202012Validator, FormatChecker
+
+          schema = json.loads(Path("contracts/deployment.schema.json").read_text())
+          manifest = json.loads(Path("runtime/deployment.json").read_text())
+          build = json.loads(Path("runtime/deployment.build.json").read_text())
+          frozen = json.loads(Path("contracts/abi-build.json").read_text())
+
+          Draft202012Validator(schema, format_checker=FormatChecker()).validate(manifest)
+          assert manifest["chain_id"] == "31337", manifest["chain_id"]
+          assert manifest["abi_sha256"] == frozen["abi_sha256"], "manifest ABI hash != frozen ABI hash"
+          roles = manifest["roles"]
+          assert len({a.lower() for a in roles.values()}) == len(roles), f"role accounts must be distinct: {roles}"
+          assert build["deployment_id"] == manifest["deployment_id"]
+          assert build["abi"]["byte_identical_to_frozen"] is True
+          assert build["private_keys_included"] is False
+
+          def keys(node):
+              if isinstance(node, dict):
+                  for k, v in node.items():
+                      yield k
+                      yield from keys(v)
+              elif isinstance(node, list):
+                  for v in node:
+                      yield from keys(v)
+
+          secret_like = [k for k in [*keys(manifest), *keys(build)]
+                         if k != "private_keys_included" and any(w in k.lower() for w in ("private", "mnemonic", "secret", "seed"))]
+          assert not secret_like, f"secret-like fields in deployment output: {secret_like}"
+          print("deployment manifest valid:", json.dumps(manifest, indent=2))
+          EOF
+
+      - name: web3.py integration smoke (fresh Anvil) and deterministic deployment
+        run: |
+          python blockchain/scripts/e2e_local.py --evidence-out runtime/e2e-evidence.json
+          python - <<'EOF'
+          import json
+          from pathlib import Path
+
+          first = json.loads(Path("runtime/deployment.json").read_text())
+          second = json.loads(Path("runtime/e2e-evidence.json").read_text())["deployment"]
+          for field in ("chain_id", "contract_address", "contract_code_hash", "abi_sha256", "roles"):
+              assert first[field] == second[field], f"non-deterministic deployment field {field}: {first[field]} != {second[field]}"
+          assert first["deployment_id"] != second["deployment_id"], "each deployment must get a new deployment_id"
+          print("deterministic deployment across two fresh Anvil nodes: OK")
+          EOF
+
+      - name: Upload local deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: blockchain-local-evidence
+          path: |
+            runtime/deployment.json
+            runtime/deployment.build.json
+            runtime/e2e-evidence.json
+          if-no-files-found: ignore
+          retention-days: 7

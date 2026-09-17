@@ -59,6 +59,7 @@ All commands run from `blockchain/` unless noted otherwise.
 | Deploy + grant roles (terminal 2) | `npm run deploy` |
 | Integration smoke (throwaway Anvil) | `../.venv/bin/python scripts/e2e_local.py` |
 | Smoke against the running deployment | `../.venv/bin/python scripts/e2e_local.py --use-existing` |
+| CI (GitHub Actions) | `.github/workflows/blockchain.yml`: build, all forge tests, ABI check, Anvil deploy, schema validation, web3.py smoke |
 | Shared checks (repo root) | `python -m pytest -q && npm run check:abi && git diff --check` |
 
 `npm run deploy` always deploys a **new** contract. On a fresh Anvil the address is
@@ -92,6 +93,13 @@ Nobody edits ABI JSON by hand.
 | oracle (Backend runtime sender only) | #2 | `0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC` |
 | buyer | #3 | `0x90F79bf6EB2c4f870365E785982E1f101E93b906` |
 | recipient | #4 | `0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65` |
+
+The deploy script requires all five addresses to be distinct, and CI checks that too. The
+owner cannot grant itself issuer or oracle (Team Lead decision: roles stay separated). The
+seller is not a separate schema role: `config/demo-authorizations.json` sets
+`seller_actor: "issuer"`, so the demo seller address is the issuer address. Buyer and
+recipient are always different from the seller, and the contract rejects a seller buying its
+own batch.
 
 You can override them with `OWNER=… ISSUER=… ORACLE=… BUYER=… RECIPIENT=…`. `RPC_URL` and
 `DEPLOYMENT_DIR` are also configurable. The script refuses any chain ID other than 31337
