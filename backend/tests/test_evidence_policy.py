@@ -150,7 +150,10 @@ def test_path_traversal_rejected(value):
 def test_symlink_escape_rejected(tmp_path):
     (tmp_path / "bundle").mkdir()
     (tmp_path / "secret.txt").write_text("secret")
-    (tmp_path / "bundle" / "link.txt").symlink_to(tmp_path / "secret.txt")
+    try:
+        (tmp_path / "bundle" / "link.txt").symlink_to(tmp_path / "secret.txt")
+    except OSError as exc:  # e.g. Windows without Developer Mode/admin: WinError 1314
+        pytest.skip(f"cannot create symlinks on this platform: {exc}")
     with pytest.raises(EvidenceRejected):
         safe_path(tmp_path / "bundle", "link.txt")
 
