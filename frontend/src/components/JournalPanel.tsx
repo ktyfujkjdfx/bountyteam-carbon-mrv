@@ -69,25 +69,40 @@ export function JournalPanel({ client, plotId, events, eventsError, eventsLoadin
         <ul className="timeline client-log" aria-label="Ответы Backend в этой сессии">
           {clientLog.map((entry) => (
             <li key={entry.id} data-testid="client-log-entry">
-              <Badge tone="blocked">UI: ответ Backend</Badge> <span className="small">{entry.at}</span>
-              <div>{entry.message}</div>
-              <div className="muted small">Локальная запись клиента, не событие Backend/контракта.</div>
+              <span className="timeline-time">{entry.at}</span>
+              <div className="timeline-body">
+                <span>
+                  <Badge tone="blocked">UI: ответ Backend</Badge>
+                </span>
+                <span>{entry.message}</span>
+                <span className="muted small">Локальная запись клиента, не событие Backend или контракта.</span>
+              </div>
             </li>
           ))}
         </ul>
       )}
-      {events && merged.length === 0 && <Empty>Событий пока нет.</Empty>}
+      {events && merged.length === 0 && (
+        <Empty>
+          <strong>Событий пока нет</strong>
+          <span>Наблюдения, решения и транзакции появятся здесь по мере обработки Backend.</span>
+        </Empty>
+      )}
       {merged.length > 0 && (
         <ol className="timeline" aria-label="Журнал событий Backend">
           {merged.map((event) => (
             <li key={event.event_id} data-testid="journal-event" data-kind={event.kind}>
-              <Badge tone={KIND_TONE[event.kind]}>{event.kind}</Badge> <span className="small">{formatUtc(event.occurred_at)}</span>
-              <div>{event.message}</div>
-              <div className="muted small mono">
-                {event.verification_id && `verification ${shortHash(event.verification_id, 8)} `}
-                {event.operation_id && `op ${shortHash(event.operation_id, 8)} `}
-                {event.batch_id && `batch #${event.batch_id} `}
-                {event.tx_hash && `tx ${shortHash(event.tx_hash, 8)}`}
+              <span className="timeline-time">{formatUtc(event.occurred_at)}</span>
+              <div className="timeline-body">
+                <span>
+                  <Badge tone={KIND_TONE[event.kind]}>{event.kind}</Badge>
+                </span>
+                <span>{event.message}</span>
+                <span className="mono">
+                  {event.verification_id && `verification ${shortHash(event.verification_id, 8)} `}
+                  {event.operation_id && `op ${shortHash(event.operation_id, 8)} `}
+                  {event.batch_id && `batch #${event.batch_id} `}
+                  {event.tx_hash && `tx ${shortHash(event.tx_hash, 8)}`}
+                </span>
               </div>
             </li>
           ))}

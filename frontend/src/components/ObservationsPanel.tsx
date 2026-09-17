@@ -9,9 +9,9 @@ import { useTrackedAction } from '../hooks/useTrackedAction';
 import { Empty, ErrorNotice, Loading, StatusBadge } from './common';
 
 const SCENARIOS: ReadonlyArray<{ id: ScenarioId; label: string; note: string }> = [
-  { id: 'baseline', label: 'Historical replay: baseline T0 → T1', note: 'Сравнение до изменения' },
-  { id: 'post_fire', label: 'Historical replay: post_fire T1 → T2', note: 'Наблюдение после события' },
-  { id: 'insufficient', label: 'Quality check: insufficient', note: 'Явно маркированный тест качества' },
+  { id: 'baseline', label: 'Historical replay · T0 → T1', note: 'Базовое сравнение до изменения' },
+  { id: 'post_fire', label: 'Historical replay · T1 → T2', note: 'Наблюдение после события' },
+  { id: 'insufficient', label: 'Quality check', note: 'Явно маркированный тест качества' },
 ];
 
 interface Props {
@@ -59,19 +59,20 @@ export function ObservationsPanel(props: Props) {
           <button
             key={s.id}
             type="button"
-            className="btn"
+            className="btn btn-secondary"
             disabled={verify.busy}
             onClick={() => void verify.run({ scenario_id: s.id })}
             title={s.note}
             data-testid={`verify-${s.id}`}
           >
-            {s.label}
+            <span>{s.label}</span>
+            <span className="mono">{s.id}</span>
           </button>
         ))}
       </div>
-      <p className="muted small">
-        Сценарии — ключи серверного manifest (исторический replay реальных/fixture дат), а не «симуляция пожара». Запуск разрешён только
-        demo-актору issuer{actor !== 'issuer' ? ' — сейчас выбран ' + actor + ', Backend вернёт 403' : ''}.
+      <p className="muted small" style={{ marginTop: 8 }}>
+        Ключи серверного manifest сценариев — исторический replay, не симуляция события. Запуск разрешён только demo-актору issuer
+        {actor !== 'issuer' ? ` — сейчас выбран ${actor}, Backend вернёт 403` : ''}.
       </p>
 
       {verify.phase !== 'idle' && (
@@ -103,16 +104,22 @@ export function ObservationsPanel(props: Props) {
       <h3>История проверок</h3>
       {historyLoading && !history && <Loading />}
       {historyError && <ErrorNotice error={historyError} onRetry={onReloadHistory} compact />}
-      {history && items.length === 0 && <Empty>Наблюдений ещё нет.</Empty>}
+      {history && items.length === 0 && (
+        <Empty>
+          <strong>Наблюдений ещё нет</strong>
+          <span>История пополняется после обработки evidence Backend.</span>
+        </Empty>
+      )}
       {items.length > 0 && (
         <ol className="history" data-testid="history">
           {items.map((item) => (
             <li key={item.verification_id} className={item.verification_id === selectedId ? 'selected' : undefined}>
               <button type="button" className="history-item" onClick={() => onSelect(item.verification_id)} aria-pressed={item.verification_id === selectedId}>
-                <span className="small">
-                  Съёмка {formatUtc(item.observed_at)} · обработано {formatUtc(item.processed_at)}
-                  {item.is_latest ? ' · latest' : ''}
+                <span className="history-date">
+                  <span>{formatUtc(item.observed_at)}</span>
+                  {item.is_latest && <span className="muted">LATEST</span>}
                 </span>
+                <span className="small muted">обработано {formatUtc(item.processed_at)}</span>
                 <span className="badge-row">
                   <StatusBadge meta={OUTCOME_META[item.outcome]} />
                   <StatusBadge meta={QUALITY_META[item.evidence_quality]} />

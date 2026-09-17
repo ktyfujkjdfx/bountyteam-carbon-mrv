@@ -154,38 +154,70 @@ function BatchCard({
   const transferValid = POSITIVE_UINT_STRING.test(transferAmount) && toActor !== actor;
 
   return (
-    <article className={`batch-card${frozen ? ' frozen' : ''}`} data-testid={`batch-${batch.batch_id}`}>
+    <article className={`registry-record${frozen ? ' frozen' : ''}`} data-testid={`batch-${batch.batch_id}`}>
       <header className="batch-header">
-        <h3>Серия #{batch.batch_id}</h3>
+        <h3>Запись реестра · серия #{batch.batch_id}</h3>
         <StatusBadge meta={CREDIT_META[batch.credit_status]} testId="batch-credit-status" />
       </header>
-      {frozen && (
-        <p className="state state-blocked" data-testid="frozen-explainer">
-          FROZEN подтверждён чтением контракта {batch.frozen_at ? `(${formatUtc(batch.frozen_at)})` : ''}. Это временное ограничение
-          прототипа, не юридическое аннулирование; балансы сохранены.
-        </p>
-      )}
-      <dl className="fields">
-        <Field label="Total supply">{formatUintString(batch.total_supply)} ед.</Field>
-        <Field label="Seller balance">
-          <span data-testid="seller-balance">{formatUintString(batch.seller_balance)}</span> ед.
-        </Field>
-        <Field label={`Баланс актора ${batch.actor}`}>
-          <span data-testid="actor-balance">{formatUintString(batch.actor_balance)}</span> ед.
-        </Field>
-        <Field label="Unit price">{formatUintString(batch.unit_price_wei)} wei (локальная тестовая валюта, без ценности)</Field>
-        <Field label="Seller" mono>
-          {batch.seller}
-        </Field>
-        <Field label="Выпуск / последнее наблюдение">
-          {formatUtc(batch.issued_at)} / {formatUtc(batch.last_observed_at)}
-        </Field>
-        <Field label="Evidence hash серии (/credits)">
-          <Hash value={batch.evidence_hash} />
-          <div className="muted small">Значение Backend для серии; связь с конкретной проверкой — во вкладке Proof (anchors).</div>
-        </Field>
-        <Field label="Chain state checked at">{formatUtc(batch.chain_state_checked_at)}</Field>
-      </dl>
+      <div className="batch-state">
+        <div className="label">Credit state · readback /credits</div>
+        <div className="batch-state-value" data-state={batch.credit_status}>
+          {batch.credit_status}
+        </div>
+        {frozen ? (
+          <p className="state state-blocked compact" data-testid="frozen-explainer">
+            FROZEN подтверждён чтением контракта {batch.frozen_at ? `(${formatUtc(batch.frozen_at)})` : ''}. Это временное ограничение
+            прототипа, не юридическое аннулирование; балансы сохранены.
+          </p>
+        ) : (
+          <p className="small muted">{CREDIT_META[batch.credit_status].hint}</p>
+        )}
+      </div>
+      <div className="batch-body">
+        <dl className="balances">
+          <div>
+            <dt>Total supply</dt>
+            <dd>
+              {formatUintString(batch.total_supply)}
+              <span className="unit">ед.</span>
+            </dd>
+          </div>
+          <div>
+            <dt>Seller</dt>
+            <dd>
+              <span data-testid="seller-balance">{formatUintString(batch.seller_balance)}</span>
+              <span className="unit">ед.</span>
+            </dd>
+          </div>
+          <div>
+            <dt>Актор · {batch.actor}</dt>
+            <dd>
+              <span data-testid="actor-balance">{formatUintString(batch.actor_balance)}</span>
+              <span className="unit">ед.</span>
+            </dd>
+          </div>
+        </dl>
+        <dl className="fields">
+          <Field label="Unit price">
+            <span className="mono">{formatUintString(batch.unit_price_wei)}</span> wei · тестовая валюта, без ценности
+          </Field>
+          <Field label="Seller address">
+            <Hash value={batch.seller} />
+          </Field>
+          <Field label="Выпуск / наблюдение">
+            <span className="mono">
+              {formatUtc(batch.issued_at)} / {formatUtc(batch.last_observed_at)}
+            </span>
+          </Field>
+          <Field label="Evidence hash серии">
+            <Hash value={batch.evidence_hash} />
+            <div className="muted small">Значение Backend для серии; связь с конкретной проверкой — во вкладке Proof.</div>
+          </Field>
+          <Field label="Chain state checked">
+            <span className="mono">{formatUtc(batch.chain_state_checked_at)}</span>
+          </Field>
+        </dl>
+      </div>
 
       <div className="action-grid">
         <form
@@ -298,6 +330,7 @@ export function CreditsPanel(props: Props) {
 
   return (
     <div className="credits" data-testid="credits-panel">
+      <LedgerNote ledger={ledger} />
       {creditsLoading && !credits && <Loading label="Загрузка серий и балансов…" />}
       {creditsError && (
         <ErrorNotice
@@ -330,7 +363,12 @@ export function CreditsPanel(props: Props) {
         <OperationStatus action={issue as TrackedAction<unknown, Operation>} label="issue" />
       </form>
 
-      {credits && items.length === 0 && <Empty>Серий пока нет. Количество единиц задаёт demo authorization, а не NDVI/гектары.</Empty>}
+      {credits && items.length === 0 && (
+        <Empty>
+          <strong>Серия не выпущена</strong>
+          <span>Записей реестра для участка нет. Количество единиц задаёт demo authorization, а не NDVI или гектары.</span>
+        </Empty>
+      )}
       {items.map((batch) => (
         <BatchCard
           key={batch.batch_id}
@@ -343,7 +381,6 @@ export function CreditsPanel(props: Props) {
           onRejected={onRejected}
         />
       ))}
-      <LedgerNote ledger={ledger} />
     </div>
   );
 }
