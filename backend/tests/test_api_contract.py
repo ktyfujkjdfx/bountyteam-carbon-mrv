@@ -98,17 +98,40 @@ def test_role_enforcement_is_403(harness):
 
 @pytest.mark.parametrize("body", [{"scenario_id": "freeze_now"}, {"scenario_id": "baseline", "extra": 1}, {},
                                   {"scenario_id": 7}])
-def test_request_body_schema_rejected_with_422_envelope(harness, body):
+def test_verify_request_schema_error_matches_frozen_invalid_json_example(harness, body):
     error = harness.api.post(f"/plots/{PLOT}/verify", body, "issuer", "bad-body-key", "Error", status=422)
-    assert error["error"]["code"] == "VALIDATION_ERROR"
+    frozen = _frozen_invalid_json_example()["body"]["error"]
+    assert (error["error"]["code"], error["error"]["message"]) == (frozen["code"], frozen["message"])
+    assert error["error"]["details"]["category"] == "REQUEST_SCHEMA"
+    assert harness.count("verification_jobs") == 0
 
 
-def test_invalid_json_body_is_422_envelope(harness):
+def _frozen_invalid_json_example() -> dict:
+    from backend.app.contracts import read_json
+    case = next(c for c in read_json(FIXTURES / "http_examples.json")["cases"] if c["name"] == "invalid_json")
+    assert (case["method"], case["path"], case["status"]) == ("POST", "/plots/{plot_id}/verify", 422)
+    return case
+
+
+def test_invalid_json_body_on_verify_matches_frozen_example(harness):
     response = harness.client.post(f"/api/v1/plots/{PLOT}/verify", content=b"{not json",
                                    headers={**harness.api.headers("issuer", "bad-json-key"),
                                             "Content-Type": "application/json"})
     assert response.status_code == 422
-    assert_model(response.json(), "Error")
+    body = assert_model(response.json(), "Error")
+    frozen = _frozen_invalid_json_example()["body"]["error"]
+    assert (body["error"]["code"], body["error"]["message"]) == (frozen["code"], frozen["message"])
+    assert body["error"]["details"]["category"] == "REQUEST_SCHEMA"
+
+
+def test_non_body_and_other_route_request_errors_stay_validation_error(harness):
+    headers = harness.api.headers("issuer", "missing-body-key")
+    bad_path = harness.client.post("/api/v1/plots/bad%20id/verify", json={"scenario_id": "baseline"}, headers=headers)
+    assert bad_path.status_code == 422 and bad_path.json()["error"]["code"] == "VALIDATION_ERROR"
+    harness.verify("baseline")
+    issue = harness.api.post(f"/plots/{PLOT}/issue", {"demo_authorization_id": 5}, "issuer", "bad-issue-body", "Error",
+                             status=422)
+    assert issue["error"]["code"] == "VALIDATION_ERROR" and issue["error"]["details"]["category"] == "REQUEST_SCHEMA"
 
 
 @pytest.mark.parametrize("path", ["/jobs/not-a-uuid", "/operations/1", "/verifications/x/proof",

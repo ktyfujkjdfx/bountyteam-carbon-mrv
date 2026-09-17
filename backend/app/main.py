@@ -33,6 +33,7 @@ UINT_DEC = r"^(0|[1-9][0-9]{0,77})$"
 POSITIVE_DEC = r"^[1-9][0-9]{0,77}$"
 UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 ACTORS = ("issuer", "buyer", "recipient")
+VERIFY_PATH = re.compile(r"^/api/v1/plots/[^/]+/verify$")
 
 PlotId = Annotated[str, Path(pattern=PLOT_ID)]
 BatchId = Annotated[str, Path(pattern=UINT_DEC)]
@@ -229,10 +230,15 @@ def create_app(settings: Settings | None = None, ctx: AppContext | None = None, 
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError):
-        details = [{"location": "/".join(str(p) for p in err.get("loc", ())), "message": str(err.get("msg"))[:200]}
-                   for err in exc.errors()[:10]]
-        return _envelope(request, 422, "VALIDATION_ERROR", "Request does not match the API contract",
-                         {"errors": details})
+        errors = exc.errors()
+        details = {"category": "REQUEST_SCHEMA",
+                   "errors": [{"location": "/".join(str(p) for p in err.get("loc", ())),
+                               "message": str(err.get("msg"))[:200]} for err in errors[:10]]}
+        body_only = bool(errors) and all(tuple(err.get("loc", ()))[:1] == ("body",) for err in errors)
+        if request.method == "POST" and VERIFY_PATH.match(request.url.path) and body_only:
+            # Frozen example fixtures/http_examples.json "invalid_json" (POST /plots/{plot_id}/verify, 422).
+            return _envelope(request, 422, "INVALID_EVIDENCE", "Неверная схема", details)
+        return _envelope(request, 422, "VALIDATION_ERROR", "Request does not match the API contract", details)
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request: Request, exc: StarletteHTTPException):

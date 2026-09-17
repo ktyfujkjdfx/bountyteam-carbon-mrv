@@ -168,9 +168,15 @@ Batches are stored per `deployment_id`. A new deployment never reuses old batche
   - 403 `FORBIDDEN`
   - 404 `NOT_FOUND`
   - 409: `IDEMPOTENCY_CONFLICT`, `ACTION_NOT_ALLOWED`, `AUTHORIZATION_ALREADY_USED`, `BATCH_NOT_ACTIVE`, `INSUFFICIENT_BALANCE`, `DEPLOYMENT_MISMATCH`
-  - 422: `VALIDATION_ERROR`, `INVALID_RECIPIENT`, `AUTHORIZATION_PLOT_MISMATCH`, `UNKNOWN_SCENARIO`
+  - 422 on `POST /plots/{plot_id}/verify` for malformed JSON or a body that does not match
+    `VerifyRequest`: exactly the frozen example `invalid_json`, i.e. `INVALID_EVIDENCE` /
+    `"Неверная схема"`, with `details.category = "REQUEST_SCHEMA"`
+  - 422 elsewhere: `VALIDATION_ERROR` (`details.category = "REQUEST_SCHEMA"` for request schema
+    errors), `INVALID_RECIPIENT`, `AUTHORIZATION_PLOT_MISMATCH`, `UNKNOWN_SCENARIO`
   - 503: `CHAIN_UNAVAILABLE`, `SERVICE_UNAVAILABLE`, `ARTIFACT_INTEGRITY_FAILED`
-  - Job errors use `INVALID_EVIDENCE` or `JOB_ERROR`.
+  - Semantically invalid RS evidence is never a synchronous 422, because `/verify` returns 202
+    before processing. It surfaces as `Job.error` with `INVALID_EVIDENCE` and
+    `details.category = "EVIDENCE"` (import CLI: the same shape on stderr). Other job failures use `JOB_ERROR`.
 - **Labels:** show `evidence.dataset_kind` (`SYNTHETIC`/`REAL`), `computation_mode`
   (`CACHED_REPLAY`/`COMPUTED`), `observation_mode` (`HISTORICAL_REPLAY`) and `/health` `mode`.
 - **Artifacts:** serve only through `/api/v1/artifacts/{artifact_id}`. They are hash-checked

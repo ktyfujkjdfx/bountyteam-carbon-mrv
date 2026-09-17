@@ -100,7 +100,8 @@ class Worker:
             result = import_evidence(self.ctx, evidence_path.read_bytes(), bundle_root, computation_mode=mode,
                                      expected_plot_id=job["plot_id"])
         except EvidenceRejected as exc:
-            self._finish_job(job_id, error={"code": "INVALID_EVIDENCE", "message": exc.message, "details": exc.details})
+            self._finish_job(job_id, error={"code": "INVALID_EVIDENCE", "message": exc.message,
+                                            "details": {"category": "EVIDENCE", **exc.details}})
             return
         except Exception as exc:  # no stack traces to clients
             log.exception("verification job failed")

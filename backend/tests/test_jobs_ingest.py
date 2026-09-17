@@ -88,7 +88,8 @@ def test_import_bundle_cli_accepts_and_rejects(tmp_path):
     rejected = subprocess.run(command[:4] + [str(tampered.parent), "--evidence", str(tampered)], cwd=REPO_ROOT, env=env,
                               capture_output=True, text=True, timeout=120)
     assert rejected.returncode == 2
-    assert json.loads(rejected.stderr)["error"]["code"] == "INVALID_EVIDENCE"
+    rejection = json.loads(rejected.stderr)["error"]
+    assert rejection["code"] == "INVALID_EVIDENCE" and rejection["details"]["category"] == "EVIDENCE"
 
 
 def test_corrupt_json_is_rejected_before_decision(harness):
@@ -107,7 +108,8 @@ def _job_fails(tmp_path, *, mutate_file=None, mutate_evidence=None, expected_mes
     harness = Harness(tmp_path / "state", scenarios_path=write_scenarios(tmp_path, post_fire=str(evidence_path)))
     job = harness.verify("post_fire")
     assert job["state"] == "FAILED" and job["verification_id"] is None
-    assert job["error"]["code"] == "INVALID_EVIDENCE"
+    assert job["error"]["code"] == "INVALID_EVIDENCE" and job["error"]["details"]["category"] == "EVIDENCE"
+    assert job["error"]["message"] != "Неверная схема"  # semantic evidence rejection, distinct from request schema
     if expected_message:
         assert expected_message in job["error"]["message"]
     assert harness.count("verifications") == 0 and harness.count("operations") == 0

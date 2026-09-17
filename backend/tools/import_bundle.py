@@ -31,7 +31,7 @@ def main(argv=None) -> int:
                                  expected_plot_id=args.plot_id)
     except (EvidenceRejected, OSError) as exc:
         message = exc.message if isinstance(exc, EvidenceRejected) else "Cannot read evidence file"
-        details = exc.details if isinstance(exc, EvidenceRejected) else {}
+        details = {"category": "EVIDENCE", **(exc.details if isinstance(exc, EvidenceRejected) else {})}
         print(json.dumps({"accepted": False, "error": {"code": "INVALID_EVIDENCE", "message": message,
                                                         "details": details}}, ensure_ascii=False), file=sys.stderr)
         return 2
