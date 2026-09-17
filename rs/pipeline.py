@@ -255,7 +255,13 @@ def compute_evidence(request, *, code_commit=None):
     if aoi_cloud_before is None or aoi_cloud_after is None:
         limitations.append("AOI cloud ratio could not be computed for one date (empty AOI footprint read).")
 
-    firms_result = _resolve_firms(geometry, before["acquired_at"], after["acquired_at"], data_root, plot_id)
+    # Attribution is about the damage that was actually measured, so it runs
+    # against the kept components (in grid CRS), not the AOI.
+    damage_geometries = [poly for poly, _count in artifacts_payload.get("kept_components") or []]
+    firms_result = _resolve_firms(
+        before["acquired_at"], after["acquired_at"], data_root, plot_id,
+        damage_geometries=damage_geometries, grid_epsg=epsg,
+    )
     firms_support = firms_result["support"]
     firms_points = firms_result.pop("points")
     if firms_support == "NOT_CHECKED":
@@ -352,8 +358,25 @@ def _firms_archive_paths(data_root, plot_id):
     return sorted(archive_dir.glob("*.csv")) if archive_dir.is_dir() else []
 
 
-def _resolve_firms(geometry, window_start, window_end, data_root, plot_id):
-    """Attribute the observation window against FIRMS, offline archive first.
+def _damage_query_bbox(damage_geometries, grid_epsg):
+    """WGS84 bbox covering the buffered damage mask, for the NRT area query."""
+    from shapely.ops import unary_union
+
+    buffered = unary_union(list(damage_geometries)).buffer(firms_mod.SPATIAL_TOLERANCE_M)
+    to_wgs = Transformer.from_crs(f"EPSG:{grid_epsg}", "EPSG:4326", always_xy=True)
+    minx, miny, maxx, maxy = buffered.bounds
+    west, south = to_wgs.transform(minx, miny)
+    east, north = to_wgs.transform(maxx, maxy)
+    return (west, south, east, north)
+
+
+def _resolve_firms(window_start, window_end, data_root, plot_id, *, damage_geometries, grid_epsg):
+    """Attribute the detected damage against FIRMS, offline archive first.
+
+    Matching is deliberately narrow: hotspots in the half-open window
+    (T_before, T_after] and within 500 m of the damage mask, measured in the
+    analysis grid's own UTM CRS. See rs/firms.py for why each of those three
+    choices is what it is.
 
     Returns the schema's `firms` fields plus the matched points bundle.py turns
     into firms.geojson. NOT_CHECKED is reported whenever no source is reachable;
@@ -377,16 +400,19 @@ def _resolve_firms(geometry, window_start, window_end, data_root, plot_id):
         source_refs = [
             f"NASA FIRMS archive {path.name} sha256={_sha256_file(path)}" for path in archive_paths
         ]
+    elif not damage_geometries:
+        # Nothing to attribute and no cached archive: a network query would ask
+        # about an empty area, so report honestly that no check was made.
+        return empty
     else:
-        bbox = gridmath.bounds_wgs84(geometry)
-        hotspots = firms_mod.fetch_hotspots(bbox, start, end)
+        hotspots = firms_mod.fetch_hotspots(_damage_query_bbox(damage_geometries, grid_epsg), start, end)
         if hotspots is None:
             return empty
         product = "VIIRS_SNPP_NRT"
         source_refs = ["NASA FIRMS VIIRS_SNPP_NRT area API"]
 
     in_window = firms_mod.filter_hotspots(hotspots, start, end)
-    matched = firms_mod.match_within_aoi(in_window, geometry)
+    matched = firms_mod.match_within_damage_mask(in_window, damage_geometries, grid_epsg)
     return {
         "support": "SUPPORTED" if matched else "NOT_FOUND",
         "hotspot_count": len(matched),

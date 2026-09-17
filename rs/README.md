@@ -34,12 +34,12 @@ measurement, confirmed empirically below.
 | Scenario | Before | After | Real result | FIRMS |
 |---|---|---|---|---|
 | `no_change` (T0→T1) | `S2A_35TMF_20220726_0_L2A` (2022-07-26) | `S2B_35TMF_20230805_0_L2A` (2023-08-05) | `NO_CHANGE`, dNBR mean 0.026, 0 ha affected after MMU | `NOT_FOUND` |
-| `fire` (T1→T2) | `S2B_35TMF_20230805_0_L2A` (2023-08-05) | `S2A_35TMF_20230830_0_L2A` (2023-08-30) | `DISTURBANCE_DETECTED`, 84.24 ha / 6.0% of baseline forest affected | `SUPPORTED`, 40 hotspots |
+| `fire` (T1→T2) | `S2B_35TMF_20230805_0_L2A` (2023-08-05) | `S2A_35TMF_20230830_0_L2A` (2023-08-30) | `DISTURBANCE_DETECTED`, 84.24 ha / 6.0% of baseline forest affected | `SUPPORTED`, 37 hotspots |
 
 Both scenes come from Element84 Earth Search (`sentinel-2-l2a` collection, AWS
 Open Data, no auth). Data source: `docs/roles/02_RS_PLAN.md`, primary provider.
 
-The 40 FIRMS hotspots matched for the `fire` scenario start on **2023-08-21**,
+The 37 FIRMS hotspots matched for the `fire` scenario start on **2023-08-21**,
 the documented `EMSR686` ignition date, which is independent thermal
 confirmation that the detected dNBR signature is a fire and not a harvest,
 phenology shift or processing artefact. They are a thermal-anomaly signal only,
@@ -52,9 +52,30 @@ Attribution uses NASA FIRMS' **open per-country yearly archive**
 which needs no account and no `MAP_KEY`. The exact upstream file is cached under
 `rs/sources/<plot_id>/firms/` and its SHA-256 is recorded in
 `firms.source_refs`, so attribution reproduces offline and is independently
-checkable against the public file. Hotspots are filtered to the observation
-window (UTC `acq_date`/`acq_time`), to `nominal`/`high` confidence, and to
-within the frozen 500 m tolerance of the AOI.
+checkable against the public file.
+
+A hotspot counts as supporting the detected disturbance only when **all three**
+hold:
+
+| Rule | Detail |
+|---|---|
+| **Time** | `acq_date`/`acq_time` (UTC) falls in the half-open window `(T_before, T_after]`. The start is **excluded**: a hotspot burning at the instant the "before" scene was acquired is already part of that scene and cannot explain a change measured against it. The end is included. |
+| **Space** | The point lies within the frozen **500 m** tolerance of the **damage mask** — the union of the detected `affected_area` polygons — not of the AOI. Buffering the AOI answers a weaker question ("was there a fire anywhere near this plot") and over-counts hotspots far from what was actually measured. |
+| **Confidence** | `nominal` or `high`; `low` is dropped. |
+
+The buffer is built in the analysis grid's own UTM CRS (`method.grid.epsg`,
+EPSG:32635 for Dadia), **not** EPSG:3857. Web Mercator units are not metres away
+from the equator — its scale factor is 1/cos(latitude), so at Dadia's ~41.1° N a
+"500 m" Web Mercator buffer is only about 377 m on the ground, which would
+silently drop genuine hotspots. UTM is metric where the plot is, which is why
+the grid is computed in it in the first place.
+
+`test_firms_point_499m_from_damage_mask_is_included`,
+`test_firms_point_501m_from_damage_mask_is_excluded`,
+`test_firms_window_is_half_open_excluding_t_before_including_t_after` and
+`test_firms_buffer_is_metric_in_the_grid_crs_not_web_mercator` pin each of these,
+and `test_real_bundle_firms_matched_points_obey_the_stated_rule` re-derives the
+rule from the committed `firms.geojson` and `affected_area.geojson`.
 
 `rs/firms.py` still supports the near-real-time FIRMS "area" API through the
 optional `FIRMS_MAP_KEY` env var; the archive is preferred because it is keyless
@@ -194,8 +215,10 @@ dark/burnt-pixel preservation, north-up 20 m UTM grid construction, exact
 pixel-area/MMU accounting, `NO_CHANGE` / `DISTURBANCE_DETECTED` /
 `INSUFFICIENT_DATA` classification on synthetic local rasters, forbidden-field
 absence, NaN/Infinity absence, OS-independent relative paths, run-to-run
-reproducibility, tampered-artifact rejection, FIRMS window/confidence/500 m
-filtering and its `SUPPORTED` / `NOT_FOUND` / `NOT_CHECKED` branches, the frozen
+reproducibility, tampered-artifact rejection, the FIRMS half-open window,
+confidence filter and 500 m damage-mask buffer (including the 499 m / 501 m
+boundaries and the grid-CRS-vs-Web-Mercator distinction) and its
+`SUPPORTED` / `NOT_FOUND` / `NOT_CHECKED` branches, the frozen
 policy freeze preconditions on the fire bundle, and full schema + semantic
 validation (`tools/contract_helpers.validate_evidence`) of all three real
 committed bundles (primary no_change, primary fire, reserve).

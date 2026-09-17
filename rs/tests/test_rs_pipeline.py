@@ -527,22 +527,87 @@ def test_firms_window_filter_drops_out_of_window_and_low_confidence():
     assert all(firms.confidence_label(p["confidence"]) != "low" for p in kept)
 
 
-def test_firms_window_filter_is_inclusive_at_the_exact_boundaries():
+def test_firms_window_is_half_open_excluding_t_before_including_t_after():
+    # (T_before, T_after]: a hotspot burning at the moment the "before" scene
+    # was acquired is already part of that scene and cannot explain a change
+    # measured against it; one at exactly T_after still can.
     start = datetime(2023, 8, 5, 9, 0, tzinfo=timezone.utc)
     end = datetime(2023, 8, 30, 9, 0, tzinfo=timezone.utc)
-    rows = [_hotspot(26.2, 41.13, "2023-08-05", "0900"), _hotspot(26.2, 41.13, "2023-08-30", "0900")]
-    assert len(firms.filter_hotspots(rows, start, end)) == 2
+    at_start = _hotspot(26.2, 41.13, "2023-08-05", "0900")
+    one_minute_after_start = _hotspot(26.2, 41.13, "2023-08-05", "0901")
+    at_end = _hotspot(26.2, 41.13, "2023-08-30", "0900")
+    one_minute_after_end = _hotspot(26.2, 41.13, "2023-08-30", "0901")
+    kept = firms.filter_hotspots([at_start, one_minute_after_start, at_end, one_minute_after_end], start, end)
+    assert at_start not in kept
+    assert one_minute_after_start in kept
+    assert at_end in kept
+    assert one_minute_after_end not in kept
 
 
-def test_firms_spatial_match_honours_the_500m_tolerance():
-    aoi = {"type": "Polygon", "coordinates": [[[26.19, 41.11], [26.24, 41.11], [26.24, 41.15],
-                                               [26.19, 41.15], [26.19, 41.11]]]}
-    inside = _hotspot(26.21, 41.13, "2023-08-22")
-    just_outside = _hotspot(26.1932, 41.13, "2023-08-22")   # ~ -0.0068 deg lon, inside the buffer
-    far_away = _hotspot(26.05, 41.13, "2023-08-22")         # ~12 km west, far beyond it
-    matched = firms.match_within_aoi([inside, just_outside, far_away], aoi)
-    assert inside in matched and just_outside in matched and far_away not in matched
+def _utm_damage_square(epsg=32635, x=500000.0, y=4550000.0, side=200.0):
+    """A square damage component in grid coordinates, as components produce."""
+    from shapely.geometry import box
+
+    return [box(x, y, x + side, y + side)]
+
+
+def _hotspot_at_metres_east(damage, epsg, distance_m, date="2023-08-22"):
+    """A hotspot `distance_m` due east of the damage square's eastern edge."""
+    from pyproj import Transformer
+
+    minx, miny, maxx, maxy = damage[0].bounds
+    to_wgs = Transformer.from_crs(f"EPSG:{epsg}", "EPSG:4326", always_xy=True)
+    lon, lat = to_wgs.transform(maxx + distance_m, (miny + maxy) / 2)
+    return _hotspot(lon, lat, date)
+
+
+def test_firms_point_499m_from_damage_mask_is_included():
+    damage = _utm_damage_square()
+    point = _hotspot_at_metres_east(damage, 32635, 499)
+    assert firms.match_within_damage_mask([point], damage, 32635) == [point]
+
+
+def test_firms_point_501m_from_damage_mask_is_excluded():
+    damage = _utm_damage_square()
+    point = _hotspot_at_metres_east(damage, 32635, 501)
+    assert firms.match_within_damage_mask([point], damage, 32635) == []
     assert firms.SPATIAL_TOLERANCE_M == 500
+
+
+def test_firms_buffer_is_metric_in_the_grid_crs_not_web_mercator():
+    # EPSG:3857 units are not metres away from the equator: at ~41 N a "500 m"
+    # Web Mercator buffer is only ~377 m on the ground, so a genuine 450 m
+    # hotspot would be wrongly dropped. The grid CRS is metric where the plot is.
+    from pyproj import Transformer
+    from shapely.geometry import Point
+    from shapely.ops import transform as shapely_transform, unary_union
+
+    damage = _utm_damage_square()
+    point = _hotspot_at_metres_east(damage, 32635, 450)
+    assert firms.match_within_damage_mask([point], damage, 32635) == [point]
+
+    to_3857 = Transformer.from_crs("EPSG:32635", "EPSG:3857", always_xy=True)
+    mercator_damage = shapely_transform(lambda x, y: to_3857.transform(x, y), unary_union(damage))
+    mercator_point = Point(*to_3857.transform(
+        *Transformer.from_crs("EPSG:4326", "EPSG:32635", always_xy=True).transform(
+            float(point["longitude"]), float(point["latitude"]))))
+    assert not mercator_damage.buffer(500).intersects(mercator_point), (
+        "if this ever passes, Web Mercator became metric and the CRS choice stopped mattering")
+
+
+def test_firms_matches_the_damage_mask_not_the_whole_aoi():
+    # Buffering the AOI answers a weaker question ("was there a fire anywhere
+    # near this plot") and over-counts hotspots far from what was measured.
+    damage = _utm_damage_square()
+    near_damage = _hotspot_at_metres_east(damage, 32635, 100)
+    elsewhere_in_aoi = _hotspot_at_metres_east(damage, 32635, 3000)
+    matched = firms.match_within_damage_mask([near_damage, elsewhere_in_aoi], damage, 32635)
+    assert matched == [near_damage]
+
+
+def test_firms_finds_nothing_when_there_is_no_damage_to_attribute():
+    point = _hotspot(26.2, 41.13, "2023-08-22")
+    assert firms.match_within_damage_mask([point], [], 32635) == []
 
 
 def test_firms_is_not_checked_without_an_archive_or_map_key(tmp_path, monkeypatch):
@@ -633,11 +698,56 @@ def test_real_scenes_use_the_exact_resampling_path(bundle_name, request_name, _o
             assert resample.describe(plan) in ("EXACT_SLICE", "EXACT_BLOCK_MEAN_2X")
 
 
-REAL_BUNDLE_FIRMS = [("no_change", "NOT_FOUND"), ("fire", "SUPPORTED"), ("evia_reserve_no_change", "NOT_FOUND")]
+# Exact counts, not just "> 0": matching against the whole AOI instead of the
+# damage mask, or an inclusive window start, both silently inflate this.
+REAL_BUNDLE_FIRMS = [("no_change", "NOT_FOUND", 0), ("fire", "SUPPORTED", 37),
+                     ("evia_reserve_no_change", "NOT_FOUND", 0)]
 
 
-@pytest.mark.parametrize("bundle_name,expected_support", REAL_BUNDLE_FIRMS)
-def test_real_bundle_firms_support_matches_the_committed_points(bundle_name, expected_support):
+@pytest.mark.parametrize("bundle_name,expected_support,expected_count", REAL_BUNDLE_FIRMS)
+def test_real_bundle_firms_hotspot_count_is_exact(bundle_name, expected_support, expected_count):
+    bundle_dir = ROOT / "rs" / "bundles" / bundle_name
+    evidence_path = bundle_dir / "verification.json"
+    if not evidence_path.exists():
+        pytest.skip(f"real bundle not present: {evidence_path}")
+    block = read_json(evidence_path)["firms"]
+    assert (block["support"], block["hotspot_count"]) == (expected_support, expected_count)
+
+
+@pytest.mark.parametrize("bundle_name,expected_support,_count", REAL_BUNDLE_FIRMS)
+def test_real_bundle_firms_matched_points_obey_the_stated_rule(bundle_name, expected_support, _count):
+    # Re-derive the rule from the committed artifacts: every point in
+    # firms.geojson must sit in (T_before, T_after] and within 500 m of the
+    # committed affected_area polygons, measured in method.grid.epsg.
+    bundle_dir = ROOT / "rs" / "bundles" / bundle_name
+    evidence_path = bundle_dir / "verification.json"
+    if not evidence_path.exists():
+        pytest.skip(f"real bundle not present: {evidence_path}")
+    evidence = read_json(evidence_path)
+    if evidence["firms"]["support"] != "SUPPORTED":
+        return
+    from pyproj import Transformer
+    from shapely.geometry import Point, shape
+    from shapely.ops import transform as shapely_transform, unary_union
+
+    epsg = evidence["method"]["grid"]["epsg"]
+    to_grid = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg}", always_xy=True)
+    damage_wgs84 = unary_union([shape(f["geometry"])
+                                for f in read_json(bundle_dir / "affected_area.geojson")["features"]])
+    damage = shapely_transform(lambda x, y: to_grid.transform(x, y), damage_wgs84)
+    start = datetime.strptime(evidence["firms"]["window_start"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    end = datetime.strptime(evidence["firms"]["window_end"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+    for feature in read_json(bundle_dir / "firms.geojson")["features"]:
+        lon, lat = feature["geometry"]["coordinates"]
+        distance = damage.distance(Point(*to_grid.transform(lon, lat)))
+        assert distance <= evidence["firms"]["spatial_tolerance_m"], f"{distance:.1f} m from the damage mask"
+        stamp = firms.acquired_at(feature["properties"])
+        assert start < stamp <= end
+
+
+@pytest.mark.parametrize("bundle_name,expected_support,_count", REAL_BUNDLE_FIRMS)
+def test_real_bundle_firms_support_matches_the_committed_points(bundle_name, expected_support, _count):
     # The keyless FIRMS archive is checked for every real bundle, so support is
     # never NOT_CHECKED here; SUPPORTED must be backed by a real points artifact
     # and NOT_FOUND must carry no count and no artifact.

@@ -55,7 +55,12 @@ def load_archive(paths):
 
 
 def filter_hotspots(hotspots, start, end, confidence_filter=DEFAULT_CONFIDENCE_FILTER):
-    """Keep hotspots inside [start, end] whose confidence passes the filter.
+    """Keep hotspots in the half-open window (start, end] passing the filter.
+
+    The window is the interval *between* the two observations, so the start is
+    excluded and the end included. A hotspot detected at exactly T_before was
+    already burning when the "before" scene was acquired, so it cannot explain
+    a change measured against that scene; one at exactly T_after still can.
 
     `acq_date`/`acq_time` are UTC in both FIRMS sources; acq_time is HHMM.
     """
@@ -63,7 +68,7 @@ def filter_hotspots(hotspots, start, end, confidence_filter=DEFAULT_CONFIDENCE_F
     kept = []
     for point in hotspots:
         stamp = acquired_at(point)
-        if stamp is None or not (start <= stamp <= end):
+        if stamp is None or not (start < stamp <= end):
             continue
         if confidence_label(point.get("confidence")) not in allowed:
             continue
@@ -111,22 +116,37 @@ def fetch_hotspots(bbox_wgs84, start_date, end_date, product="VIIRS_SNPP_NRT"):
     return list(reader)
 
 
-def match_within_aoi(hotspots, aoi_geometry_wgs84, tolerance_m=SPATIAL_TOLERANCE_M):
-    """Filter hotspots within `tolerance_m` of the AOI polygon."""
-    from shapely.geometry import shape
+def match_within_damage_mask(hotspots, damage_geometries, grid_epsg, tolerance_m=SPATIAL_TOLERANCE_M):
+    """Hotspots within `tolerance_m` of the detected damage mask.
 
-    aoi = shape(aoi_geometry_wgs84)
-    centroid = aoi.centroid
-    to_metric = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
-    to_wgs = Transformer.from_crs("EPSG:3857", "EPSG:4326", always_xy=True)
-    aoi_metric_coords = [to_metric.transform(x, y) for x, y in aoi.exterior.coords]
-    from shapely.geometry import Polygon
+    Two things matter for this to mean what the contract says:
 
-    aoi_metric = Polygon(aoi_metric_coords).buffer(tolerance_m)
+    * **What is buffered.** The rule is "within 500 m of the damage mask", so
+      the buffer is taken around the union of the detected affected-area
+      polygons, not around the whole AOI. Buffering the AOI answers a
+      different and much weaker question ("was there a fire anywhere near this
+      plot"), and over-counts hotspots that are nowhere near what was
+      measured.
+    * **Where it is buffered.** The buffer is built in the analysis grid's own
+      UTM CRS (`method.grid.epsg`). EPSG:3857 is not metric away from the
+      equator: its scale factor is 1/cos(latitude), so at Dadia (~41.1 N) a
+      "500 m" buffer in Web Mercator units is about 377 m on the ground. UTM
+      is metric where the plot is, which is the whole point of computing the
+      grid in it.
+
+    `damage_geometries` are shapely polygons already in `grid_epsg`, exactly as
+    produced by `rs.components.affected_components`. With no damage there is
+    nothing to attribute, and no hotspot can match.
+    """
+    from shapely.ops import unary_union
+
+    if not damage_geometries:
+        return []
+    damage = unary_union(list(damage_geometries)).buffer(tolerance_m)
+    to_grid = Transformer.from_crs("EPSG:4326", f"EPSG:{grid_epsg}", always_xy=True)
     matched = []
     for point in hotspots:
-        lon, lat = float(point["longitude"]), float(point["latitude"])
-        mx, my = to_metric.transform(lon, lat)
-        if aoi_metric.contains(Point(mx, my)):
+        x, y = to_grid.transform(float(point["longitude"]), float(point["latitude"]))
+        if damage.intersects(Point(x, y)):
             matched.append(point)
     return matched
