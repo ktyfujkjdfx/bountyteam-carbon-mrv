@@ -1,0 +1,5 @@
+# Foundry build output and dependencies (reproduced by `forge soldeer install` + `forge build`)
+out/
+cache/
+dependencies/
+broadcast/
