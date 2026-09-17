@@ -10,9 +10,10 @@ and the deployment manifest (deployment.json). Flow:
 
 Every successful step is CONFIRMED only by receipt status + expected decoded event + readback.
 
-Default (`--fresh`) starts a throwaway Anvil on a free port, deploys with tools/deploy-local.cjs
-into a temporary directory and never touches runtime/deployment.json. `--use-existing` runs
-against an already deployed manifest (it creates a SMOKE batch there).
+It always starts its own throwaway Anvil on a free port and deploys with tools/deploy-local.cjs
+into a temporary directory. It never connects to the shared deployment in runtime/: Backend is
+the only runtime oracle sender, so this smoke must not send `freeze` (or compete for nonces) on
+the deployment Backend uses.
 
 Not a pytest module on purpose: the shared `python -m pytest -q` must not require Anvil.
 The issuance key/evidence/decision hashes below are synthetic smoke values, not the Backend
@@ -81,7 +82,7 @@ def start_anvil(port: int) -> subprocess.Popen:
 
 
 def deploy(rpc_url: str, out_dir: Path) -> None:
-    env = {**os.environ, "RPC_URL": rpc_url, "DEPLOYMENT_DIR": str(out_dir)}
+    env = {**os.environ, "RPC_URL": rpc_url, "DEPLOYMENT_DIR": str(out_dir), "DEPLOYMENT_BUILD_DIR": str(out_dir)}
     subprocess.run(["node", str(DEPLOY_TOOL)], check=True, env=env, stdout=subprocess.DEVNULL)
 
 
@@ -214,6 +215,11 @@ def run_flow(adapter: Adapter) -> dict:
     fire_evidence = sha256_bytes32("SMOKE-FIRE-EVIDENCE")
     decision = sha256_bytes32("SMOKE-FIRE-DECISION")
     fire_observed = now - 3_600
+    steps["unknown_batch"] = adapter.expect_revert(c.transfer(batch_id + 1000, r["recipient"], 1), r["buyer"], "UnknownBatch")
+    steps["stale_freeze"] = adapter.expect_revert(
+        c.freeze(batch_id, fire_evidence, decision, issue_observed - 1, FIRE_REVERSAL), r["oracle"], "StaleObservation"
+    )
+    check(adapter.batch(batch_id)["creditStatus"] == "ACTIVE", "stale freeze changed status")
     steps["freeze"] = adapter.transact(
         c.freeze(batch_id, fire_evidence, decision, fire_observed, FIRE_REVERSAL), r["oracle"], event="Frozen"
     )
@@ -247,40 +253,31 @@ def run_flow(adapter: Adapter) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--fresh", action="store_true", default=True, help="throwaway Anvil + deploy (default)")
-    mode.add_argument("--use-existing", action="store_true", help="use an existing deployment manifest")
-    parser.add_argument("--rpc-url", default="http://127.0.0.1:8545")
-    parser.add_argument("--deployment", type=Path, default=ROOT / "runtime" / "deployment.json")
-    parser.add_argument("--evidence-out", type=Path, default=ROOT / "runtime" / "e2e-evidence.json")
+    parser.add_argument("--evidence-out", type=Path, default=ROOT / "blockchain" / "runtime" / "e2e-evidence.json")
     args = parser.parse_args()
 
     schema = Draft202012Validator(json.loads(SCHEMA_PATH.read_text()), format_checker=FormatChecker())
     anvil = None
     tmp = None
     try:
-        if args.use_existing:
-            rpc_url, manifest = args.rpc_url, args.deployment
-        else:
-            port = free_port()
-            rpc_url = f"http://127.0.0.1:{port}"
-            anvil = start_anvil(port)
-            tmp = tempfile.TemporaryDirectory()
-            deploy(rpc_url, Path(tmp.name))
-            manifest = Path(tmp.name) / "deployment.json"
+        port = free_port()
+        rpc_url = f"http://127.0.0.1:{port}"
+        anvil = start_anvil(port)
+        tmp = tempfile.TemporaryDirectory()
+        deploy(rpc_url, Path(tmp.name))
+        manifest = Path(tmp.name) / "deployment.json"
 
         deployment = json.loads(manifest.read_text())
         schema.validate(deployment)
         evidence = run_flow(Adapter(rpc_url, deployment))
         evidence["deployment_schema_valid"] = True
 
-        if anvil is not None:
-            anvil.terminate()
-            anvil.wait(timeout=10)
-            anvil = start_anvil(port)
-            restarted = Adapter(rpc_url, deployment).verify_identity()
-            check(not restarted["ok"], "restarted Anvil was not detected as a deployment mismatch")
-            evidence["restart_detection"] = restarted
+        anvil.terminate()
+        anvil.wait(timeout=10)
+        anvil = start_anvil(port)
+        restarted = Adapter(rpc_url, deployment).verify_identity()
+        check(not restarted["ok"], "restarted Anvil was not detected as a deployment mismatch")
+        evidence["restart_detection"] = restarted
 
         args.evidence_out.parent.mkdir(parents=True, exist_ok=True)
         args.evidence_out.write_text(json.dumps(evidence, indent=2) + "\n")
@@ -296,7 +293,7 @@ def main() -> int:
             "frozen_status": s["freeze"]["readback"]["batch"]["creditStatus"],
             "reverts": {k: v["error"] for k, v in s.items() if isinstance(v, dict) and "error" in v},
             "balances_after_freeze": s["after_freeze_readback"]["balances"],
-            "restart_detected": "restart_detection" in evidence,
+            "restart_detected": not evidence["restart_detection"]["ok"],
             "evidence": str(args.evidence_out),
         }, indent=2))
         return 0
