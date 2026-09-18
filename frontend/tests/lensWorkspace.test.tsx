@@ -7,6 +7,8 @@ import { LayersPanel } from '../src/lens/components/LayersPanel';
 import { ObservationsPanel } from '../src/lens/components/ObservationsPanel';
 import { PassportPanel, passportHtml, passportPayload, verifyPassportFile } from '../src/lens/components/PassportPanel';
 import { HistoryPanel } from '../src/lens/components/HistoryPanel';
+import { SummaryPanel } from '../src/lens/components/SummaryPanel';
+import { ZonesPanel } from '../src/lens/components/ZonesPanel';
 import { LensApp } from '../src/lens/LensApp';
 import { DEMO_STEPS } from '../src/lens/demo';
 import type { FixtureScenarioId } from '../src/lens/fixtures';
@@ -196,6 +198,41 @@ describe('passport integrity for an outside reader', () => {
     expect(html).toContain('2019–2020');
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;');
+  });
+});
+
+describe('hostile and extreme input', () => {
+  it('treats a claim written as HTML as text and refuses it as a number', async () => {
+    const user = userEvent.setup();
+    render(<LensApp client={createFixtureLensClient({ queuedMs: 0, runningMs: 0 })} />);
+    await waitFor(() => expect(screen.getByTestId('lens-area')).toHaveTextContent('га'));
+    await user.type(screen.getByTestId('lens-claim-input'), '<img src=x onerror=alert(1)>');
+    await user.click(screen.getByTestId('lens-run'));
+    expect(screen.getByTestId('lens-validation-error')).toHaveTextContent('должны быть числом');
+    expect(document.querySelector('img')).toBeNull();
+    expect(screen.getByTestId('lens-claim-input')).toHaveValue('<imgsrc=xonerror=alert(1)>');
+  }, 20_000);
+
+  it('rejects a negative claim and carries a very large one through without breaking', async () => {
+    const negative = requestFor('RU_TVER_01', [2019, 2020], -5);
+    await expect(resultOf('DOC_EXAMPLE_Q395', negative)).rejects.toMatchObject({ code: 'INVALID_CLAIM' });
+
+    const huge = requestFor('RU_TVER_01', [2019, 2020], 1e12);
+    const result = await resultOf('DOC_EXAMPLE_Q395', huge);
+    expect(result.units.q).toBe(395);
+    expect(result.claim.gap_units).toBe(1e12 - 395);
+    render(<SummaryPanel result={result} priceId="price_base" onPrice={vi.fn()} />);
+    expect(screen.getByTestId('lens-q-value')).toHaveTextContent('395');
+  });
+
+  it('renders a zone with a very long identifier without losing the card', async () => {
+    const base = await resultOf('FIRE_SUPPORTED_LOSS', requestFor('RU_MORDOVIA_03', [2020, 2022]));
+    const longId = `ZONE-${'0123456789'.repeat(12)}`;
+    const zone = base.zones[0];
+    if (!zone) throw new Error('fixture has no zone');
+    const result: LensResult = { ...base, zones: [{ ...zone, zone_id: longId, label: longId }] };
+    render(<ZonesPanel result={result} selectedZoneId={longId} onSelectZone={vi.fn()} />);
+    expect(screen.getByTestId('lens-zone-card')).toHaveTextContent(longId.slice(0, 40));
   });
 });
 
