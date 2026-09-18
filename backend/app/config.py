@@ -47,6 +47,10 @@ class Settings:
     rs_mode: str = "cached_bundle"
     rs_command: tuple[str, ...] = ()
     rs_work_dir: Path = BACKEND_ROOT / "runtime" / "rs-runs"
+    # Carbon Lens /api/v2. Its files live beside the P0 runtime, never inside it.
+    lens_artifact_store: Path = BACKEND_ROOT / "runtime" / "lens-artifacts"
+    lens_work_dir: Path = BACKEND_ROOT / "runtime" / "lens-runs"
+    lens_enabled: bool = True
     cors_origins: tuple[str, ...] = ()
     max_artifact_bytes: int = 64 * 1024 * 1024
     max_bundle_bytes: int = 512 * 1024 * 1024
@@ -88,6 +92,10 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
         rs_mode=env.get("BACKEND_RS_MODE", "cached_bundle"),
         rs_command=tuple(env.get("BACKEND_RS_COMMAND", "").split()),
         rs_work_dir=_path(env.get("BACKEND_RS_WORK_DIR"), Settings.rs_work_dir),
+        lens_artifact_store=_path(env.get("BACKEND_LENS_ARTIFACT_STORE"),
+                                  Settings.lens_artifact_store),
+        lens_work_dir=_path(env.get("BACKEND_LENS_WORK_DIR"), Settings.lens_work_dir),
+        lens_enabled=env.get("BACKEND_LENS_ENABLED", "1") not in ("0", "false", "False"),
         cors_origins=_csv(env.get("BACKEND_CORS_ORIGINS")),
         worker_poll_seconds=float(env.get("BACKEND_WORKER_POLL_SECONDS", "1.0")),
     ).validate()

@@ -172,6 +172,76 @@ CREATE TABLE worker_leases (
     heartbeat_at REAL NOT NULL
 );
 """),
+    (2, "carbon lens v2 analyses", """
+-- /api/v2 lives in its own tables. The v1 schema above is not read, written or
+-- reinterpreted by the Lens code; a P0 credit state is not a passport status.
+CREATE TABLE lens_analyses (
+    analysis_id TEXT PRIMARY KEY,
+    job_state TEXT NOT NULL CHECK (job_state IN ('QUEUED','RUNNING','SUCCEEDED','FAILED')),
+    actor TEXT NOT NULL,
+    request_json TEXT NOT NULL,
+    geometry_hash TEXT NOT NULL,
+    input_hash TEXT NOT NULL,
+    year_start INTEGER NOT NULL,
+    year_end INTEGER NOT NULL,
+    -- Comparison scope: two analyses may be compared only when this key matches.
+    scope_key TEXT NOT NULL,
+    result_json TEXT,
+    content_hash TEXT,
+    report_hash TEXT,
+    units_q INTEGER,
+    error_json TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK ((job_state = 'SUCCEEDED') = (result_json IS NOT NULL)),
+    CHECK ((job_state = 'FAILED') = (error_json IS NOT NULL))
+);
+CREATE INDEX lens_analyses_pending ON lens_analyses(job_state, created_at);
+CREATE INDEX lens_analyses_scope ON lens_analyses(scope_key, created_at);
+
+-- Once a result is published it is the passport. A worker that wakes up late and
+-- finds the job finished must not overwrite it.
+CREATE TRIGGER lens_analyses_result_immutable BEFORE UPDATE ON lens_analyses
+WHEN OLD.result_json IS NOT NULL
+BEGIN SELECT RAISE(ABORT, 'a published analysis result is immutable'); END;
+
+-- Allowlist for GET /analyses/{id}/artifacts/{id}: only files whose bytes were
+-- hash-verified when they were stored.
+CREATE TABLE lens_artifacts (
+    analysis_id TEXT NOT NULL REFERENCES lens_analyses(analysis_id),
+    artifact_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    media_type TEXT NOT NULL,
+    sha256 TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    storage_name TEXT NOT NULL,
+    metadata_json TEXT NOT NULL,
+    PRIMARY KEY (analysis_id, artifact_id)
+);
+
+CREATE TABLE lens_reports (
+    analysis_id TEXT PRIMARY KEY REFERENCES lens_analyses(analysis_id),
+    report_hash TEXT NOT NULL,
+    json_bytes BLOB NOT NULL,
+    html_bytes BLOB NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TRIGGER lens_reports_immutable BEFORE UPDATE ON lens_reports
+BEGIN SELECT RAISE(ABORT, 'a stored passport is immutable'); END;
+
+CREATE TABLE lens_events (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    occurred_at TEXT NOT NULL,
+    analysis_id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('ANALYSIS_QUEUED','ANALYSIS_COMPLETED',
+        'ANALYSIS_FAILED','EVIDENCE_REVIEW_REQUIRED','PASSPORT_SUPERSEDED',
+        'PASSPORT_TAMPER_DETECTED')),
+    message TEXT NOT NULL,
+    dedupe_key TEXT UNIQUE
+);
+CREATE INDEX lens_events_analysis ON lens_events(analysis_id, seq);
+"""),
 ]
 
 
