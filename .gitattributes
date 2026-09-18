@@ -23,3 +23,8 @@
 *.tif binary
 *.tiff binary
 *.zip binary
+
+# Official Case 2 inputs must survive clone byte-for-byte. In particular,
+# CSV files use UTF-8 BOM and must not be rewritten by Git's text filters.
+data/** -text whitespace=cr-at-eol
+doc/** -text
