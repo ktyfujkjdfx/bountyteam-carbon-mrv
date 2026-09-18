@@ -19,6 +19,8 @@ interface Props {
   onClaimedUnits: (value: string) => void;
   scenario: FixtureScenarioId;
   onScenario: (id: FixtureScenarioId) => void;
+  /** The labelled result set is chosen only while no live service answers. */
+  scenarioSelectable: boolean;
   drawing: boolean;
   onToggleDrawing: () => void;
   onImportGeoJson: (text: string) => void;
@@ -43,6 +45,7 @@ export function RequestPanel(props: Props) {
     onClaimedUnits,
     scenario,
     onScenario,
+    scenarioSelectable,
     drawing,
     onToggleDrawing,
     onImportGeoJson,
@@ -172,20 +175,32 @@ export function RequestPanel(props: Props) {
       </p>
 
       <h3>Источник результата</h3>
-      <label className="lens-field">
-        <span>Помеченный набор F1</span>
-        <select className="select" value={scenario} onChange={(e) => onScenario(e.target.value as FixtureScenarioId)} data-testid="lens-scenario-select">
-          {FIXTURE_SCENARIO_ORDER.map((id) => (
-            <option key={id} value={id}>
-              {FIXTURE_SCENARIOS[id].fixture?.label ?? id}
-            </option>
-          ))}
-        </select>
-      </label>
-      <p className="muted small">
-        До подключения Backend экран показывает помеченные значения: условный пример постановки и логические векторы. Это не расчёт по
-        выбранному участку.
-      </p>
+      {scenarioSelectable ? (
+        <>
+          <label className="lens-field">
+            <span>Помеченный набор значений</span>
+            <select className="select" value={scenario} onChange={(e) => onScenario(e.target.value as FixtureScenarioId)} data-testid="lens-scenario-select">
+              {FIXTURE_SCENARIO_ORDER.map((id) => {
+                const label = FIXTURE_SCENARIOS[id].fixture;
+                return (
+                  <option key={id} value={id}>
+                    {label?.acceptance_id ? `${label.acceptance_id} · ` : ''}
+                    {label?.label ?? id}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+          <p className="muted small">
+            До подключения Backend экран показывает помеченные значения: условный пример постановки и логические векторы. Это не расчёт по
+            выбранному участку: территория, площадь, базовая линия, сцены и события при этом настоящие.
+          </p>
+        </>
+      ) : (
+        <p className="muted small" data-testid="lens-scenario-live-note">
+          Значения приходят от сервиса; помеченный набор в этом режиме не подставляется.
+        </p>
+      )}
 
       {validationError && (
         <div className="state state-error compact" role="alert" data-testid="lens-validation-error">

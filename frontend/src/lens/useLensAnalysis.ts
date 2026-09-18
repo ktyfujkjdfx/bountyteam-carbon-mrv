@@ -36,8 +36,8 @@ export function useLensAnalysis(client: LensApiClient) {
   }, []);
 
   const run = useCallback(
-    async (request: LensRequest, scenario: FixtureScenarioId) => {
-      if (busyRef.current) return;
+    async (request: LensRequest, scenario: FixtureScenarioId): Promise<LensResult | null> => {
+      if (busyRef.current) return null;
       busyRef.current = true;
       runIdRef.current += 1;
       const runId = runIdRef.current;
@@ -56,7 +56,7 @@ export function useLensAnalysis(client: LensApiClient) {
       setState({ phase: 'submitting', job: null, result: null, error: null });
       try {
         const job = await client.submitAnalysis(request, { scenario, idempotencyKey, signal: controller.signal });
-        if (!fresh()) return;
+        if (!fresh()) return null;
         setState({ phase: 'polling', job, result: null, error: null });
 
         const polled = await pollUntilTerminal<LensJob>({
@@ -69,28 +69,30 @@ export function useLensAnalysis(client: LensApiClient) {
           initialDelayMs: 300,
           maxDurationMs: 60_000,
         });
-        if (!fresh()) return;
+        if (!fresh()) return null;
 
         if (polled.status === 'timeout') {
           setState((s) => ({ ...s, phase: 'timeout' }));
-          return;
+          return null;
         }
         if (polled.status === 'error') {
           setState((s) => ({ ...s, phase: 'error', error: { code: polled.error.code ?? 'POLL_FAILED', message: polled.error.message, detail: null } }));
-          return;
+          return null;
         }
-        if (polled.status !== 'terminal') return;
+        if (polled.status !== 'terminal') return null;
 
         const finished = polled.value;
         if (finished.state === 'FAILED' || !finished.result_id) {
           setState({ phase: 'error', job: finished, result: null, error: finished.error ? { ...finished.error, detail: null } : { code: 'JOB_FAILED', message: 'Расчёт завершился ошибкой', detail: null } });
-          return;
+          return null;
         }
         const result = await client.getResult(finished.result_id, controller.signal);
-        if (!fresh()) return;
+        if (!fresh()) return null;
         setState({ phase: 'done', job: finished, result, error: null });
+        return result;
       } catch (error) {
         if (fresh()) setState({ phase: 'error', job: null, result: null, error: toError(error) });
+        return null;
       } finally {
         if (runId === runIdRef.current) busyRef.current = false;
       }
