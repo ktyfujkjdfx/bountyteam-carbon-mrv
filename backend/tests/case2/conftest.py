@@ -1,0 +1,158 @@
+"""Harness for the Carbon Lens API: one composed app, one store, one worker under control.
+
+The worker is driven by hand with `run()` rather than by a background thread, so every test
+knows exactly how many passes happened. `restart()` rebuilds the context, the app and the
+worker over the same files, which is the only honest way to test that nothing important
+lived in a process.
+"""
+from __future__ import annotations
+
+from dataclasses import replace
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from backend.app.config import Settings
+from backend.app.context import create_context
+from backend.app.main import create_app
+from backend.app.v2 import catalog
+from backend.app.v2.api import compose, create_lens_app
+from backend.app.v2.contracts import api_validator, schema_errors
+from backend.app.v2.service import create_lens_context
+from backend.app.v2.worker import LensWorker
+
+SESSION = "test-demo-session-000000"
+ACTOR = "issuer"
+TVER = "RU_TVER_01"
+MORDOVIA = "RU_MORDOVIA_03"
+
+
+def assert_model(body, model: str):
+    errors = schema_errors(api_validator(model), body)
+    assert not errors, f"{model} contract violation: {errors}"
+    return body
+
+
+def make_settings(tmp_path: Path, **overrides) -> Settings:
+    base = Settings(demo_session=SESSION, db_path=tmp_path / "backend.sqlite",
+                    artifact_store=tmp_path / "artifacts",
+                    mock_chain_path=tmp_path / "mock-chain.sqlite",
+                    rs_work_dir=tmp_path / "rs-runs",
+                    lens_artifact_store=tmp_path / "lens-artifacts",
+                    lens_work_dir=tmp_path / "lens-runs",
+                    worker_poll_seconds=0.05)
+    return replace(base, **overrides).validate()
+
+
+class LensApi:
+    """Every JSON response is checked against the published model before a test sees it."""
+
+    def __init__(self, client: TestClient):
+        self.client = client
+
+    def headers(self, *, actor: str | None = None, key: str | None = None,
+                session: str | None = SESSION) -> dict:
+        headers = {}
+        if session is not None:
+            headers["X-Demo-Session"] = session
+        if actor:
+            headers["X-Demo-Actor"] = actor
+        if key:
+            headers["Idempotency-Key"] = key
+        return headers
+
+    def get(self, path: str, model: str | None = None, *, status: int = 200,
+            session: str | None = SESSION, **kwargs):
+        response = self.client.get("/api/v2" + path, headers=self.headers(session=session),
+                                   **kwargs)
+        assert response.status_code == status, response.text
+        if model is None:
+            return response
+        body = response.json()
+        assert_model(body, model if status == 200 else "Error")
+        return body
+
+    def post(self, path: str, body: dict, *, actor: str = ACTOR, key: str,
+             status: int = 202, session: str | None = SESSION, model: str = "AnalysisAccepted"):
+        response = self.client.post("/api/v2" + path, json=body,
+                                    headers=self.headers(actor=actor, key=key, session=session))
+        assert response.status_code == status, response.text
+        payload = response.json()
+        assert_model(payload, model if status == 202 else "Error")
+        return payload
+
+
+class Harness:
+    def __init__(self, tmp_path: Path, **overrides):
+        self.tmp_path = tmp_path
+        self.settings = make_settings(tmp_path, **overrides)
+        self._build()
+
+    def _build(self) -> None:
+        self.ctx = create_context(self.settings)
+        self.lens = create_lens_context(self.ctx, prefer_real=False)
+        self.app = compose(create_app(ctx=self.ctx), create_lens_app(self.lens))
+        self.client = TestClient(self.app)
+        self.api = LensApi(self.client)
+        self.worker = LensWorker(self.lens, worker_id="test-lens-worker")
+
+    def restart(self) -> "Harness":
+        """A process restart over the same database and artifact store."""
+        fresh = Harness.__new__(Harness)
+        fresh.tmp_path = self.tmp_path
+        fresh.settings = self.settings
+        fresh._build()
+        return fresh
+
+    def run(self, passes: int = 1) -> None:
+        for _ in range(passes):
+            assert self.worker.tick()
+
+    def submit(self, body: dict, *, key: str, actor: str = ACTOR) -> str:
+        return self.api.post("/analyses", body, key=key, actor=actor)["analysis_id"]
+
+    def analyse(self, body: dict, *, key: str) -> dict:
+        analysis_id = self.submit(body, key=key)
+        self.run()
+        return self.api.get(f"/analyses/{analysis_id}", "Analysis")
+
+    def counted(self, table: str, where: str = "1=1", params: tuple = ()) -> int:
+        with self.ctx.db.reader() as conn:
+            return conn.execute(f"SELECT COUNT(*) FROM {table} WHERE {where}", params).fetchone()[0]
+
+
+@pytest.fixture
+def harness(tmp_path) -> Harness:
+    return Harness(tmp_path)
+
+
+@pytest.fixture(scope="session")
+def replay_entries() -> list[dict]:
+    from backend.app.v2.adapters.raster import ReplayRasterAdapter
+
+    entries = ReplayRasterAdapter().entries()
+    assert entries, "the replay vectors are missing; the Lens suite cannot run"
+    return entries
+
+
+def entry_for(entries: list[dict], name: str) -> dict:
+    return next(item for item in entries if item["name"] == name)
+
+
+def request_for(entry: dict) -> dict:
+    """The API request that reproduces one replay vector."""
+    return {"aoi_id": entry["aoi_id"], "year_start": entry["year_start"],
+            "year_end": entry["year_end"]}
+
+
+def geometry_request(entry: dict) -> dict:
+    """The same vector addressed by its polygon instead of by an area name."""
+    if entry["name"].startswith("check-transfer"):
+        sample = next(item for item in catalog.sample_requests()
+                      if item["request_id"] == "CHECK_TRANSFER_01")
+        geometry = sample["geometry"]
+    else:
+        geometry = catalog.area(entry["aoi_id"]).geometry
+    return {"geometry": geometry, "year_start": entry["year_start"],
+            "year_end": entry["year_end"]}
