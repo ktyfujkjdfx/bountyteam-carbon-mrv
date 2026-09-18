@@ -1,0 +1,263 @@
+{
+  "fixture": {
+    "kind": "CONTRACT_FIXTURE",
+    "label": "Пример формата ответа",
+    "note": "Показывает форму и nullability полей v2. Числа иллюстративные, источником научных значений не являются."
+  },
+  "identity": {
+    "analysis_id": "00000000-0000-4000-8000-000000000003",
+    "input_hash": "0xc71e9b12e861823480a75dfbe5dd18d0b04eab2e5949dc25d41303b21e6fc9c4",
+    "geometry_hash": "0xd14fa39d5a21892ab2ac6b967ac0057ba980ee6eb9b30221779d75ffdd6f1f2c",
+    "schema_version": "carbon-lens-api/2.0.0",
+    "method_version": "carbon-lens-backend/2.0.0+rs-case2-raster-core/1.0.0+carbon-lens-trust-1.0.0",
+    "dataset_version": "sr-data-case2/2026-09-16",
+    "dataset_hash": "0x8d9837b08adf1a6f21e335dd81ef20d3912ed426a89e68a8b59ace333dcbc9fd",
+    "source_manifest_hash": "0xd82d838df6c0776c7748d62cc28e70f72455e3290cceb6e29a66d286c7466a64",
+    "parameters_hash": "0x026f0f39dad7c8cad9c0b5ff41157e8f7d30acd86ec99f8963c833ef4eb3e267",
+    "code_sha": null
+  },
+  "run": {
+    "run_id": "10000000-0000-4000-8000-000000000003",
+    "created_at": "2026-09-18T12:00:00Z",
+    "dataset_origin": "STUB_FIXTURE",
+    "raster_adapter": "contract-fixture",
+    "carbon_adapter": "contract-fixture"
+  },
+  "request": {
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            32.91,
+            56.59
+          ],
+          [
+            32.9264,
+            56.59
+          ],
+          [
+            32.9264,
+            56.599
+          ],
+          [
+            32.91,
+            56.599
+          ],
+          [
+            32.91,
+            56.59
+          ]
+        ]
+      ]
+    },
+    "aoi_id": null,
+    "year_start": 2019,
+    "year_end": 2020,
+    "claimed_units": 600.0,
+    "claim_origin": "USER_INPUT",
+    "include_optical": true
+  },
+  "calculation_status": "UNAVAILABLE",
+  "evidence_status": "INSUFFICIENT",
+  "areas": {
+    "requested_ha": 100.0,
+    "calculated_ha": 62.5,
+    "missing_ha": 37.5,
+    "complete": false,
+    "parent_parts": [
+      {
+        "aoi_id": "DOC_EXAMPLE_AREA",
+        "area_ha": 62.5
+      }
+    ]
+  },
+  "coverage": {
+    "biomass_fraction": 0.625,
+    "uncertainty_fraction": 0.625,
+    "baseline_fraction": 0.625,
+    "optical_paired_valid_fraction": 0.0
+  },
+  "timeline": [
+    {
+      "year": 2019,
+      "mean_agb_tdm_ha": 100.0,
+      "mean_carbon_tc_ha": 47.0,
+      "total_carbon_tc": 2937.5,
+      "baseline_carbon_tc_ha": 47.0,
+      "area_ha": 62.5,
+      "coverage": 0.625,
+      "in_period": true,
+      "source_ref": "CCI_V7"
+    },
+    {
+      "year": 2020,
+      "mean_agb_tdm_ha": 104.0,
+      "mean_carbon_tc_ha": 48.879999999999995,
+      "total_carbon_tc": 3054.9999999999995,
+      "baseline_carbon_tc_ha": 47.47,
+      "area_ha": 62.5,
+      "coverage": 0.625,
+      "in_period": true,
+      "source_ref": "CCI_V7"
+    }
+  ],
+  "change": {
+    "year_start": 2019,
+    "year_end": 2020,
+    "mean_carbon_start_tc_ha": 47.0,
+    "mean_carbon_end_tc_ha": 48.879999999999995,
+    "total_carbon_start_tc": 2937.5,
+    "total_carbon_end_tc": 3054.9999999999995,
+    "delta_carbon_tc": 117.49999999999955,
+    "eproj_tco2e": -430.83333333333167,
+    "eproj_tco2e_ha_year": -6.893333333333307,
+    "normalisation_area_ha": 62.5,
+    "sign_convention": "POSITIVE_E_MEANS_POOL_LOSS",
+    "pool": "AGB_LIVE_WOODY"
+  },
+  "uncertainty": {
+    "status": "AVAILABLE",
+    "unavailable_reason": null,
+    "lower_tco2e": -495.45833333333167,
+    "upper_tco2e": -366.20833333333167,
+    "sd_tco2e": 64.625,
+    "method": "INDEPENDENT_CELLS",
+    "interval_kind": "SCENARIO",
+    "assumptions": {
+      "spatial_dependence": "INDEPENDENT_CELLS",
+      "temporal_correlation": 0.0,
+      "coverage_factor": 1.0,
+      "empirically_calibrated": false,
+      "note": "половина ширины интервала задана примером doc"
+    },
+    "sensitivity": []
+  },
+  "baseline": {
+    "status": "AVAILABLE",
+    "unavailable_reason": null,
+    "baseline_id": "HIST-AGB-2015-2019-v1",
+    "kind": "сценарное допущение",
+    "area_ha": 62.5,
+    "delta_tc": 29.37499999999993,
+    "delta_tc_ha": 0.46999999999999886,
+    "ebase_tco2e": -107.70833333333307,
+    "parts": [
+      {
+        "aoi_id": "DOC_EXAMPLE_AREA",
+        "area_ha": 62.5,
+        "stock_start_tc_ha": 47.0,
+        "stock_end_tc_ha": 47.47,
+        "delta_tc_ha": 0.46999999999999886,
+        "delta_tc": 29.37499999999993,
+        "clipped_at_zero": false
+      }
+    ]
+  },
+  "units": {
+    "status": "UNAVAILABLE",
+    "unavailable_reason": "INCOMPLETE_COVERAGE",
+    "zero_reason": null,
+    "eproj_tco2e": -430.83333333333167,
+    "ebase_tco2e": -107.70833333333307,
+    "lk_tco2e": 0.0,
+    "lower_tco2e": -495.45833333333167,
+    "upper_tco2e": -366.20833333333167,
+    "h_tco2e": null,
+    "r_tco2e": null,
+    "ratio": null,
+    "unc": null,
+    "uncertainty_deduction_tco2e": null,
+    "radj_tco2e": null,
+    "buffer_tco2e": null,
+    "rounding_residual_tco2e": null,
+    "q": null,
+    "reason_codes": [
+      "INCOMPLETE_COVERAGE"
+    ]
+  },
+  "scenario_values": {
+    "price_parameters_ref": "data/methodology/parameters.csv#price_low,price_base,price_high",
+    "unit": "RUB",
+    "low": null,
+    "base": null,
+    "high": null
+  },
+  "claim": {
+    "status": "UNASSESSABLE",
+    "origin": "USER_INPUT",
+    "comparable": true,
+    "claimed_units": 600.0,
+    "q": null,
+    "gap_units": null,
+    "supported_share": null,
+    "mismatch_reasons": [],
+    "scope": {
+      "geometry_hash": "0xd14fa39d5a21892ab2ac6b967ac0057ba980ee6eb9b30221779d75ffdd6f1f2c",
+      "year_start": 2019,
+      "year_end": 2020,
+      "pool": "AGB_LIVE_WOODY",
+      "unit": "POTENTIAL_UNIT_OF_THE_CASE"
+    },
+    "scenario_gap_values": null,
+    "scope_note": "Сравнение возможно только при совпадении контура, периода, пула и единиц. Заявленный объём — пользовательский ввод, а не установленный факт."
+  },
+  "zones": [],
+  "evidence": {
+    "status": "INSUFFICIENT",
+    "optical_paired_valid_fraction": 0.0,
+    "analysed_parent": null,
+    "scenes": [],
+    "reconciliation": null,
+    "warnings": [
+      "Оптические сцены к этому примеру не приложены, поэтому причина изменения не устанавливалась."
+    ]
+  },
+  "passport": {
+    "content_hash": "0xb38edbc211ffcd7d573580cfb949676bf90a8c6d72fd7c90825cb16a7676bf9a",
+    "report_hash": "0x4f2ba9348ed661c70b4d39c715ce537e5d0c3fdda11171be73a945c9b156a797",
+    "previous_hash": null,
+    "comparison_scope": "geometry_hash+year_start+year_end+pool+method_version",
+    "comparison_result": "FIRST_OBSERVATION",
+    "comparison_note": "Сравнение допускается только между сопоставимыми наблюдениями одного контура, периода и пула.",
+    "created_at": "2026-09-18T12:00:00Z"
+  },
+  "sources": [
+    {
+      "source_id": "CCI_V7",
+      "product": "ESA CCI Biomass — биомасса, неопределённость и изменение",
+      "version": "7.0; выпуск 21.05.2026",
+      "license_url": "https://artefacts.ceda.ac.uk/licences/specific_licences/esacci_biomass_terms_and_conditions_v2.pdf",
+      "attribution": "Santoro M.; Cartus O. (2026), ESA Biomass CCI, v7.0, NERC EDS CEDA. Acknowledge ESA Climate Change Initiative and Biomass CCI team; cite DOI.",
+      "access_date": "2026-09-16",
+      "role": "biomass"
+    },
+    {
+      "source_id": "IPCC_FOREST_2006",
+      "product": "IPCC 2006 Guidelines, Volume 4",
+      "version": "2006",
+      "license_url": "https://www.ipcc-nggip.iges.or.jp/",
+      "attribution": "IPCC 2006, Volume 4, Chapter 4, Table 4.3",
+      "access_date": "2026-09-16",
+      "role": "carbon_fraction"
+    },
+    {
+      "source_id": "CASE_RULES_V1",
+      "product": "Сценарные правила кейса SR Data",
+      "version": "1",
+      "license_url": "",
+      "attribution": "data/methodology/parameters.csv",
+      "access_date": "2026-09-16",
+      "role": "case_parameters"
+    }
+  ],
+  "artifacts": [],
+  "limitations": [
+    "Учитывается только живая надземная древесная биомасса; это не полный баланс экосистемы.",
+    "Положительное E — потеря учитываемого пула за период, а не мгновенный выброс всего углерода.",
+    "Базовая линия — условие кейса по истории 2015–2019; она не доказывает дополнительность и не описывает действия владельца.",
+    "Интервал сценарный при заявленных допущениях; это не эмпирически откалиброванный доверительный интервал.",
+    "Контур выходит за доступное покрытие биомассы; единицы по правилам кейса не рассчитываются."
+  ],
+  "notes": []
+}

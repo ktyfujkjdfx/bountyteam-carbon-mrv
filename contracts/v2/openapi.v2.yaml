@@ -1,0 +1,243 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: BountyTeam Carbon Lens API
+  version: 2.0.0
+  description: |
+    Verifier API of Carbon Lens: a contour and a period in, a reproducible
+    calculation, a map and a passport out.
+
+    The frozen /api/v1 contract is untouched and keeps its own document
+    (contracts/openapi.yaml). This document is the single source of truth for
+    the HTTP shape of /api/v2 exactly as contracts/openapi.yaml is for v1.
+
+    Five status axes are independent and are never merged:
+    job_state (worker progress), calculation_status (were the numbers
+    computable), evidence_status (how well the change is explained),
+    claim.status (how a stated volume compares with the calculation), and the
+    anchor status of the passport.
+
+    Partial coverage is a valid scientific outcome: the analysis succeeds, the
+    result is returned and units.q is null with an unavailable_reason. It is
+    not a worker failure. Low optical quality is an evidence warning and does
+    not by itself make q null.
+servers:
+  - url: http://127.0.0.1:8000/api/v2
+    description: Local demo backend
+tags:
+  - name: catalog
+  - name: analyses
+
+paths:
+  /catalog:
+    get:
+      tags: [catalog]
+      operationId: getCatalog
+      summary: Supplied areas, sample requests, available years and method versions
+      parameters:
+        - $ref: '#/components/parameters/Session'
+      responses:
+        '200':
+          description: Catalog of the supplied dataset
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/Catalog'
+        '401': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /analyses:
+    post:
+      tags: [analyses]
+      operationId: createAnalysis
+      summary: Queue an analysis of one contour over one period
+      description: |
+        Accepts either a geometry or the identifier of a supplied area. Naming a
+        supplied area is a shortcut for pasting its polygon and changes nothing
+        else about the analysis.
+
+        The request is bound to (actor, operation, Idempotency-Key) together
+        with the canonical hash of the normalized request. The same key with the
+        same request replays the stored 202; the same key with a different
+        request is 409 IDEMPOTENCY_CONFLICT.
+
+        An optional claimed_units is an input label. It enters the request
+        identity, and it never changes the calculated numbers.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/Actor'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: 'api-models.v2.schema.json#/components/schemas/AnalysisRequest'
+      responses:
+        '202':
+          description: Analysis queued
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/AnalysisAccepted'
+        '401': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /analyses/{analysis_id}:
+    get:
+      tags: [analyses]
+      operationId: getAnalysis
+      summary: Job progress and, once SUCCEEDED, the typed result
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/AnalysisId'
+      responses:
+        '200':
+          description: Analysis state
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/Analysis'
+        '401': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /analyses/{analysis_id}/artifacts/{artifact_id}:
+    get:
+      tags: [analyses]
+      operationId: getAnalysisArtifact
+      summary: One manifest-listed artifact of this analysis
+      description: |
+        Only artifacts listed in the manifest of this analysis are served, and
+        only after their stored bytes match the recorded sha256 and size. A
+        mismatch is 503 ARTIFACT_INTEGRITY_FAILED, never a silently different
+        file.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/AnalysisId'
+        - $ref: '#/components/parameters/ArtifactId'
+      responses:
+        '200':
+          description: Artifact bytes with the recorded media type
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /analyses/{analysis_id}/report:
+    get:
+      tags: [analyses]
+      operationId: getAnalysisReport
+      summary: The passport as JSON or as a self-contained HTML document
+      description: |
+        The HTML report is self-contained: it embeds the numbers it shows and
+        does not depend on a session URL that expires, so an archived copy still
+        reads correctly. Both formats carry exactly the values of the result.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/AnalysisId'
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [json, html]
+            default: json
+      responses:
+        '200':
+          description: Report
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/Report'
+            text/html:
+              schema:
+                type: string
+        '401': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /analyses/{analysis_id}/proof:
+    get:
+      tags: [analyses]
+      operationId: getAnalysisProof
+      summary: Hashes, versions and the honest anchor status
+      description: |
+        A hash detects a changed file against a trusted record. One anchor does
+        not prevent double selling and does not certify that the calculation is
+        true. Anchor fields are nullable and carry an explicit status of
+        NOT_REQUESTED, PENDING, CONFIRMED or FAILED.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/AnalysisId'
+      responses:
+        '200':
+          description: Proof document
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/Proof'
+        '401': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+components:
+  parameters:
+    Session:
+      name: X-Demo-Session
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Demo session token. Never baked into a browser bundle.
+    Actor:
+      name: X-Demo-Actor
+      in: header
+      required: true
+      schema:
+        type: string
+        enum: [issuer, buyer, recipient]
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+    AnalysisId:
+      name: analysis_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Opaque identifier. Consumers must not parse it.
+    ArtifactId:
+      name: artifact_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Opaque identifier of a manifest-listed artifact.
+
+  responses:
+    Failure:
+      description: |
+        Error envelope. 401 unauthenticated; 404 unknown analysis or artifact;
+        409 idempotency conflict; 422 invalid geometry, period or claim;
+        503 source unavailable or artifact integrity failure. The body never
+        carries a stack trace, a secret or a local filesystem path.
+      content:
+        application/json:
+          schema:
+            $ref: 'api-models.v2.schema.json#/components/schemas/Error'

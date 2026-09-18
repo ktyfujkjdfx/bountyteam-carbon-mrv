@@ -1,0 +1,213 @@
+{
+  "note": "Примеры запросов и ответов /api/v2. Тела помечены как CONTRACT_FIXTURE: они показывают формат, а не научный результат.",
+  "createAnalysis": {
+    "request": {
+      "method": "POST",
+      "path": "/api/v2/analyses",
+      "headers": {
+        "X-Demo-Session": "<session>",
+        "X-Demo-Actor": "issuer",
+        "Idempotency-Key": "lens-tver-2019-2024-0001",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "aoi_id": "RU_TVER_01",
+        "year_start": 2019,
+        "year_end": 2024,
+        "claimed_units": null,
+        "claim_origin": null,
+        "include_optical": true
+      }
+    },
+    "response": {
+      "status": 202,
+      "body": {
+        "analysis_id": "00000000-0000-4000-8000-000000000001",
+        "job_state": "QUEUED",
+        "status_url": "/api/v2/analyses/00000000-0000-4000-8000-000000000001",
+        "created_at": "2026-09-18T12:00:00Z"
+      }
+    }
+  },
+  "createAnalysis_idempotency_conflict": {
+    "request": {
+      "method": "POST",
+      "path": "/api/v2/analyses",
+      "headers": {
+        "Idempotency-Key": "lens-tver-2019-2024-0001"
+      },
+      "body": {
+        "aoi_id": "RU_TVER_01",
+        "year_start": 2020,
+        "year_end": 2024
+      }
+    },
+    "response": {
+      "status": 409,
+      "body": {
+        "error": {
+          "code": "IDEMPOTENCY_CONFLICT",
+          "message": "Idempotency-Key was already used with a different request",
+          "details": {}
+        },
+        "request_id": "00000000-0000-4000-8000-0000000000ff"
+      }
+    }
+  },
+  "createAnalysis_invalid_period": {
+    "request": {
+      "method": "POST",
+      "path": "/api/v2/analyses",
+      "body": {
+        "aoi_id": "RU_TVER_01",
+        "year_start": 2024,
+        "year_end": 2019
+      }
+    },
+    "response": {
+      "status": 422,
+      "body": {
+        "error": {
+          "code": "INVALID_PERIOD",
+          "message": "year_end must be greater than year_start",
+          "details": {
+            "year_start": 2024,
+            "year_end": 2019
+          }
+        },
+        "request_id": "00000000-0000-4000-8000-0000000000fe"
+      }
+    }
+  },
+  "createAnalysis_area_too_large": {
+    "request": {
+      "method": "POST",
+      "path": "/api/v2/analyses",
+      "body": {
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                32.0,
+                56.0
+              ],
+              [
+                33.0,
+                56.0
+              ],
+              [
+                33.0,
+                57.0
+              ],
+              [
+                32.0,
+                57.0
+              ],
+              [
+                32.0,
+                56.0
+              ]
+            ]
+          ]
+        },
+        "year_start": 2019,
+        "year_end": 2024
+      }
+    },
+    "response": {
+      "status": 422,
+      "body": {
+        "error": {
+          "code": "AREA_TOO_LARGE",
+          "message": "Requested area exceeds the limit of 2000 ha",
+          "details": {
+            "max_area_ha": 2000.0
+          }
+        },
+        "request_id": "00000000-0000-4000-8000-0000000000fd"
+      }
+    }
+  },
+  "getAnalysis_running": {
+    "request": {
+      "method": "GET",
+      "path": "/api/v2/analyses/00000000-0000-4000-8000-000000000001"
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "analysis_id": "00000000-0000-4000-8000-000000000001",
+        "job_state": "RUNNING",
+        "created_at": "2026-09-18T12:00:00Z",
+        "updated_at": "2026-09-18T12:00:03Z",
+        "attempts": 1,
+        "status_url": "/api/v2/analyses/00000000-0000-4000-8000-000000000001",
+        "report_url": null,
+        "proof_url": null,
+        "error": null,
+        "result": null
+      }
+    }
+  },
+  "getAnalysis_succeeded": {
+    "request": {
+      "method": "GET",
+      "path": "/api/v2/analyses/00000000-0000-4000-8000-000000000001"
+    },
+    "response": {
+      "status": 200,
+      "result_fixture": "analysis_result_available.json"
+    }
+  },
+  "getAnalysis_not_found": {
+    "request": {
+      "method": "GET",
+      "path": "/api/v2/analyses/00000000-0000-4000-8000-0000000000aa"
+    },
+    "response": {
+      "status": 404,
+      "body": {
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "Analysis not found",
+          "details": {}
+        },
+        "request_id": "00000000-0000-4000-8000-0000000000fc"
+      }
+    }
+  },
+  "getAnalysisArtifact_integrity_failed": {
+    "request": {
+      "method": "GET",
+      "path": "/api/v2/analyses/00000000-0000-4000-8000-000000000001/artifacts/cells"
+    },
+    "response": {
+      "status": 503,
+      "body": {
+        "error": {
+          "code": "ARTIFACT_INTEGRITY_FAILED",
+          "message": "Stored artifact failed its hash check",
+          "details": {}
+        },
+        "request_id": "00000000-0000-4000-8000-0000000000fb"
+      }
+    }
+  },
+  "getAnalysisProof": {
+    "request": {
+      "method": "GET",
+      "path": "/api/v2/analyses/00000000-0000-4000-8000-000000000001/proof"
+    },
+    "response": {
+      "status": 200,
+      "anchor": {
+        "status": "NOT_REQUESTED",
+        "deployment_id": null,
+        "tx_hash": null,
+        "anchored_at": null,
+        "note": "Хеш выявляет изменение файла относительно доверенной фиксации. Он не предотвращает двойную продажу и не удостоверяет истинность расчёта."
+      }
+    }
+  }
+}

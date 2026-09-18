@@ -1,0 +1,135 @@
+{
+  "schema": "rs.case2.raster-analysis/1",
+  "request": {
+    "area_ha": 100.0,
+    "year_start": 2019,
+    "year_end": 2020,
+    "years": 1,
+    "parents": [
+      "DOC_EXAMPLE_AREA"
+    ]
+  },
+  "stock_change": {
+    "stock_start_tc": 4700.0,
+    "stock_end_tc": 4888.0,
+    "delta_tc": 188.0,
+    "e_tco2e": -689.3333333333333,
+    "e_per_ha_per_year": -6.893333333333333,
+    "normalisation_area_ha": 100.0,
+    "sign_convention": "positive E is a loss from the accounted pool",
+    "unit": "t CO2e over the period; t CO2e/ha/year for the rate"
+  },
+  "timeline": [
+    {
+      "year": 2019,
+      "mean_tc_ha": 47.0,
+      "total_tc": 4700.0,
+      "mean_agb_t_ha": 100.0,
+      "cells": 2,
+      "covered_ha": 100.0
+    },
+    {
+      "year": 2020,
+      "mean_tc_ha": 48.88,
+      "total_tc": 4888.0,
+      "mean_agb_t_ha": 104.0,
+      "cells": 2,
+      "covered_ha": 100.0
+    }
+  ],
+  "coverage": {
+    "requested_ha": 100.0,
+    "calculated_ha": 100.0,
+    "missing_ha": 0.0,
+    "complete": true,
+    "biomass": {
+      "area_ha": 100.0,
+      "fraction": 1.0
+    },
+    "biomass_sd": {
+      "area_ha": 100.0,
+      "fraction": 1.0
+    },
+    "optical_paired": {
+      "area_ha": 0.0,
+      "fraction": 0.0
+    },
+    "note": "три покрытия отвечают на разные вопросы и никогда не смешиваются; облачность оптической сцены не уменьшает покрытие биомассы"
+  },
+  "cells": {
+    "count": 2,
+    "valid_count": 2,
+    "weight_sum_ha": 100.0,
+    "artifact": "cells.geojson"
+  },
+  "optical": {
+    "scenes": [],
+    "paired": null
+  },
+  "change_evidence": {
+    "available": false,
+    "reason": "NO_USABLE_SCENE_PAIR",
+    "selection": null
+  },
+  "grids": {
+    "cci_biomass:DOC_EXAMPLE_AREA": {
+      "crs": "EPSG:4326",
+      "transform": [
+        0.0008888888888888889,
+        0.0,
+        32.91,
+        0.0,
+        -0.0008888888888888889,
+        56.599
+      ],
+      "width": 2,
+      "height": 1,
+      "pixel_size": [
+        0.0008888888888888889,
+        0.0008888888888888889
+      ],
+      "units": "degree"
+    }
+  },
+  "parameters": {
+    "carbon_fraction": 0.47,
+    "co2_per_c": 3.6666666666666665,
+    "pool": "living above-ground woody biomass",
+    "method": "stock-difference",
+    "method_version": "rs-case2-raster-core/1.0.0"
+  },
+  "limitations": [
+    "Оптическая пара для периода отсутствует, причина изменения не устанавливалась."
+  ],
+  "artifacts": [
+    {
+      "id": "DOC_EXAMPLE_AREA:2019-2020:cells",
+      "role": "cells",
+      "media_type": "application/geo+json",
+      "path": "cells.geojson",
+      "api_url": "artifacts/DOC_EXAMPLE_AREA:2019-2020:cells",
+      "sha256": "5ae4fc2bb39246d855b3f0bd3f536447ba321bd61ebbb58f13270d0fe4fad33a",
+      "size_bytes": 1024,
+      "crs": "EPSG:4326",
+      "resolution": [
+        0.0008888888888888889,
+        0.0008888888888888889
+      ],
+      "resolution_units": "degree",
+      "bbox_native": [
+        32.91,
+        56.59,
+        32.9264,
+        56.5945
+      ],
+      "bbox_wgs84": [
+        32.91,
+        56.59,
+        32.9264,
+        56.5945
+      ],
+      "unit": "t/ha",
+      "provenance": "CONTRACT_FIXTURE"
+    }
+  ]
+}
