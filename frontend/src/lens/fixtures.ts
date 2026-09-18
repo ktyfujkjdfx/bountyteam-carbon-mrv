@@ -1,9 +1,12 @@
-import type { LensResult, LensRequest, PriceScenario } from './types';
+import { caseSources, casePrices } from './data';
+import type { LensResult, LensRequest, LensZone, PriceScenario } from './types';
 
-// Labelled preview data for F1. Nothing here is a computed result for a real AOI:
+// Labelled preview values for the Carbon Lens workspace. Nothing here is a computed result for a real AOI:
 // DOC_EXAMPLE reproduces the conditional example printed in doc/Постановка_задачи (Q = 395);
-// UNIT_TEST_VECTOR entries are logic vectors for branches that must exist in the UI.
+// UNIT_TEST_VECTOR entries are logic vectors for branches the UI must be able to show.
 // Every scientific number is supplied ready-made; the screen never recomputes them.
+// Territories, scenes, fire events, the baseline table, prices and the source registry are NOT here:
+// they are read from the official data/ archive through src/lens/data.ts.
 
 export type FixtureScenarioId =
   | 'DOC_EXAMPLE_Q395'
@@ -12,56 +15,23 @@ export type FixtureScenarioId =
   | 'ZERO_ROUNDED'
   | 'UNAVAILABLE_COVERAGE'
   | 'WEAK_OPTICS_VALID_CCI'
+  | 'FIRE_SUPPORTED_LOSS'
+  | 'CAUSE_UNKNOWN_LOSS'
+  | 'RECOVERY_AFTER_LOSS'
+  | 'SUBPLOT_BASELINE'
   | 'UNKNOWN_DRIFT';
 
-export const PRICES: PriceScenario[] = [
-  { id: 'price_low', label: 'Низкая', rub_per_unit: 500 },
-  { id: 'price_base', label: 'Базовая', rub_per_unit: 1500 },
-  { id: 'price_high', label: 'Высокая', rub_per_unit: 4000 },
-];
+/** Price scenarios come from data/methodology/parameters.csv, not from this file. */
+export const PRICES: PriceScenario[] = casePrices();
 
-const SOURCES: LensResult['sources'] = [
-  {
-    source_id: 'CCI_V7',
-    title: 'ESA Biomass CCI',
-    version: 'v7.0',
-    license: 'ESA CCI terms',
-    attribution: 'Santoro M.; Cartus O. (2026), NERC EDS CEDA, DOI 10.5285/6429d1aafe1e43b9b414e4a5a7f8b903',
-    accessed: '2026-09-18',
-  },
-  {
-    source_id: 'S2_L2A',
-    title: 'Sentinel-2 L2A (Element 84 Earth Search)',
-    version: '2019–2024',
-    license: 'Copernicus',
-    attribution: 'Contains modified Copernicus Sentinel data 2019–2024',
-    accessed: '2026-09-18',
-  },
-  {
-    source_id: 'GFC_2025_V113',
-    title: 'Hansen Global Forest Change',
-    version: '2025 v1.13',
-    license: 'CC BY 4.0',
-    attribution: 'Hansen et al. (2013), University of Maryland / GLAD',
-    accessed: '2026-09-18',
-  },
-  {
-    source_id: 'MODIS_MCD64A1_061',
-    title: 'MODIS Burned Area MCD64A1',
-    version: 'v6.1',
-    license: 'NASA LP DAAC terms',
-    attribution: 'Giglio, Justice, Boschetti, Roy; DOI 10.5067/MODIS/MCD64A1.061',
-    accessed: '2026-09-18',
-  },
-  {
-    source_id: 'CASE_RULES_V1',
-    title: 'Сценарные правила кейса (baseline, вычеты, резерв, цены)',
-    version: 'v1',
-    license: 'Материалы кейса',
-    attribution: 'SR Data, data/methodology/parameters.csv',
-    accessed: '2026-09-18',
-  },
-];
+const SOURCES: LensResult['sources'] = caseSources().map((source) => ({
+  source_id: source.source_id,
+  title: source.product,
+  version: source.version,
+  license: source.license_url || source.license,
+  attribution: source.attribution,
+  accessed: source.accessed,
+}));
 
 const IPCC_ASSUMPTIONS = [
   'CF = 0.47 т C/т сухого вещества (IPCC 2006, том 4, таблица 4.3).',
@@ -69,11 +39,14 @@ const IPCC_ASSUMPTIONS = [
   'Учитывается только живая надземная древесная биомасса.',
 ];
 
-type Scenario = Omit<LensResult, 'request' | 'area_ha'>;
+type Scenario = Omit<LensResult, 'request' | 'area_ha' | 'layers'>;
 
 export interface ScenarioDefaults {
   areaHa: number;
   years: [number, number];
+  /** AOI the guided demo selects for this vector; the numbers still belong to the vector, not to the AOI. */
+  aoiId: string | null;
+  sampleRequestId?: string;
 }
 
 function passport(id: string, hash: string): LensResult['passport'] {
@@ -89,12 +62,37 @@ function passport(id: string, hash: string): LensResult['passport'] {
   };
 }
 
+const FIXTURE_PROVENANCE: LensResult['provenance'] = {
+  official: [
+    'Территории, контуры и площади — data/areas.csv и data/areas.geojson',
+    'Базовая линия — data/methodology/baseline.csv',
+    'Сцены Sentinel-2, облачность и доля пригодных пикселей — data/scenes.csv',
+    'События и продукты гарей — data/events.csv',
+    'Коэффициенты, вычеты, резерв и цены — data/methodology/parameters.csv',
+    'Источники, лицензии и ограничения — data/sources.csv',
+  ],
+  computed_by: 'FIXTURE',
+  computed_note:
+    'Запас, E, R, неопределённость, покрытие и Q взяты из помеченного набора, а не рассчитаны по растрам выбранного участка.',
+};
+
+function zone(input: Omit<LensZone, 'geometry' | 'geometry_note'>): LensZone {
+  return {
+    ...input,
+    geometry: null,
+    geometry_note: 'Контур зоны схематичен: положение задано помеченным набором, а не детекцией по растрам.',
+  };
+}
+
 const DOC_EXAMPLE: Scenario = {
   fixture: {
     kind: 'DOC_EXAMPLE',
     label: 'Условный пример из постановки задачи',
     note: 'Числа взяты из doc/Постановка_задачи (100 га, один год, биомасса 100 → 104 т/га). Это не расчёт по выбранному участку data/.',
+    acceptance_id: null,
+    acceptance_note: 'Числовой эталон формул: R → вычет за неопределённость → резерв → округление → Q = 395.',
   },
+  provenance: FIXTURE_PROVENANCE,
   calculation_status: 'AVAILABLE',
   evidence_status: 'SUFFICIENT',
   stock: {
@@ -159,7 +157,7 @@ const DOC_EXAMPLE: Scenario = {
     { year: 2022, stock_tc_ha: null, baseline_tc_ha: 48.41, observed: false, in_selected_period: false },
   ],
   zones: [
-    {
+    zone({
       zone_id: 'DOC-EXAMPLE-ZONE-1',
       label: 'Условная зона прироста',
       area_ha: 100,
@@ -169,10 +167,12 @@ const DOC_EXAMPLE: Scenario = {
       contribution_e_tco2e: -689.333,
       cause_status: 'NOT_ESTABLISHED',
       evidence_source_id: null,
+      evidence_event_id: null,
       evidence_note: 'В примере постановки причина изменения не устанавливается.',
       artifact_ids: [],
-    },
+    }),
   ],
+  optical: { scene_keys: [], note: 'Условный пример не привязан к конкретным сценам Sentinel-2.' },
   artifacts: [],
   sources: SOURCES,
   limitations: [
@@ -197,10 +197,11 @@ function unitVector(
   label: string,
   note: string,
   overrides: Partial<Scenario>,
+  acceptance: { id: string | null; note: string | null } = { id: null, note: null },
 ): Scenario {
   const base: Scenario = {
     ...DOC_EXAMPLE,
-    fixture: { kind: 'UNIT_TEST_VECTOR', label, note },
+    fixture: { kind: 'UNIT_TEST_VECTOR', label, note, acceptance_id: acceptance.id, acceptance_note: acceptance.note },
     passport: passport(`FIXTURE-${id}`, `0x${id.toLowerCase().replace(/[^a-z0-9]/g, '').padEnd(64, '0').slice(0, 64)}`),
   };
   return { ...base, ...overrides };
@@ -229,6 +230,10 @@ const ZERO_NON_POSITIVE = unitVector(
       rounding_remainder_tco2e: null,
     },
     limitations: ['Отсутствие положительного результата относительно базовой линии — корректный итог, а не ошибка расчёта.'],
+  },
+  {
+    id: 'S1',
+    note: 'Контроль по GFC: отсутствие зарегистрированных потерь покрова не гарантирует ни постоянную биомассу, ни положительный Q.',
   },
 );
 
@@ -301,7 +306,12 @@ const UNAVAILABLE_COVERAGE = unitVector(
       { year: 2019, stock_tc_ha: 47, baseline_tc_ha: 47, observed: true, in_selected_period: true },
       { year: 2020, stock_tc_ha: null, baseline_tc_ha: 47.47, observed: false, in_selected_period: true },
     ],
+    zones: [],
     limitations: ['Недоступность расчёта — это не ноль единиц: показана причина и рассчитанная часть.'],
+  },
+  {
+    id: 'S7',
+    note: 'Контур выходит за доступное покрытие: частичный результат и q = null. Это проверка границ, а не подмена растра.',
   },
 );
 
@@ -317,7 +327,7 @@ const WEAK_OPTICS = unitVector(
       { id: 'OPTICAL_PAIRED_VALID', label: 'Оптика на обе даты (paired-valid)', covered_fraction: 0.18, missing_area_ha: 82, note: 'Облака и тени: объяснение изменения ограничено, расчёт запаса не затронут.' },
     ],
     zones: [
-      {
+      zone({
         zone_id: 'UNIT-ZONE-OPTICS',
         label: 'Зона изменения без пригодной оптики',
         area_ha: 24.5,
@@ -327,11 +337,229 @@ const WEAK_OPTICS = unitVector(
         contribution_e_tco2e: 1136.7,
         cause_status: 'NOT_ESTABLISHED',
         evidence_source_id: null,
+        evidence_event_id: null,
         evidence_note: 'Причина не установлена: пригодных снимков на обе даты недостаточно.',
         artifact_ids: [],
-      },
+      }),
     ],
+    optical: {
+      scene_keys: [],
+      note: 'Пригодность сцен на обе даты ограничена; метаданные доступных сцен показаны из data/scenes.csv.',
+    },
     limitations: ['Оптическое качество и покрытие биомассы — разные оси; одно не заменяет другое.'],
+  },
+  {
+    id: 'S6',
+    note: 'Облачная сцена не делает покрытие CCI неполным: оси качества разделены, альтернативные сцены видны в таблице наблюдений.',
+  },
+);
+
+const FIRE_SUPPORTED_LOSS = unitVector(
+  'FIRE_SUPPORTED_LOSS',
+  'Потеря с признаком горения по продукту MODIS',
+  'Логический вектор: зона потери связана со строкой data/events.csv; признак горения — продукт, а не измеренная площадь гари.',
+  {
+    evidence_status: 'REVIEW_REQUIRED',
+    stock: { ...DOC_EXAMPLE.stock, mean_start_tc_ha: 47, mean_end_tc_ha: 41.2, total_start_tc: 4700, total_end_tc: 4120, delta_tc: -580, e_tco2e: 2126.667, e_tco2e_ha_yr: 21.267 },
+    uncertainty: { ...DOC_EXAMPLE.uncertainty, lower_tco2e: 1700, upper_tco2e: 2553.3, h_tco2e: 426.633 },
+    units: {
+      status: 'AVAILABLE',
+      q: 0,
+      reason: 'NON_POSITIVE_RELATIVE_RESULT',
+      reason_detail: 'Период закончился ниже базовой линии: единицы по условиям кейса не образуются.',
+      r_tco2e: -2299,
+      h_over_r: null,
+      unc_fraction: null,
+      r_adj_tco2e: null,
+      buffer_tco2e: null,
+      leakage_tco2e: 0,
+      rounding_remainder_tco2e: null,
+    },
+    timeline: [
+      { year: 2019, stock_tc_ha: 47, baseline_tc_ha: 47, observed: true, in_selected_period: true },
+      { year: 2020, stock_tc_ha: 47.3, baseline_tc_ha: 47.47, observed: true, in_selected_period: true },
+      { year: 2021, stock_tc_ha: 42.9, baseline_tc_ha: 47.94, observed: true, in_selected_period: true },
+      { year: 2022, stock_tc_ha: 41.2, baseline_tc_ha: 48.41, observed: true, in_selected_period: true },
+    ],
+    zones: [
+      zone({
+        zone_id: 'UNIT-ZONE-FIRE',
+        label: 'Зона потери с признаком горения',
+        area_ha: 118.4,
+        date_min: '2021-08-05',
+        date_max: '2021-08-22',
+        delta_stock_tc: -486,
+        contribution_e_tco2e: 1782,
+        cause_status: 'SUPPORTED',
+        evidence_source_id: 'MODIS_MCD64A1_061',
+        evidence_event_id: 'RU_MORDOVIA_03_MODIS_FIRE_202108',
+        evidence_note: 'Связь зоны с событием задана помеченным набором; сама запись события — официальная строка data/events.csv.',
+        artifact_ids: [],
+      }),
+      zone({
+        zone_id: 'UNIT-ZONE-FIRE-EDGE',
+        label: 'Смежная зона без подтверждения причины',
+        area_ha: 37.9,
+        date_min: '2021-06-01',
+        date_max: '2021-09-30',
+        delta_stock_tc: -94,
+        contribution_e_tco2e: 344.7,
+        cause_status: 'NOT_ESTABLISHED',
+        evidence_source_id: null,
+        evidence_event_id: null,
+        evidence_note: 'Изменение наблюдается, но продукт гарей не покрывает эту зону.',
+        artifact_ids: [],
+      }),
+    ],
+    limitations: [
+      'Признак горения по MODIS не означает измеренную площадь гари: шаг сетки около 463 м, дата имеет погрешность.',
+      'Доля сгоревшей территории и её вклад в E не выводятся из сообщения МЧС.',
+    ],
+  },
+  {
+    id: 'S2',
+    note: 'Изменение и свидетельства пожара августа 2021 года: показаны площадь зоны и вклад в E, без выдуманной доли «половина леса».',
+  },
+);
+
+const CAUSE_UNKNOWN_LOSS = unitVector(
+  'CAUSE_UNKNOWN_LOSS',
+  'Потеря покрова с неустановленной причиной',
+  'Логический вектор: изменение наблюдается, но достаточных свидетельств причины нет.',
+  {
+    evidence_status: 'REVIEW_REQUIRED',
+    stock: { ...DOC_EXAMPLE.stock, mean_end_tc_ha: 44.1, total_end_tc: 4410, delta_tc: -290, e_tco2e: 1063.333, e_tco2e_ha_yr: 10.633 },
+    uncertainty: { ...DOC_EXAMPLE.uncertainty, lower_tco2e: 780, upper_tco2e: 1346.6, h_tco2e: 283.267 },
+    units: {
+      status: 'AVAILABLE',
+      q: 0,
+      reason: 'NON_POSITIVE_RELATIVE_RESULT',
+      reason_detail: 'Результат периода ниже базовой линии.',
+      r_tco2e: -1235.666,
+      h_over_r: null,
+      unc_fraction: null,
+      r_adj_tco2e: null,
+      buffer_tco2e: null,
+      leakage_tco2e: 0,
+      rounding_remainder_tco2e: null,
+    },
+    zones: [
+      zone({
+        zone_id: 'UNIT-ZONE-UNKNOWN',
+        label: 'Мозаика потерь покрова',
+        area_ha: 63.2,
+        date_min: '2020-05-01',
+        date_max: '2023-09-30',
+        delta_stock_tc: -207,
+        contribution_e_tco2e: 759,
+        cause_status: 'NOT_ESTABLISHED',
+        evidence_source_id: 'GFC_2025_V113',
+        evidence_event_id: null,
+        evidence_note: 'Продукт изменений отмечает год потери, но причину не определяет; записи о событии для участка нет.',
+        artifact_ids: [],
+      }),
+    ],
+    limitations: [
+      'Причина не установлена: наблюдается изменение, пожар или вырубка не доказаны.',
+      'Год потери по GFC не равен измеренному изменению биомассы.',
+    ],
+  },
+  { id: 'S3', note: 'Потери покрова без достаточных свидетельств: статус причины остаётся «не установлена».' },
+);
+
+const RECOVERY_AFTER_LOSS = unitVector(
+  'RECOVERY_AFTER_LOSS',
+  'История потери и последующая динамика',
+  'Логический вектор: после потери наблюдается прирост, но период в целом остаётся ниже базовой линии.',
+  {
+    evidence_status: 'REVIEW_REQUIRED',
+    stock: { ...DOC_EXAMPLE.stock, mean_start_tc_ha: 47, mean_end_tc_ha: 45.9, total_end_tc: 4590, delta_tc: -110, e_tco2e: 403.333, e_tco2e_ha_yr: 0.807 },
+    uncertainty: { ...DOC_EXAMPLE.uncertainty, lower_tco2e: 120, upper_tco2e: 686.6, h_tco2e: 283.267 },
+    units: {
+      status: 'AVAILABLE',
+      q: 0,
+      reason: 'NON_POSITIVE_RELATIVE_RESULT',
+      reason_detail: 'Прирост после потери не вывел период выше базовой линии.',
+      r_tco2e: -1097.333,
+      h_over_r: null,
+      unc_fraction: null,
+      r_adj_tco2e: null,
+      buffer_tco2e: null,
+      leakage_tco2e: 0,
+      rounding_remainder_tco2e: null,
+    },
+    timeline: [
+      { year: 2015, stock_tc_ha: 45.1, baseline_tc_ha: null, observed: true, in_selected_period: false },
+      { year: 2019, stock_tc_ha: 47, baseline_tc_ha: 47, observed: true, in_selected_period: true },
+      { year: 2020, stock_tc_ha: 44.2, baseline_tc_ha: 47.47, observed: true, in_selected_period: true },
+      { year: 2021, stock_tc_ha: 41.8, baseline_tc_ha: 47.94, observed: true, in_selected_period: true },
+      { year: 2022, stock_tc_ha: 43.6, baseline_tc_ha: 48.41, observed: true, in_selected_period: true },
+      { year: 2023, stock_tc_ha: 44.8, baseline_tc_ha: 48.87, observed: true, in_selected_period: true },
+      { year: 2024, stock_tc_ha: 45.9, baseline_tc_ha: 49.34, observed: true, in_selected_period: true },
+    ],
+    zones: [
+      zone({
+        zone_id: 'UNIT-ZONE-RECOVERY',
+        label: 'Зона ранней потери с последующим приростом',
+        area_ha: 88.7,
+        date_min: '2020-05-01',
+        date_max: '2024-09-30',
+        delta_stock_tc: -142,
+        contribution_e_tco2e: 520.7,
+        cause_status: 'NOT_ESTABLISHED',
+        evidence_source_id: 'GFC_2025_V113',
+        evidence_event_id: null,
+        evidence_note: 'Ранняя потеря покрова и последующая динамика; причина отдельно не подтверждена.',
+        artifact_ids: [],
+      }),
+    ],
+    limitations: [
+      'Восстановление объявляется только по результатам наблюдений, а не по ожиданию.',
+      'Годы после 2024 в данных отсутствуют: прогноз фактического запаса не строится.',
+    ],
+  },
+  { id: 'S4', note: 'История и последующая динамика: прирост виден, но восстановление не объявляется без результата выше базовой линии.' },
+);
+
+const SUBPLOT_BASELINE = unitVector(
+  'SUBPLOT_BASELINE',
+  'Подучасток: удельная базовая линия родителя',
+  'Логический вектор: базовая линия родительского участка применена к площади запроса.',
+  {
+    evidence_status: 'SUFFICIENT',
+    stock: { ...DOC_EXAMPLE.stock, mean_start_tc_ha: 47, mean_end_tc_ha: 49.6, delta_tc: 2103, total_start_tc: 38016, total_end_tc: 40119, e_tco2e: -7711, e_tco2e_ha_yr: -2.383 },
+    baseline: {
+      baseline_id: 'HIST-AGB-2015-2019-v1',
+      kind: 'сценарное допущение',
+      e_base_tco2e: -4074.8,
+      stock_start_tc_ha: 47,
+      stock_end_tc_ha: 48.88,
+      applied_to_area_ha: 808.8538,
+      parent_aoi_id: 'RU_VOLOGDA_02',
+      note: 'Удельная базовая линия родительского участка применена к площади запроса (правило из data/sample_requests.geojson).',
+    },
+    uncertainty: { ...DOC_EXAMPLE.uncertainty, lower_tco2e: -8850, upper_tco2e: -6572, h_tco2e: 1139 },
+    units: {
+      status: 'AVAILABLE',
+      q: 2455,
+      reason: null,
+      reason_detail: null,
+      r_tco2e: 3636.2,
+      h_over_r: 0.313,
+      unc_fraction: 0.1,
+      r_adj_tco2e: 3272.58,
+      buffer_tco2e: 490.887,
+      leakage_tco2e: 0,
+      rounding_remainder_tco2e: 0.693,
+    },
+    limitations: [
+      'Площадь запроса берётся из сервиса; клиентская оценка площади приблизительна.',
+      'Базовая линия подучастка — правило кейса, а не измеренный альтернативный сценарий.',
+    ],
+  },
+  {
+    id: 'S5',
+    note: 'Подучасток ~808,85 га: удельная базовая линия родителя применяется к реальной площади запроса; нарисованный допустимый контур обрабатывается так же.',
   },
 );
 
@@ -360,6 +588,10 @@ export const FIXTURE_SCENARIOS: Record<FixtureScenarioId, Scenario> = {
   ZERO_ROUNDED,
   UNAVAILABLE_COVERAGE,
   WEAK_OPTICS_VALID_CCI: WEAK_OPTICS,
+  FIRE_SUPPORTED_LOSS,
+  CAUSE_UNKNOWN_LOSS,
+  RECOVERY_AFTER_LOSS,
+  SUBPLOT_BASELINE,
   UNKNOWN_DRIFT,
 };
 
@@ -370,23 +602,32 @@ export const FIXTURE_SCENARIO_ORDER: FixtureScenarioId[] = [
   'ZERO_ROUNDED',
   'UNAVAILABLE_COVERAGE',
   'WEAK_OPTICS_VALID_CCI',
+  'FIRE_SUPPORTED_LOSS',
+  'CAUSE_UNKNOWN_LOSS',
+  'RECOVERY_AFTER_LOSS',
+  'SUBPLOT_BASELINE',
   'UNKNOWN_DRIFT',
 ];
 
 export const SCENARIO_DEFAULTS: Record<FixtureScenarioId, ScenarioDefaults> = {
-  DOC_EXAMPLE_Q395: { areaHa: 100, years: [2019, 2020] },
-  ZERO_NON_POSITIVE: { areaHa: 100, years: [2019, 2020] },
-  ZERO_UNCERTAINTY: { areaHa: 100, years: [2019, 2020] },
-  ZERO_ROUNDED: { areaHa: 100, years: [2019, 2020] },
-  UNAVAILABLE_COVERAGE: { areaHa: 100, years: [2019, 2020] },
-  WEAK_OPTICS_VALID_CCI: { areaHa: 100, years: [2019, 2020] },
-  UNKNOWN_DRIFT: { areaHa: 100, years: [2019, 2020] },
+  DOC_EXAMPLE_Q395: { areaHa: 100, years: [2019, 2020], aoiId: null },
+  ZERO_NON_POSITIVE: { areaHa: 100, years: [2019, 2024], aoiId: 'RU_TVER_01' },
+  ZERO_UNCERTAINTY: { areaHa: 100, years: [2019, 2020], aoiId: null },
+  ZERO_ROUNDED: { areaHa: 100, years: [2019, 2020], aoiId: null },
+  UNAVAILABLE_COVERAGE: { areaHa: 100, years: [2019, 2020], aoiId: null },
+  WEAK_OPTICS_VALID_CCI: { areaHa: 100, years: [2021, 2022], aoiId: 'RU_MORDOVIA_03' },
+  FIRE_SUPPORTED_LOSS: { areaHa: 100, years: [2020, 2022], aoiId: 'RU_MORDOVIA_03' },
+  CAUSE_UNKNOWN_LOSS: { areaHa: 100, years: [2019, 2024], aoiId: 'RU_VOLOGDA_02' },
+  RECOVERY_AFTER_LOSS: { areaHa: 100, years: [2019, 2024], aoiId: 'RU_MORDOVIA_04' },
+  SUBPLOT_BASELINE: { areaHa: 808.8538, years: [2020, 2024], aoiId: null, sampleRequestId: 'CHECK_TRANSFER_01' },
+  UNKNOWN_DRIFT: { areaHa: 100, years: [2019, 2020], aoiId: null },
 };
 
 export function buildFixtureResult(id: FixtureScenarioId, request: LensRequest, areaHa: number): LensResult {
   const rest = FIXTURE_SCENARIOS[id];
   return {
     ...structuredClone(rest),
+    layers: [],
     request: structuredClone(request),
     area_ha: areaHa,
     stock: { ...structuredClone(rest.stock), year_start: request.year_start, year_end: request.year_end },

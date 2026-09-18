@@ -37,11 +37,36 @@ const forbidden = [
   /https?:\/\/[a-z0-9.-]*(dataspace\.copernicus|firms\.modaps|earthdata\.nasa)/i,
 ];
 
+// Attribution and licence links published in the official registry are shown to the reader and never
+// fetched by the app. They are allowed verbatim; any other external host still fails the build.
+const dataDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../data');
+const registry = new Set();
+for (const name of ['sources.csv', 'events.csv']) {
+  try {
+    const text = await readFile(join(dataDir, name), 'utf8');
+    for (const match of text.matchAll(/https?:\/\/[^\s,"']+/g)) registry.add(match[0].replace(/[.,;)]+$/, ''));
+  } catch {
+    // The registry is optional for this check: without it every external host is reported.
+  }
+}
+
+function urlAt(text, index) {
+  const start = text.lastIndexOf('http', index);
+  if (start === -1) return text.slice(index, index + 80);
+  let end = start;
+  while (end < text.length && !'"\'`\\ \n\t<>),'.includes(text[end])) end += 1;
+  return text.slice(start, end).replace(/[.,;)]+$/, '');
+}
+
 for (const file of files.filter((f) => /\.(html|js|css)$/.test(f))) {
   const text = await readFile(file, 'utf8');
   for (const pattern of forbidden) {
-    const match = text.match(pattern);
-    if (match) failures.push(`${relative(root, file)} references external host: ${match[0]}`);
+    for (const match of text.matchAll(new RegExp(pattern.source, `${pattern.flags.replace('g', '')}g`))) {
+      const url = urlAt(text, match.index);
+      if (registry.has(url)) continue;
+      failures.push(`${relative(root, file)} references external host: ${match[0]}`);
+      break;
+    }
   }
 }
 
@@ -62,4 +87,7 @@ if (failures.length > 0) {
   process.exit(1);
 }
 const bytes = (await Promise.all(files.map((f) => stat(f)))).reduce((sum, s) => sum + s.size, 0);
-console.log(`check:dist ok: ${files.length} files, ${(bytes / 1024).toFixed(1)} KiB, no external runtime hosts, no GeoTIFF, relative asset paths`);
+console.log(
+  `check:dist ok: ${files.length} files, ${(bytes / 1024).toFixed(1)} KiB, no external runtime hosts, no GeoTIFF, relative asset paths ` +
+    `(${registry.size} attribution links from data/ allowed as text)`,
+);

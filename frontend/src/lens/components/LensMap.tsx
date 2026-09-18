@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { GeometryError, geometryBounds, toLeafletBounds } from '../../domain/geo';
-import type { LensGeometry, LensZone } from '../types';
+import type { LensGeometry, LensLayer, LensZone } from '../types';
 
 interface Props {
   geometry: LensGeometry | null;
   zones: LensZone[];
+  layers: LensLayer[];
+  visibleLayers: ReadonlySet<string>;
   selectedZoneId: string | null;
   onSelectZone: (zoneId: string) => void;
   drawing: boolean;
@@ -17,7 +19,11 @@ function ringsOf(geometry: LensGeometry): number[][][] {
   return geometry.type === 'Polygon' ? (geometry.coordinates as number[][][]) : (geometry.coordinates as number[][][][]).flat();
 }
 
-// Zones in F1 fixtures carry no geometry yet; they are drawn as labelled markers inside the contour.
+function toLatLngs(geometry: LensGeometry): [number, number][][] {
+  return ringsOf(geometry).map((ring) => ring.map(([lon, lat]) => [lat as number, lon as number] as [number, number]));
+}
+
+// A zone without geometry is anchored as a labelled marker inside the contour instead of being hidden.
 function zoneAnchor(geometry: LensGeometry, index: number, total: number): [number, number] | null {
   try {
     const b = geometryBounds(geometry as never);
@@ -28,13 +34,14 @@ function zoneAnchor(geometry: LensGeometry, index: number, total: number): [numb
   }
 }
 
-export function LensMap({ geometry, zones, selectedZoneId, onSelectZone, drawing, onDrawn }: Props) {
+export function LensMap({ geometry, zones, layers, visibleLayers, selectedZoneId, onSelectZone, drawing, onDrawn }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const readoutRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
   const sessionRef = useRef(0);
   const [corner, setCorner] = useState<{ session: number; point: [number, number] } | null>(null);
+  const missingLayers = layers.filter((layer) => layer.availability !== 'AVAILABLE');
 
   // Geometry is validated during render, so an invalid contour never needs a state update from an effect.
   const geometryView = useMemo(() => {
@@ -90,29 +97,57 @@ export function LensMap({ geometry, zones, selectedZoneId, onSelectZone, drawing
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready || !geometry || zones.length === 0) return;
-    const markers = zones
+    if (!map || !ready || !geometry || zones.length === 0 || !visibleLayers.has('CHANGE_ZONES')) return;
+    const drawn = zones
       .map((zone, index) => {
-        const anchor = zoneAnchor(geometry, index, zones.length);
-        if (!anchor) return null;
         const selected = zone.zone_id === selectedZoneId;
-        const marker = L.circleMarker(anchor, {
-          radius: selected ? 11 : 8,
-          color: selected ? '#edf3ef' : '#3a1d00',
-          weight: selected ? 2 : 1.5,
-          fillColor: zone.cause_status === 'SUPPORTED' ? '#f0a06a' : '#b3bfb8',
-          fillOpacity: 0.95,
+        const supported = zone.cause_status === 'SUPPORTED';
+        const style = {
+          color: selected ? '#edf3ef' : supported ? '#f0a06a' : '#b3bfb8',
+          weight: selected ? 3 : 1.5,
+          fillColor: supported ? '#f0a06a' : '#b3bfb8',
+          fillOpacity: selected ? 0.4 : 0.22,
+          dashArray: supported ? undefined : '4 3',
+        };
+        const tooltip = `${zone.label} · ${zone.area_ha.toLocaleString('ru-RU')} га · ${supported ? 'причина подтверждена продуктом' : 'причина не установлена'}`;
+        const layer = zone.geometry
+          ? L.polygon(toLatLngs(zone.geometry), style)
+          : (() => {
+              const anchor = zoneAnchor(geometry, index, zones.length);
+              return anchor ? L.circleMarker(anchor, { ...style, radius: selected ? 11 : 8, fillOpacity: 0.95 }) : null;
+            })();
+        if (!layer) return null;
+        layer.addTo(map).bindTooltip(tooltip, { direction: 'top' });
+        layer.on('click', () => onSelectZone(zone.zone_id));
+        return layer;
+      })
+      .filter((m): m is L.Polygon | L.CircleMarker => m !== null);
+    return () => {
+      drawn.forEach((m) => m.remove());
+    };
+  }, [ready, geometry, zones, visibleLayers, selectedZoneId, onSelectZone]);
+
+  // Vector layers the result ships inline (currently the schematic gap in numeric coverage).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    const drawn = layers
+      .filter((layer) => layer.availability === 'AVAILABLE' && layer.geometry && visibleLayers.has(layer.layer_id))
+      .map((layer) =>
+        L.polygon(toLatLngs(layer.geometry as LensGeometry), {
+          color: '#d8b46a',
+          weight: 1,
+          fillColor: '#d8b46a',
+          fillOpacity: 0.18,
+          dashArray: '6 4',
         })
           .addTo(map)
-          .bindTooltip(`${zone.label} · ${zone.area_ha} га`, { direction: 'top' });
-        marker.on('click', () => onSelectZone(zone.zone_id));
-        return marker;
-      })
-      .filter((m): m is L.CircleMarker => m !== null);
+          .bindTooltip(`${layer.label}: ${layer.note}`, { direction: 'top' }),
+      );
     return () => {
-      markers.forEach((m) => m.remove());
+      drawn.forEach((m) => m.remove());
     };
-  }, [ready, geometry, zones, selectedZoneId, onSelectZone]);
+  }, [ready, layers, visibleLayers]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -167,14 +202,20 @@ export function LensMap({ geometry, zones, selectedZoneId, onSelectZone, drawing
           WGS84 · наведите курсор
         </div>
       </div>
-      {geometryView.error && (
-        <div className="map-notes">
+      <div className="map-notes">
+        {geometryView.error && (
           <div className="state state-error compact" role="alert" data-testid="lens-geometry-error">
             <strong>Геометрия отклонена</strong>
             {geometryView.error}
           </div>
-        </div>
-      )}
+        )}
+        {missingLayers.length > 0 && (
+          <p className="muted small" data-testid="lens-map-missing-layers">
+            Не показаны на карте: {missingLayers.map((layer) => layer.label).join(', ')}. Пустая карта не означает «изменений нет» —
+            причины перечислены в списке слоёв.
+          </p>
+        )}
+      </div>
     </section>
   );
 }

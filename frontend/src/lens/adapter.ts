@@ -1,6 +1,9 @@
 import areasCsv from '../../../data/areas.csv?raw';
 import areasGeoJson from '../../../data/areas.geojson?raw';
 import sampleRequests from '../../../data/sample_requests.geojson?raw';
+import { parseCsv, parseGeoJsonText } from './csv';
+import { eventsForAoi, scenesInPeriod } from './data';
+import { withContentHash } from './passport';
 import { buildFixtureResult, SCENARIO_DEFAULTS, type FixtureScenarioId } from './fixtures';
 import {
   LENS_MAX_AREA_HA,
@@ -41,28 +44,7 @@ export interface LensApiClient {
   getResult(resultId: string, signal?: AbortSignal): Promise<LensResult>;
 }
 
-function stripBom(text: string): string {
-  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
-}
-
-export function parseCsv(text: string): Record<string, string>[] {
-  const lines = stripBom(text).trim().split(/\r?\n/);
-  const header = (lines.shift() ?? '').split(',');
-  return lines.map((line) => {
-    const cells: string[] = [];
-    let cell = '';
-    let quoted = false;
-    for (const char of line) {
-      if (char === '"') quoted = !quoted;
-      else if (char === ',' && !quoted) {
-        cells.push(cell);
-        cell = '';
-      } else cell += char;
-    }
-    cells.push(cell);
-    return Object.fromEntries(header.map((name, i) => [name, cells[i] ?? '']));
-  });
-}
+export { parseCsv };
 
 export function parsedAreas(): LensArea[] {
   return parseCsv(areasCsv).map((row) => ({
@@ -85,8 +67,7 @@ interface GeoFeature {
 }
 
 function featureCollection(raw: string): GeoFeature[] {
-  const parsed = JSON.parse(stripBom(raw)) as { features?: GeoFeature[] };
-  return parsed.features ?? [];
+  return parseGeoJsonText<{ features?: GeoFeature[] }>(raw).features ?? [];
 }
 
 export function areaGeometryFromData(aoiId: string): LensGeometry | null {
@@ -189,6 +170,191 @@ function claimComparison(result: LensResult, request: LensRequest, scenario: Fix
   };
 }
 
+function bboxOf(geometry: LensGeometry): { west: number; south: number; east: number; north: number } | null {
+  const points = rings(geometry).flat();
+  if (points.length === 0) return null;
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+  for (const point of points) {
+    const [lon, lat] = point;
+    if (typeof lon !== 'number' || typeof lat !== 'number') continue;
+    west = Math.min(west, lon);
+    east = Math.max(east, lon);
+    south = Math.min(south, lat);
+    north = Math.max(north, lat);
+  }
+  return Number.isFinite(west) && Number.isFinite(south) ? { west, south, east, north } : null;
+}
+
+function box(west: number, south: number, east: number, north: number): LensGeometry {
+  return {
+    type: 'Polygon',
+    coordinates: [
+      [
+        [west, south],
+        [east, south],
+        [east, north],
+        [west, north],
+        [west, south],
+      ],
+    ],
+  };
+}
+
+/**
+ * Schematic outline for a zone of a labelled fixture: a deterministic cell inside the request contour.
+ * It shows where zone selection and highlighting happen; it is not a detection result and says so
+ * through LensZone.geometry_note.
+ */
+export function schematicZoneGeometry(geometry: LensGeometry, index: number, total: number): LensGeometry | null {
+  const bounds = bboxOf(geometry);
+  if (!bounds || total <= 0) return null;
+  const width = bounds.east - bounds.west;
+  const height = bounds.north - bounds.south;
+  const step = width / (total + 1);
+  const centreLon = bounds.west + step * (index + 1);
+  const centreLat = bounds.south + height * (index % 2 === 0 ? 0.42 : 0.62);
+  const halfLon = Math.min(step * 0.34, width * 0.18);
+  const halfLat = height * 0.12;
+  return box(centreLon - halfLon, centreLat - halfLat, centreLon + halfLon, centreLat + halfLat);
+}
+
+/** Schematic strip standing for the part of the request without numeric biomass coverage. */
+export function coverageGapGeometry(geometry: LensGeometry, missingFraction: number): LensGeometry | null {
+  const bounds = bboxOf(geometry);
+  if (!bounds || !(missingFraction > 0)) return null;
+  const width = bounds.east - bounds.west;
+  const cut = Math.min(0.9, missingFraction) * width;
+  return box(bounds.east - cut, bounds.south, bounds.east, bounds.north);
+}
+
+export function opticalContextFor(request: LensRequest): LensResult['optical'] {
+  const scenes = scenesInPeriod(request.aoi_id ?? request.parent_aoi_id, request.year_start, request.year_end);
+  return {
+    scene_keys: scenes.map((scene) => scene.scene_key),
+    note:
+      scenes.length === 0
+        ? 'Для выбранной территории и периода в data/scenes.csv нет сцен Sentinel-2.'
+        : 'Метаданные сцен — официальная таблица data/scenes.csv; пригодность оценивается по доле классов SCL 4–7.',
+  };
+}
+
+/**
+ * Map layers with an explicit availability per layer: a layer the service cannot supply is reported as
+ * "нет данных" with a reason, never silently omitted so the map looks clean.
+ */
+export function buildLayers(result: LensResult, kind: 'fixture' | 'http'): LensResult['layers'] {
+  const geometry = result.request.geometry;
+  const zonesWithGeometry = result.zones.filter((z) => z.geometry !== null);
+  const biomass = result.coverage.find((axis) => axis.id === 'BIOMASS_CCI');
+  const missingFraction = biomass?.covered_fraction === null || biomass?.covered_fraction === undefined ? 0 : 1 - biomass.covered_fraction;
+  const gap = missingFraction > 0.0001 ? coverageGapGeometry(geometry, missingFraction) : null;
+  const optical = result.coverage.find((axis) => axis.id === 'OPTICAL_PAIRED_VALID');
+  const events = eventsForAoi(result.request.aoi_id ?? result.request.parent_aoi_id);
+  const preview = result.artifacts.find((artifact) => artifact.role.includes('preview')) ?? null;
+
+  return [
+    {
+      layer_id: 'AOI_CONTOUR',
+      label: 'Контур запроса',
+      availability: 'AVAILABLE',
+      unit: null,
+      observed_at: null,
+      resolution_m: null,
+      legend: [{ swatch: 'contour', label: 'Границы запроса (WGS84)' }],
+      note: 'Геометрия из data/ или заданная пользователем.',
+      source_id: 'CASE_RULES_V1',
+      artifact_id: null,
+      geometry: null,
+    },
+    {
+      layer_id: 'CHANGE_ZONES',
+      label: 'Зоны изменений',
+      availability: zonesWithGeometry.length > 0 ? 'AVAILABLE' : 'NO_DATA',
+      unit: 'т C',
+      observed_at: result.zones[0]?.date_max ?? null,
+      resolution_m: null,
+      legend: [
+        { swatch: 'zone-supported', label: 'Причина подтверждена внешним продуктом' },
+        { swatch: 'zone-unknown', label: 'Причина не установлена' },
+      ],
+      note:
+        zonesWithGeometry.length > 0
+          ? 'Схематические контуры из помеченного набора: положение условное, статус причины — из результата.'
+          : 'Сервис не вернул зоны изменений для этого запроса.',
+      source_id: null,
+      artifact_id: null,
+      geometry: null,
+    },
+    {
+      layer_id: 'COVERAGE_GAP',
+      label: 'Пропуски числового покрытия',
+      availability: gap ? 'AVAILABLE' : 'NO_DATA',
+      unit: 'доля площади',
+      observed_at: null,
+      resolution_m: null,
+      legend: [{ swatch: 'gap', label: 'Нет числовых данных биомассы и SD' }],
+      note: gap
+        ? `Схематически показана площадь без числового покрытия (${biomass?.missing_area_ha ?? '—'} га).`
+        : 'Пропусков числового покрытия в этом результате нет.',
+      source_id: 'CCI_V7',
+      artifact_id: null,
+      geometry: gap,
+    },
+    {
+      layer_id: 'OPTICAL_QUALITY',
+      label: 'Оптическое качество (облака, тени, снег)',
+      availability: 'NO_DATA',
+      unit: 'доля пригодных пикселей',
+      observed_at: null,
+      resolution_m: 20,
+      legend: [{ swatch: 'optics', label: 'Маска SCL по сцене' }],
+      note:
+        optical && optical.covered_fraction !== null
+          ? `Растровая маска в этом режиме не выдаётся. Табличная пригодность: ${Math.round(optical.covered_fraction * 100)} % площади на обе даты, метаданные сцен — в разделе «Наблюдения».`
+          : 'Растровая маска в этом режиме не выдаётся; метаданные сцен — в разделе «Наблюдения».',
+      source_id: 'S2_L2A',
+      artifact_id: null,
+      geometry: null,
+    },
+    {
+      layer_id: 'FIRE_EVIDENCE',
+      label: 'Продукт гарей MODIS',
+      availability: 'NO_DATA',
+      unit: 'дата горения',
+      observed_at: events[0]?.date_min_product ?? null,
+      resolution_m: 463,
+      legend: [{ swatch: 'fire', label: 'Пиксели с признаком горения' }],
+      note:
+        events.length > 0
+          ? `Растр MCD64A1 в браузер не выдаётся. Для территории есть официальная запись события ${events[0]?.event_id ?? ''} — см. «Наблюдения».`
+          : 'Записей о событиях для этой территории в data/events.csv нет.',
+      source_id: 'MODIS_MCD64A1_061',
+      artifact_id: null,
+      geometry: null,
+    },
+    {
+      layer_id: 'STOCK_PREVIEW',
+      label: 'Превью запаса и изменения',
+      availability: preview ? 'AVAILABLE' : kind === 'fixture' ? 'NOT_IN_THIS_MODE' : 'NO_DATA',
+      unit: 'т C/га',
+      observed_at: null,
+      resolution_m: preview?.resolution_m ?? null,
+      legend: [{ swatch: 'stock', label: 'Запас углерода по году' }],
+      note: preview
+        ? 'Превью загружается по artifacts[].url и проверяется по sha256 перед показом.'
+        : kind === 'fixture'
+          ? 'В режиме помеченных данных растровых превью нет: подключается вместе с Backend.'
+          : 'Сервис не вернул артефакт превью для этого результата.',
+      source_id: 'CCI_V7',
+      artifact_id: preview?.artifact_id ?? null,
+      geometry: null,
+    },
+  ];
+}
+
 export interface FixtureLensOptions {
   now?: () => number;
   queuedMs?: number;
@@ -257,7 +423,18 @@ export function createFixtureLensClient(options: FixtureLensOptions = {}): LensA
       counter += 1;
       const jobId = `fixture-job-${counter}`;
       const base = buildFixtureResult(opts.scenario, request, Number(areaHa.toFixed(4)));
-      const result: LensResult = { ...base, claim: claimComparison(base, request, opts.scenario) };
+      const zones = base.zones.map((zone, index) => ({
+        ...zone,
+        geometry: schematicZoneGeometry(request.geometry, index, base.zones.length),
+      }));
+      const withContext: LensResult = {
+        ...base,
+        zones,
+        optical: opticalContextFor(request),
+        claim: claimComparison(base, request, opts.scenario),
+      };
+      // The stand-in service fixes the content hash the way the real one must: over its own payload.
+      const result = await withContentHash({ ...withContext, layers: buildLayers(withContext, 'fixture') });
       results.set(result.passport.calculation_id, result);
       const job: LensJob = { job_id: jobId, state: 'QUEUED', status_url: `/api/v2/lens/jobs/${jobId}`, result_id: null, error: null };
       jobs.set(jobId, { job, createdAt: now(), result });

@@ -1,5 +1,6 @@
 import { metaFor } from '../../domain/status';
 import { Empty, StatusBadge } from '../../components/common';
+import { eventById } from '../data';
 import { CAUSE_META } from '../status';
 import type { LensResult, LensZone } from '../types';
 
@@ -27,6 +28,7 @@ export function ZonesPanel({
   }
   const selected: LensZone | null = zones.find((z) => z.zone_id === selectedZoneId) ?? zones[0] ?? null;
   const source = selected ? result.sources.find((s) => s.source_id === selected.evidence_source_id) ?? null : null;
+  const event = eventById(selected?.evidence_event_id ?? null);
 
   return (
     <div className="lens-zones" data-testid="lens-zones">
@@ -83,10 +85,33 @@ export function ZonesPanel({
                 )}
               </dd>
             </div>
+            {event && (
+              <div className="field">
+                <dt>Запись о событии</dt>
+                <dd data-testid="lens-zone-event">
+                  <span className="mono small">{event.event_id}</span>
+                  <div className="muted small">
+                    {event.date_min_product} — {event.date_max_product}, погрешность даты {event.date_uncertainty_days_min ?? '—'}–
+                    {event.date_uncertainty_days_max ?? '—'} дней; шаг сетки продукта около 463 м.
+                  </div>
+                  <div className="muted small">{event.limitations}</div>
+                </dd>
+              </div>
+            )}
+            <div className="field">
+              <dt>Контур зоны</dt>
+              <dd data-testid="lens-zone-geometry">
+                {selected.geometry ? 'Показан на карте' : 'Сервис не вернул контур зоны'}
+                <div className="muted small">{selected.geometry_note}</div>
+              </dd>
+            </div>
           </dl>
           <p className="muted small">
             Вклад зоны показан в изменении запаса и E. Отдельное количество Q для зоны не приводится: пороги и округление по всему запросу
             неаддитивны.
+          </p>
+          <p className="muted small">
+            Распределение вклада внутри ячейки CCI — модельное допущение: снимок с шагом 20 м не превращается в углерод с шагом 20 м.
           </p>
         </article>
       )}

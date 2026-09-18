@@ -138,7 +138,8 @@ describe('claim comparison from the adapter', () => {
     expect(partial.claim.status).toBe('PARTIALLY_SUPPORTED_BY_CASE');
     expect(partial.claim.gap_units).toBe(605);
 
-    const zero = await runScenario('ZERO_NON_POSITIVE', request({ claimed_units: 250 }));
+    // The zero vector declares the control period 2019–2024, so a comparable claim must use it.
+    const zero = await runScenario('ZERO_NON_POSITIVE', request({ claimed_units: 250, year_start: 2019, year_end: 2024 }));
     expect(zero.claim.status).toBe('NOT_SUPPORTED_BY_CASE');
     expect(zero.claim.gap_units).toBe(250);
   });

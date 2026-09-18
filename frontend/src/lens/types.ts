@@ -51,6 +51,38 @@ export interface FixtureLabel {
   kind: 'DOC_EXAMPLE' | 'UNIT_TEST_VECTOR';
   label: string;
   note: string;
+  /** Acceptance scenario of the roadmap this vector exercises, e.g. "S2". */
+  acceptance_id: string | null;
+  acceptance_note: string | null;
+}
+
+/** Which parts of a result come from the official archive and which are supplied by a labelled fixture. */
+export interface LensProvenance {
+  official: string[];
+  computed_by: 'FIXTURE' | 'BACKEND';
+  computed_note: string;
+}
+
+export type LayerAvailability = 'AVAILABLE' | 'NO_DATA' | 'NOT_IN_THIS_MODE';
+
+export interface LayerLegendEntry {
+  swatch: string;
+  label: string;
+}
+
+export interface LensLayer {
+  layer_id: string;
+  label: string;
+  availability: LayerAvailability;
+  unit: string | null;
+  observed_at: string | null;
+  resolution_m: number | null;
+  legend: LayerLegendEntry[];
+  note: string;
+  source_id: string | null;
+  artifact_id: string | null;
+  /** Inline vector payload for layers the adapter can ship without a raster artifact. */
+  geometry: LensGeometry | null;
 }
 
 export interface CoverageAxis {
@@ -118,8 +150,13 @@ export interface LensZone {
   contribution_e_tco2e: number | null;
   cause_status: CauseStatus;
   evidence_source_id: string | null;
+  /** Row id in data/events.csv when the zone is linked to an official event record. */
+  evidence_event_id: string | null;
   evidence_note: string;
   artifact_ids: string[];
+  /** Schematic outline supplied with the result; null when the service returns no zone geometry. */
+  geometry: LensGeometry | null;
+  geometry_note: string;
 }
 
 export interface LensArtifact {
@@ -178,8 +215,15 @@ export interface LensPassport {
   source_manifest_sha256: string;
 }
 
+export interface OpticalContext {
+  /** Keys into data/scenes.csv; scene metadata itself is read from the official table. */
+  scene_keys: string[];
+  note: string;
+}
+
 export interface LensResult {
   fixture: FixtureLabel | null;
+  provenance: LensProvenance;
   request: LensRequest;
   area_ha: number;
   calculation_status: CalculationStatus;
@@ -191,6 +235,8 @@ export interface LensResult {
   coverage: CoverageAxis[];
   timeline: TimelinePoint[];
   zones: LensZone[];
+  layers: LensLayer[];
+  optical: OpticalContext;
   artifacts: LensArtifact[];
   sources: LensSource[];
   limitations: string[];
