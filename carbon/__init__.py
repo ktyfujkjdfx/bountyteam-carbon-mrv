@@ -1,12 +1,25 @@
-"""Carbon Lens engine: stock difference, scenario interval, baseline, units, claim.
+"""Carbon Lens engine: stock difference, scenario interval, baseline, units, claim, passport.
 
 Pure functions over typed inputs. The package computes numbers and states their limits;
-it performs no I/O beyond reading the official CSV tables of data/methodology/, and it
-imports no HTTP, web framework, database or chain library.
+it performs no I/O beyond reading the official tables of `data/`, and it imports no HTTP,
+web framework, database or chain library.
+
+`analyse` composes one full result, `build_passport` seals it into a canonical hashable
+record, `build_manifest`/`verify` establish that published bytes are the sealed bytes, and
+`research_rows` shows how the answer moves when the signed assumptions move.
 """
 from __future__ import annotations
 
-from . import notes, reasons
+from . import canonical, notes, reasons
+from .analysis import (
+    Analysis,
+    AnalysisRequest,
+    AreaCoverage,
+    MethodOptions,
+    TimelinePoint,
+    analyse,
+    geometry_hash,
+)
 from .baseline import (
     BaselinePart,
     BaselinePartResult,
@@ -17,6 +30,14 @@ from .baseline import (
     load_baseline_table,
 )
 from .claim import AnalysisContext, ClaimInput, ClaimResult, compare_claim
+from .integrity import (
+    ArtifactRecord,
+    IntegrityReport,
+    build_manifest,
+    describe,
+    manifest_hash,
+    verify,
+)
 from .interval import (
     FULLY_DEPENDENT_CELLS,
     INDEPENDENT_CELLS,
@@ -26,10 +47,20 @@ from .interval import (
     compute_interval,
 )
 from .parameters import DEFAULT_PARAMETERS, METHOD_VERSION, CaseParameters, load_parameters
+from .passport import Passport, PassportEnvelope, build_passport, link_versions, seal
+from .provenance import build_provenance, parameters_snapshot, verify_files
+from .report import build_report, render_html
+from .research import ResearchRow, research_rows, research_table
+from .rs_adapter import RasterInputs, RsPayloadError, from_fixture, from_rs_payload
 from .units import Coverage, ScenarioValue, UnitsResult, compute_units
 
 __all__ = [
+    "METHOD_VERSION",
+    "Analysis",
     "AnalysisContext",
+    "AnalysisRequest",
+    "AreaCoverage",
+    "ArtifactRecord",
     "BaselinePart",
     "BaselinePartResult",
     "BaselineResult",
@@ -42,18 +73,44 @@ __all__ = [
     "DEFAULT_PARAMETERS",
     "FULLY_DEPENDENT_CELLS",
     "INDEPENDENT_CELLS",
+    "IntegrityReport",
     "IntervalResult",
     "IntervalVariant",
-    "METHOD_VERSION",
+    "MethodOptions",
+    "Passport",
+    "PassportEnvelope",
+    "RasterInputs",
+    "ResearchRow",
+    "RsPayloadError",
     "ScenarioValue",
+    "TimelinePoint",
     "UnitsResult",
+    "analyse",
     "baseline_stock",
+    "build_manifest",
+    "build_passport",
+    "build_provenance",
+    "build_report",
+    "canonical",
     "compare_claim",
     "compute_baseline",
     "compute_interval",
     "compute_units",
+    "describe",
+    "from_fixture",
+    "from_rs_payload",
+    "geometry_hash",
+    "link_versions",
     "load_baseline_table",
     "load_parameters",
+    "manifest_hash",
     "notes",
+    "parameters_snapshot",
     "reasons",
+    "render_html",
+    "research_rows",
+    "research_table",
+    "seal",
+    "verify",
+    "verify_files",
 ]

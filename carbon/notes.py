@@ -23,6 +23,11 @@ COVERAGE_INCOMPLETE = "COVERAGE_INCOMPLETE"
 CLAIM_INPUT_LABEL = "CLAIM_INPUT_LABEL"
 CLAIM_GAP_SCENARIO = "CLAIM_GAP_SCENARIO"
 CLAIM_ZERO = "CLAIM_ZERO"
+OPTICAL_QUALITY_SEPARATE = "OPTICAL_QUALITY_SEPARATE"
+AREA_NOT_FULLY_COVERED = "AREA_NOT_FULLY_COVERED"
+RESEARCH_VARIANT = "RESEARCH_VARIANT"
+PASSPORT_NEW_OBSERVATION = "PASSPORT_NEW_OBSERVATION"
+PROVISIONAL_INPUT = "PROVISIONAL_INPUT"
 
 CATALOGUE: dict[str, str] = {
     SCENARIO_INTERVAL: (
@@ -81,6 +86,28 @@ CATALOGUE: dict[str, str] = {
         "с заявлением, а не установленный финансовый результат и не оценка риска."
     ),
     CLAIM_ZERO: "Заявлен нулевой объём, поэтому доля поддержки не определена.",
+    OPTICAL_QUALITY_SEPARATE: (
+        "Оптическое качество снимков показано отдельно и относится к наглядности "
+        "свидетельств. Оно не уменьшает число потенциальных единиц: облачность снимка "
+        "не меняет модельную оценку запаса биомассы."
+    ),
+    AREA_NOT_FULLY_COVERED: (
+        "Расчётная площадь меньше запрошенной. Непокрытая часть показана отдельно "
+        "и не заменяется нулевым запасом."
+    ),
+    RESEARCH_VARIANT: (
+        "Исследовательский вариант расчёта. Он показывает чувствительность результата "
+        "к допущениям и не заменяет основной расчёт по официальной базовой линии."
+    ),
+    PASSPORT_NEW_OBSERVATION: (
+        "Период или контур отличаются от предыдущей версии паспорта, поэтому это новое "
+        "наблюдение, а не пересчёт прежнего. Прежняя версия остаётся без изменений."
+    ),
+    PROVISIONAL_INPUT: (
+        "Пер-клеточные входные данные получены предварительным локальным извлечением "
+        "из официальных файлов data/, а не компонентом RS. После фиксации контракта RS "
+        "результат подлежит пересчёту на его выходе."
+    ),
 }
 
 
