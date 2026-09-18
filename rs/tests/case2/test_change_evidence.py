@@ -136,10 +136,11 @@ def test_the_pair_with_the_smallest_seasonal_gap_wins(mordovia_03):
 def test_a_large_seasonal_gap_is_reported_rather_than_hidden():
     """SYNTHETIC_TEST_ONLY: two stub scenes 100 days apart in the season."""
     class Stub:
-        def __init__(self, key, year, stamp, fraction=1.0):
+        def __init__(self, key, year, stamp, fraction=1.0, offset=-0.1):
             self.scene_key, self.year = key, year
             self.datetime_utc, self.usable_fraction = stamp, fraction
             self.pixels_in_request = 100
+            self.reflectance_offset_applied = offset
 
     before = Stub("A", 2019, "2019-05-01T00:00:00Z")
     after = Stub("B", 2024, "2024-08-09T00:00:00Z")
@@ -367,11 +368,29 @@ def test_a_change_covering_the_whole_plot_is_flagged_as_suspect(dataset):
 
 
 def test_a_pair_from_two_processing_baselines_is_flagged(dataset):
+    """Different processor versions are reported even when the offset matches."""
     analysis = analyse(dataset.geometries["RU_TVER_01"], 2019, 2024, dataset=dataset)
     note = analysis.change_evidence["scene_selection"]["radiometric_note"]
     assert note["before_baseline"] != note["after_baseline"]
-    assert note["before_offset"] != note["after_offset"]
+    assert note["same_offset_convention"], (
+        "selection should have preferred a pair on one offset convention")
+    assert note["before_offset"] == note["after_offset"]
     assert "processor difference" in note["warning"]
+    assert "large offset artefact does not apply" in note["warning"]
+
+
+def test_a_pair_that_straddles_the_offset_change_gets_the_severe_warning():
+    """SYNTHETIC_TEST_ONLY: forced pair across the 04.00 boundary."""
+    class Stub:
+        def __init__(self, baseline, offset):
+            self.processing_baseline = baseline
+            self.reflectance_offset_applied = offset
+
+    note = change_module._radiometric_check(
+        Stub("02.12", 0.0), Stub("05.10", -0.1))["radiometric_note"]
+    assert note["same_offset_convention"] is False
+    assert "not safe to read as change" in note["warning"]
+    assert "-0.86" in note["warning"]
 
 
 def test_a_plot_with_losses_and_no_cause_keeps_them_unknown(dataset):
