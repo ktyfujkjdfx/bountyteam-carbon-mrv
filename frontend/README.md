@@ -11,6 +11,28 @@ React 19 + TypeScript 5.9 (strict) + Vite 8, Leaflet 1.9 without remote tiles, V
 Playwright (system Microsoft Edge, no browser download). Node `24.19.0` (root `.nvmrc`).
 IBM Plex Sans / Plex Mono are bundled via `@fontsource` (OFL-1.1), so the offline `dist` loads no remote fonts.
 
+## Carbon Lens workspace (`/lens`, stage F1)
+
+Separate route for the Carbon Lens case; the P0 MRV dashboard stays on `/`. Open `http://127.0.0.1:5173/lens`
+in dev, `http://127.0.0.1:4173/lens` on the built `dist`, or `index.html#/lens` when the offline bundle is
+opened from a folder.
+
+| Zone | Content |
+|---|---|
+| Запрос | four AOI from `data/areas.csv`, drawn rectangle, GeoJSON import, official sub-request `CHECK_TRANSFER_01`, years 2019–2024, optional `claimed_units` labelled as user input |
+| Карта | contour from `data/areas.geojson`, zone markers, WGS84 cursor readout, scale, no remote tiles |
+| Краткий результат | Q with `null` and `0` kept apart, scenario value at 500/1500/4000 ₽, unsupported part of the claim, four independent badges |
+| Разбор расчёта | Eproj / Ebase / R, then UNC → Radj → reserve → rounding → Q, each step exposing its formula and inputs |
+| Покрытие | biomass CCI, baseline table and optical paired-valid as separate axes |
+| Зоны | area, dates, ΔC, contribution to E, cause status, source; no per-zone Q |
+| Паспорт | versions, hashes, source list with attribution, JSON download and integrity check |
+
+Data boundary: `src/lens/adapter.ts` is the only place that knows where results come from. F1 ships
+`createFixtureLensClient` over labelled fixtures — the conditional example printed in `doc/Постановка_задачи`
+(Q = 395) and `UNIT_TEST_VECTOR` logic vectors. G0 replaces the adapter implementation, not the screens.
+The UI never computes scientific values: it formats them, multiplies Q by a scenario price and shows the
+claim gap.
+
 ## Interface
 
 One map-first monitoring workspace (desktop-first, collapses to a single column ≤ 900 px):
@@ -54,7 +76,7 @@ npm run preview        # serve dist at http://127.0.0.1:4173
 | `gen:api` / `check:api` | `src/api/generated/openapi.ts` is regenerated from `contracts/openapi.yaml`, check fails on drift |
 | `lint` | ESLint strict TS + React hooks rules; literal `SIGNING` forbidden in `src/` |
 | `typecheck` | `strict`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess` |
-| `test` | 110 tests: status mapping vs schema enums, both adapters, polling, geometry, artifact pairing, components, unknown-enum resilience, root error boundary, golden-fixture flow |
+| `test` | 144 tests: status mapping vs schema enums, both adapters, polling, geometry, artifact pairing, components, unknown-enum resilience, root error boundary, golden-fixture flow, Carbon Lens adapter and workspace |
 | `build` + `check:dist` | offline `dist/` with relative paths, no remote hosts, no GeoTIFF |
 | `e2e` | full demo flow in a real browser + HTTP failure → manual offline fallback; `e2e/backend-integration.spec.ts` (opt-in) runs the real SPA against a live Backend incl. CORS |
 
