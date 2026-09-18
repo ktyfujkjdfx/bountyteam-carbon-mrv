@@ -3,7 +3,10 @@ import { expect, test, type Page } from '@playwright/test';
 const shots = process.env.E2E_SCREENSHOT_DIR;
 
 async function shot(page: Page, name: string) {
-  if (shots) await page.screenshot({ path: `${shots}/${name}.png`, fullPage: true });
+  if (!shots) return;
+  // A sticky top bar floats over the middle of a full-page capture; pin it for the frame only.
+  await page.addStyleTag({ content: '.topbar { position: static !important; }' });
+  await page.screenshot({ path: `${shots}/${name}.png`, fullPage: true });
 }
 
 async function openLens(page: Page) {

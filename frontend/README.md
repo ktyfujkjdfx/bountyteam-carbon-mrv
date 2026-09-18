@@ -11,27 +11,40 @@ React 19 + TypeScript 5.9 (strict) + Vite 8, Leaflet 1.9 without remote tiles, V
 Playwright (system Microsoft Edge, no browser download). Node `24.19.0` (root `.nvmrc`).
 IBM Plex Sans / Plex Mono are bundled via `@fontsource` (OFL-1.1), so the offline `dist` loads no remote fonts.
 
-## Carbon Lens workspace (`/lens`, stage F1)
+## Carbon Lens workspace (`/lens`)
 
 Separate route for the Carbon Lens case; the P0 MRV dashboard stays on `/`. Open `http://127.0.0.1:5173/lens`
 in dev, `http://127.0.0.1:4173/lens` on the built `dist`, or `index.html#/lens` when the offline bundle is
-opened from a folder.
+opened from a folder. Demo script: [DEMO_LENS.md](DEMO_LENS.md). Integration assumptions for G0:
+[docs/LENS_INTEGRATION.md](docs/LENS_INTEGRATION.md).
 
 | Zone | Content |
 |---|---|
 | Запрос | four AOI from `data/areas.csv`, drawn rectangle, GeoJSON import, official sub-request `CHECK_TRANSFER_01`, years 2019–2024, optional `claimed_units` labelled as user input |
-| Карта | contour from `data/areas.geojson`, zone markers, WGS84 cursor readout, scale, no remote tiles |
+| Карта | contour from `data/areas.geojson`, zone outlines, coverage-gap layer, WGS84 cursor readout, scale, no remote tiles |
+| Слои карты | per-layer availability with a reason — a layer the service cannot supply reads «нет данных», never an empty map |
 | Краткий результат | Q with `null` and `0` kept apart, scenario value at 500/1500/4000 ₽, unsupported part of the claim, four independent badges |
 | Разбор расчёта | Eproj / Ebase / R, then UNC → Radj → reserve → rounding → Q, each step exposing its formula and inputs |
 | Покрытие | biomass CCI, baseline table and optical paired-valid as separate axes |
-| Зоны | area, dates, ΔC, contribution to E, cause status, source; no per-zone Q |
-| Паспорт | versions, hashes, source list with attribution, JSON download and integrity check |
+| Наблюдения | Sentinel-2 scenes with cloud share and SCL validity, MODIS event rows with their uncertainty, baseline rows — all from `data/` |
+| Зоны | area, dates, ΔC, contribution to E, cause status, linked event record, source; no per-zone Q |
+| Сравнение | runs of the session side by side with the limits of the comparison; no ranking |
+| Паспорт | versions, hashes, sources with licences, JSON and HTML download, integrity check of a received file |
 
-Data boundary: `src/lens/adapter.ts` is the only place that knows where results come from. F1 ships
-`createFixtureLensClient` over labelled fixtures — the conditional example printed in `doc/Постановка_задачи`
-(Q = 395) and `UNIT_TEST_VECTOR` logic vectors. G0 replaces the adapter implementation, not the screens.
-The UI never computes scientific values: it formats them, multiplies Q by a scenario price and shows the
-claim gap.
+Data boundary: `src/lens/adapter.ts` defines the only interface the screens know. Territories, geometry,
+areas, the baseline table, scenes, fire events, coefficients, prices and the source registry are read from
+the official `data/` archive through `src/lens/data.ts`. Computed values (stock, E, R, uncertainty, Q) come
+from the adapter: either `createFixtureLensClient` over labelled sets — the conditional example printed in
+`doc/Постановка_задачи` (Q = 395) and `UNIT_TEST_VECTOR` logic vectors — or `createHttpLensClient` once G0
+is published. The UI never computes scientific values: it formats them, multiplies Q by a scenario price and
+shows the claim gap.
+
+| Lens mode | How | Data |
+|---|---|---|
+| Labelled set (default) | `VITE_LENS_API_MODE=fixture` or `?lensapi=fixture` | official `data/` plus the labelled result sets, offline |
+| Live service | `VITE_LENS_API_MODE=http` + `VITE_LENS_API_BASE_URL=<origin>/api/v2`, credential via `?token=` or the access panel | Backend v2; the credential is a runtime value and is never baked into `dist` |
+
+Failures of the live service are shown as errors; the labelled set is never substituted automatically.
 
 ## Interface
 
