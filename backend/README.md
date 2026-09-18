@@ -26,6 +26,22 @@ receipt, the expected decoded event and contract readback. Frontend reaches ever
 | `tools/seed.py`, `tools/import_bundle.py` | Plot seed command and the RS bundle import command |
 | `migrate.py`, `worker.py`, `serve.py` | `python -m backend.migrate`, `python -m backend.worker`, `python -m backend.serve` |
 | `tests/` | Role tests (unit, API, persistence, reconciliation, E2E) |
+| `app/v2/`, `lens_worker.py`, `tests/case2/` | Carbon Lens `/api/v2`, additive and separate from everything above |
+
+## Carbon Lens `/api/v2`
+
+The Lens is a second contract served beside the frozen one, not a change to it.
+`create_app` still builds exactly the v1 routes and `/openapi.json` is still byte-for-byte
+`contracts/openapi.yaml`; `backend/serve.py` composes the two applications and routes
+`/api/v2` to the Lens one. `python -m backend.serve --no-lens` serves only v1.
+
+The Lens needs no chain, no deployment and no private key. Its schemas live in
+`contracts/v2/`, its examples in `fixtures/v2/`, its tables come from migration 2, and its
+worker runs under its own lease as `python -m backend.lens_worker`.
+
+`docs/case2/BACKEND_MVP.md` is the integration document: endpoints, what is real and what
+is a labelled stand-in, and the order in which the raster core and the carbon engine are
+connected. `docs/case2/G0_CONTRACT.md` is the shared contract itself.
 
 ## Setup
 
@@ -231,3 +247,7 @@ The runner:
   until reconciled. It is never promoted to `CONFIRMED`, and it is not auto-failed either.
 - `config/scenarios.json` has `real_scenes_configured: false`. Real RS bundles need that
   configuration update from the RS owner and the Team Lead.
+- No Carbon Lens result on this branch is a measurement: `rs/case2/` and `carbon/` are not
+  merged here, so a labelled stand-in answers and every response says so in
+  `run.dataset_origin`, in `fixture` and in its limitations.
+- The Lens has no chain anchor. Every proof reports `anchor.status: NOT_REQUESTED`.

@@ -144,10 +144,24 @@ def frozen_openapi_v2() -> dict:
 
 def create_lens_app(lens: LensContext) -> FastAPI:
     """The Lens application. It is mounted under /api/v2 and owns nothing above it."""
+    # The document is served by a route of our own rather than by the generated one:
+    # under a mount FastAPI rewrites `servers` to describe where it was mounted, and the
+    # published contract would then no longer be byte-for-byte what the repository holds.
     app = FastAPI(title="BountyTeam Carbon Lens", version="2.0.0",
-                  openapi_url="/openapi.json", docs_url="/docs", redoc_url=None)
+                  openapi_url=None, docs_url=None, redoc_url=None)
     app.state.lens = lens
     app.openapi = frozen_openapi_v2  # type: ignore[method-assign]
+
+    @app.get("/openapi.json", include_in_schema=False)
+    def openapi_json():
+        return frozen_openapi_v2()
+
+    @app.get("/docs", include_in_schema=False)
+    def docs():
+        from fastapi.openapi.docs import get_swagger_ui_html
+
+        return get_swagger_ui_html(openapi_url="/api/v2/openapi.json",
+                                   title="BountyTeam Carbon Lens")
 
     @app.middleware("http")
     async def request_context(request: Request, call_next):

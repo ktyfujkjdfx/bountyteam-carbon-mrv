@@ -393,9 +393,13 @@ def content_view(result: dict) -> dict:
     """The deterministic scientific content: no ids, no run time, no URLs."""
     identity_block = dict(result["identity"])
     identity_block.pop("analysis_id", None)
+    # How the caller addressed the contour is not part of what was measured: naming a
+    # supplied area is a shortcut for pasting its polygon, so both must hash the same.
+    request_block = dict(result["request"])
+    request_block.pop("aoi_id", None)
     return {
         "identity": identity_block,
-        "request": result["request"],
+        "request": request_block,
         "calculation_status": result["calculation_status"],
         "evidence_status": result["evidence_status"],
         "areas": result["areas"],
