@@ -220,3 +220,71 @@ def test_report_json_is_serialisable_and_finite(built):
     _, _, report, _ = built
     text = json.dumps(report, ensure_ascii=False, allow_nan=False)
     assert "NaN" not in text and "Infinity" not in text
+
+
+def test_the_page_embeds_its_chart_and_outline_as_inline_svg(built):
+    """The roadmap asks for an embedded chart; it must not come from a library or a CDN."""
+    _, _, report, page = built
+    assert page.count('class="chart"') == 1
+    assert page.count('class="map"') == 1
+    assert page.count("<polyline") == 1
+    assert page.count("<circle") == len(report["timeline"])
+    assert "<svg" in page and "</svg>" in page
+
+
+def test_the_chart_is_drawn_from_the_printed_timeline(built):
+    """A picture that disagrees with the table would be worse than no picture."""
+    from carbon.report import _timeline_chart
+
+    chart = _timeline_chart(report_timeline := built[2]["timeline"])
+    for point in report_timeline:
+        assert f"{point['year']}: {point['mean_tc_ha']:.3f}" in chart
+
+
+def test_a_flat_series_does_not_divide_by_zero():
+    from carbon.report import _timeline_chart
+
+    flat = [
+        {"year": year, "mean_tc_ha": 42.0, "total_tc": 1.0,
+         "mean_agb_t_ha": 1.0, "cells": 1, "covered_ha": 1.0}
+        for year in (2019, 2020, 2021)
+    ]
+    chart = _timeline_chart(flat)
+    assert "<polyline" in chart
+    assert "nan" not in chart.lower() and "inf" not in chart.lower()
+
+
+def test_a_short_series_says_so_instead_of_drawing_nonsense():
+    from carbon.report import _timeline_chart
+
+    assert "<svg" not in _timeline_chart([])
+    assert "слишком короткий" in _timeline_chart([])
+
+
+def test_an_unusable_geometry_draws_nothing_rather_than_guessing():
+    from carbon.report import _geometry_outline
+
+    assert _geometry_outline(None) == ""
+    assert _geometry_outline({"type": "Point", "coordinates": [0.0, 0.0]}) == ""
+    assert _geometry_outline({"type": "Polygon", "coordinates": [[[0, 0], [1, 1]]]}) == ""
+
+
+def test_the_outline_cannot_carry_markup_from_a_crafted_geometry():
+    """Coordinates go through float(), so a string cannot reach the page as markup."""
+    from carbon.report import _geometry_outline
+
+    with pytest.raises((ValueError, TypeError)):
+        _geometry_outline({
+            "type": "Polygon",
+            "coordinates": [[['"><script>', 0], [1, 1], [1, 0], ['"><script>', 0]]],
+        })
+
+
+def test_the_passport_carries_the_geometry_next_to_its_hash(built):
+    """A hash nobody can recompute proves nothing, so the geometry travels with it."""
+    _, passport, report, _ = built
+    from carbon import canonical
+
+    geometry = report["request"]["geometry"]
+    assert canonical.content_hash(geometry) == report["request"]["geometry_hash"]
+    assert passport.content["request"]["geometry"] == geometry

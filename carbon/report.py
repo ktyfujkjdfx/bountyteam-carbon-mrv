@@ -124,6 +124,95 @@ def _waterfall(report: dict[str, Any]) -> str:
     ]) + "</table>"
 
 
+def _timeline_chart(points: list[dict[str, Any]], *, width: int = 620, height: int = 200) -> str:
+    """Inline SVG of the annual stock curve: no script, no external resource, no library.
+
+    The chart is drawn from the same timeline the table prints, so it cannot show a
+    different curve. A flat series still gets a readable axis instead of a division by
+    zero, and the years are printed so the picture is never the only source of a value.
+    """
+    if len(points) < 2:
+        return "<p>Годовой ряд слишком короткий для графика.</p>"
+
+    left, right, top, bottom = 58, 12, 14, 30
+    plot_width = width - left - right
+    plot_height = height - top - bottom
+    values = [float(point["mean_tc_ha"]) for point in points]
+    years = [int(point["year"]) for point in points]
+    low, high = min(values), max(values)
+    if high - low < 1e-9:
+        low, high = low - 1.0, high + 1.0
+
+    def x_of(index: int) -> float:
+        return left + plot_width * index / (len(points) - 1)
+
+    def y_of(value: float) -> float:
+        return top + plot_height * (high - value) / (high - low)
+
+    line = " ".join(f"{x_of(i):.1f},{y_of(value):.1f}" for i, value in enumerate(values))
+    dots = "".join(
+        f'<circle cx="{x_of(i):.1f}" cy="{y_of(value):.1f}" r="2.5" class="dot">'
+        f"<title>{years[i]}: {value:.3f} т C/га</title></circle>"
+        for i, value in enumerate(values)
+    )
+    ticks = "".join(
+        f'<text x="{x_of(i):.1f}" y="{height - 10}" class="tick" text-anchor="middle">'
+        f"{years[i]}</text>"
+        for i in range(0, len(points), max(1, len(points) // 6))
+    )
+    grid = "".join(
+        f'<line x1="{left}" y1="{y_of(value):.1f}" x2="{width - right}" '
+        f'y2="{y_of(value):.1f}" class="grid"></line>'
+        f'<text x="{left - 6}" y="{y_of(value) + 4:.1f}" class="tick" text-anchor="end">'
+        f"{value:.1f}</text>"
+        for value in (low, (low + high) / 2, high)
+    )
+    return (
+        f'<svg class="chart" viewBox="0 0 {width} {height}" role="img" '
+        f'aria-label="Средний запас углерода по годам, т C/га">'
+        f"{grid}{ticks}"
+        f'<polyline points="{line}" class="curve"></polyline>{dots}</svg>'
+    )
+
+
+def _geometry_outline(geometry: dict[str, Any] | None, *, size: int = 180) -> str:
+    """Inline SVG outline of the requested polygon, drawn from its own coordinates."""
+    if not isinstance(geometry, dict):
+        return ""
+    kind = geometry.get("type")
+    if kind == "Polygon":
+        rings = geometry.get("coordinates") or []
+    elif kind == "MultiPolygon":
+        rings = [ring for polygon in geometry.get("coordinates") or [] for ring in polygon]
+    else:
+        return ""
+    points = [point for ring in rings for point in ring]
+    if len(points) < 3:
+        return ""
+
+    longitudes = [float(point[0]) for point in points]
+    latitudes = [float(point[1]) for point in points]
+    west, east = min(longitudes), max(longitudes)
+    south, north = min(latitudes), max(latitudes)
+    span = max(east - west, north - south, 1e-9)
+    pad = 8
+
+    def project(point: list[float]) -> str:
+        x = pad + (size - 2 * pad) * (float(point[0]) - west) / span
+        y = pad + (size - 2 * pad) * (north - float(point[1])) / span
+        return f"{x:.1f},{y:.1f}"
+
+    shapes = "".join(
+        f'<polygon points="{" ".join(project(point) for point in ring)}" class="aoi"></polygon>'
+        for ring in rings
+        if len(ring) >= 3
+    )
+    return (
+        f'<svg class="map" viewBox="0 0 {size} {size}" role="img" '
+        f'aria-label="Контур запрошенного участка">{shapes}</svg>'
+    )
+
+
 def render_html(report: dict[str, Any]) -> str:
     """A standalone page: no script, no external resource, every user string escaped."""
     request = report["request"]
@@ -133,6 +222,9 @@ def render_html(report: dict[str, Any]) -> str:
     claim = report["claim"]
     area = report["area"] or {}
     optical = report["optical_quality"]
+
+    outline = _geometry_outline(request.get("geometry"))
+    chart = _timeline_chart(report["timeline"])
 
     timeline_rows = "".join(
         "<tr>"
@@ -217,6 +309,13 @@ td, th {{ font-variant-numeric: tabular-nums; }}
 .hash {{ font-family: ui-monospace, monospace; font-size: .8rem; word-break: break-all; }}
 .warn {{ color: var(--warn); font-weight: 500; }}
 pre {{ background: rgba(127,127,127,.12); padding: .6rem; overflow-x: auto; }}
+svg.chart {{ width: 100%; max-width: 40rem; height: auto; }}
+svg.map {{ width: 11rem; height: auto; float: right; margin: 0 0 .5rem 1rem; }}
+.curve {{ fill: none; stroke: currentColor; stroke-width: 2; }}
+.dot {{ fill: currentColor; }}
+.grid {{ stroke: var(--line); stroke-width: 1; }}
+.tick {{ font-size: 10px; fill: currentColor; opacity: .75; }}
+.aoi {{ fill: rgba(127,127,127,.25); stroke: currentColor; stroke-width: 1.5; }}
 footer {{ margin-top: 2.5rem; font-size: .85rem; }}
 </style>
 </head>
@@ -228,6 +327,7 @@ method_version: {_escape(report['method_version'])}</p>
 {provisional}
 
 <h2>Запрос и площадь</h2>
+{outline}
 <table class="kv">{_rows([
     ("Период", f"{_escape(request['year_start'])}–{_escape(request['year_end'])}"),
     ("Учитываемый пул", _escape(request["pool"])),
@@ -245,6 +345,8 @@ method_version: {_escape(report['method_version'])}</p>
 {optical_block}
 
 <h2>Годовой ряд запаса</h2>
+<p>Средний запас углерода, т C/га. График построен из той же таблицы, что напечатана ниже.</p>
+{chart}
 <table><thead><tr><th>Год</th><th>AGB, т/га</th><th>Углерод, т C/га</th>
 <th>Запас, т C</th><th>Покрыто, га</th></tr></thead><tbody>{timeline_rows}</tbody></table>
 

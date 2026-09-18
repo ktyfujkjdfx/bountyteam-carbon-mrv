@@ -200,6 +200,8 @@ def build_content(
         "previous_content_hash": previous_content_hash,
         "request": {
             "request_id": request.request_id,
+            # the geometry travels with its hash: a hash nobody can recompute proves nothing
+            "geometry": request.geometry,
             "geometry_hash": analysis.geometry_hash,
             "year_start": request.year_start,
             "year_end": request.year_end,
