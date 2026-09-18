@@ -164,16 +164,28 @@ def _radiometric_check(before_scene, after_scene):
     """
     if before_scene.processing_baseline == after_scene.processing_baseline:
         return {}
+    same_convention = (before_scene.reflectance_offset_applied
+                       == after_scene.reflectance_offset_applied)
+    if same_convention:
+        warning = (
+            "the two scenes come from different processing baselines on the "
+            "same radiometric offset convention; part of any uniform index "
+            "difference is a processor difference rather than a change on the "
+            "ground, though the large offset artefact does not apply")
+    else:
+        warning = (
+            "the two scenes straddle the 04.00 offset change and no pair on a "
+            "single convention was available; on a control plot this alone "
+            "produces a median dNBR near -0.86 and flags the whole area as "
+            "regrowth, so this comparison is not safe to read as change")
     return {
         "radiometric_note": {
             "before_baseline": before_scene.processing_baseline,
             "after_baseline": after_scene.processing_baseline,
             "before_offset": before_scene.reflectance_offset_applied,
             "after_offset": after_scene.reflectance_offset_applied,
-            "warning": (
-                "the two scenes come from different processing baselines; part "
-                "of any uniform index difference is a processor difference "
-                "rather than a change on the ground"),
+            "same_offset_convention": same_convention,
+            "warning": warning,
         }
     }
 

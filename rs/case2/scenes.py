@@ -9,11 +9,18 @@ method. In order:
    classes. This is what removes the September 2021 scene over Mordovia, where
    roughly 2% of the crop is usable; it is removed for being unobservable, not
    for being inconvenient.
-3. Among the survivors, the pair with the smallest difference in day of year
+3. A pair whose two scenes share the radiometric offset convention beats one
+   that does not. This rule is not a preference, it is a measurement: on the
+   control plot, pairs mixing a pre-04.00 scene with a post-04.00 one give a
+   median dNBR of about -0.86 and flag the entire forest as regrowth, while
+   pairs on one convention give about -0.25 over the same ground and the same
+   years. Mixing conventions is responsible for roughly three quarters of that
+   apparent change. See `research.py`.
+4. Among the survivors, the pair with the smallest difference in day of year
    wins. Two summer scenes a few days apart in the seasonal cycle are
    comparable; a July scene against a September one is not, and the difference
    in phenology would be read as a change in vegetation.
-4. Ties break on the larger paired-valid area, then on scene key, so the same
+5. Ties break on the larger paired-valid area, then on scene key, so the same
    request always selects the same pair.
 
 Every rejected scene is reported with the reason, so a reader can see what was
@@ -28,7 +35,8 @@ SEASONAL_GAP_WARN_DAYS = 30
 
 SELECTION_RULE = (
     "candidates limited to the requested years; scenes seeing less than "
-    f"{USABLE_FLOOR:.0%} of the request on usable classes are rejected; among "
+    f"{USABLE_FLOOR:.0%} of the request on usable classes are rejected; a pair "
+    "sharing the radiometric offset convention beats one that does not; among "
     "the rest the pair with the smallest day-of-year difference wins, ties "
     "broken by larger paired-valid area then by scene key"
 )
@@ -78,7 +86,9 @@ def select(scenes, year_start, year_end, paired_area, floor=USABLE_FLOOR):
             gap = abs(day_of_year(before.datetime_utc)
                       - day_of_year(after.datetime_utc))
             paired = paired_area(before.scene_key, after.scene_key)
-            key = (gap, -paired, before.scene_key, after.scene_key)
+            mixed = (before.reflectance_offset_applied
+                     != after.reflectance_offset_applied)
+            key = (mixed, gap, -paired, before.scene_key, after.scene_key)
             if best is None or key < best[0]:
                 best = (key, before, after)
 
