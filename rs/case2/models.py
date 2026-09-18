@@ -169,3 +169,10 @@ class RasterAnalysis:
     sources: Sequence[SourceFile]
     parameters: Mapping[str, object]
     limitations: Sequence[str] = field(default_factory=tuple)
+    # Change evidence: scene pair, observation quality, zones, their share of
+    # the stock change and the reconciliation. None when optical reading was
+    # switched off, which is not the same as "no change was found".
+    change_evidence: Mapping[str, object] | None = None
+    # The raster stacks the evidence was built from. Kept out of the payload
+    # deliberately: artifacts are written from these, results are not.
+    raw_change: object | None = None

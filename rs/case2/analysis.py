@@ -67,6 +67,11 @@ def analyse(geometry, year_start, year_end, *, dataset=None, include_optical=Tru
     scenes, paired, optical_ha, scene_sources = _optical(
         data, request, parents, change_years, biomass_ha, include_optical)
 
+    raw_change, change_evidence, change_sources = _change_evidence(
+        data, request, parents, change_years, scenes, cells, change.delta_tc,
+        include_optical)
+    scene_sources.extend(change_sources)
+
     missing_ha = max(0.0, request_area_ha - biomass_ha)
     coverage = Coverage(
         requested_ha=request_area_ha,
@@ -107,7 +112,9 @@ def analyse(geometry, year_start, year_end, *, dataset=None, include_optical=Tru
             "method_version": METHOD_VERSION,
         },
         limitations=_limitations(coverage, paired, timeline_years, cells,
-                                 change_years, include_optical),
+                                 change_years, include_optical, change_evidence),
+        change_evidence=change_evidence,
+        raw_change=raw_change,
     )
 
 
@@ -162,6 +169,90 @@ def _optical(data, request, parents, change_years, biomass_ha, include_optical):
     return tuple(scenes), paired, optical_ha, sources
 
 
+def _change_evidence(data, request, parents, change_years, scenes, cells,
+                     total_delta_tc, include_optical):
+    """Zones, their evidence and their share of the stock change.
+
+    Only the first parent is analysed for change in this stage: a request that
+    spans two source areas has two grids and two scene pairs, and merging zones
+    across them needs a partition rule that does not exist yet. The limitation
+    is reported rather than papered over.
+    """
+    if not include_optical:
+        return None, None, []
+    from rs.case2 import change as change_module
+
+    by_key = {scene.scene_key: scene for scene in scenes}
+    raw = change_module.analyse_change(
+        data, request, parents[0], change_years[0], change_years[1], by_key)
+    if not raw.get("available"):
+        return None, {"available": False, "reason": raw.get("reason"),
+                      "selection": raw.get("selection")}, []
+
+    contribution = change_module.attribute(
+        raw, cells, request, change_years[0], change_years[1], total_delta_tc)
+    raw["contribution"] = contribution
+    raw["zones_geojson"] = zones_module_geojson(raw, contribution)
+
+    sources = [_source(data, f"{parents[0]}/GFC_2025_v1_13.tif", "gfc")]
+    if raw["fire"]["available"]:
+        for detection in raw["fire"]["detections"]:
+            stem = detection["granule"]
+            for suffix in ("Burn_Date", "QA", "Burn_Date_Uncertainty"):
+                sources.append(_source(
+                    data, f"{parents[0]}/MODIS/{stem}_{suffix}.tif", "modis_burn"))
+
+    evidence = {
+        "available": True,
+        "analysed_parent": parents[0],
+        "pair": raw["pair"],
+        "scene_selection": raw["selection"],
+        "observation_quality": raw["quality"],
+        "indices": raw["indices"],
+        "gfc": raw["gfc"],
+        "fire": {key: value for key, value in raw["fire"].items()
+                 if key != "burned"},
+        "zones": change_module.zone_payload(raw, contribution),
+        "zone_summary": _zone_summary(raw, contribution),
+        "reconciliation": contribution["reconciliation"],
+        "sensitivity": change_module.sensitivity(raw),
+        "method_note": zones_method_note(),
+    }
+    return raw, evidence, sources
+
+
+def zones_module_geojson(raw, contribution):
+    from rs.case2 import zones
+
+    return zones.to_geojson(raw["zones"], raw["classifications"], contribution,
+                            raw["grid"].crs)
+
+
+def zones_method_note():
+    from rs.case2 import zones
+
+    return zones.METHOD_NOTE
+
+
+def _zone_summary(raw, contribution):
+    from rs.case2 import zones
+
+    counts = {}
+    for classification in raw["classifications"]:
+        key = f"{classification['fact']}/{classification['cause']}"
+        counts[key] = counts.get(key, 0) + 1
+    detected_ha = sum(zone["pixel_count"] for zone in raw["zones"]) * zones.PIXEL_AREA_HA
+    return {
+        "zone_count": len(raw["zones"]),
+        "detected_area_ha": round(detected_ha, 6),
+        "by_fact_and_cause": dict(sorted(counts.items())),
+        "dropped_below_mmu": raw["dropped_below_mmu"],
+        "dropped_below_mmu_ha": round(raw["dropped_below_mmu_ha"], 6),
+        "minimum_mapping_unit_ha": zones.MIN_ZONE_PIXELS * zones.PIXEL_AREA_HA,
+        "morphology": "none applied; the minimum mapping unit is the only filter",
+    }
+
+
 def _sources(data, parents, years):
     files = []
     for aoi_id in parents:
@@ -183,7 +274,8 @@ def _source(data, relative, role):
     )
 
 
-def _limitations(coverage, paired, timeline_years, cells, change_years, include_optical):
+def _limitations(coverage, paired, timeline_years, cells, change_years,
+                 include_optical, change_evidence=None):
     notes = []
     if not coverage.complete:
         notes.append(
@@ -215,4 +307,29 @@ def _limitations(coverage, paired, timeline_years, cells, change_years, include_
     notes.append(
         f"timeline covers {timeline_years[0]}-{timeline_years[-1]} on the support "
         f"of the requested period, so every year is comparable to every other")
+    if change_evidence and change_evidence.get("available"):
+        if not change_evidence["fire"]["available"]:
+            notes.append(change_evidence["fire"]["reason"])
+        disturbances = [zone for zone in change_evidence["zones"]
+                        if zone["fact"] != "RECOVERY_INDICATION"]
+        unknown = sum(1 for zone in disturbances if zone["cause"] == "UNKNOWN")
+        if unknown:
+            notes.append(
+                f"{unknown} of {len(disturbances)} disturbance zones have no "
+                f"established cause and are reported as UNKNOWN")
+        if any(zone["fact"] == "RECOVERY_INDICATION"
+               for zone in change_evidence["zones"]):
+            notes.append(
+                "recovery zones are a spectral indication of regrowth, not "
+                "evidence that carbon has been recovered")
+        selection = change_evidence["scene_selection"]
+        for key in ("seasonal_warning", "extent_warning"):
+            if selection.get(key):
+                notes.append(selection[key])
+        if selection.get("radiometric_note"):
+            notes.append(selection["radiometric_note"]["warning"])
+        notes.append(change_evidence["method_note"])
+    elif change_evidence is not None:
+        notes.append(
+            f"change zones were not produced: {change_evidence.get('reason')}")
     return tuple(notes)

@@ -11,6 +11,7 @@ import json
 import sys
 from pathlib import Path
 
+from rs.case2 import artifacts
 from rs.case2 import manifest as manifest_module
 from rs.case2 import payload as payload_module
 from rs.case2.analysis import analyse
@@ -53,6 +54,13 @@ def resolve_geometry(args, dataset):
         return json.load(handle)
 
 
+def _artifact_prefix(payload):
+    """Namespace artifact ids by request so two results can share one store."""
+    request = payload["request"]
+    return (f"{'+'.join(request['parents'])}:"
+            f"{request['year_start']}-{request['year_end']}")
+
+
 def run(argv=None):
     args = build_parser().parse_args(argv)
     dataset = Dataset(args.data_root)
@@ -67,12 +75,20 @@ def run(argv=None):
 
     payload = payload_module.analysis_payload(analysis)
     cells = payload_module.cells_payload(analysis)
-    manifest = manifest_module.build(analysis, payload)
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    prefix = _artifact_prefix(payload)
+    records = artifacts.write_cell_artifacts(
+        out, prefix, cells,
+        analysis.grids[f"cci_biomass:{analysis.parents[0]}"])
+    if analysis.raw_change is not None:
+        records.extend(artifacts.write_change_artifacts(
+            out, prefix, analysis.raw_change, analysis.raw_change["grid"], out))
+    payload["artifacts"] = records
+
+    manifest = manifest_module.build(analysis, payload)
     write_json(out / OUTPUT_ANALYSIS, payload)
-    write_json(out / OUTPUT_CELLS, cells)
     write_json(out / OUTPUT_MANIFEST, manifest)
 
     if not args.quiet:

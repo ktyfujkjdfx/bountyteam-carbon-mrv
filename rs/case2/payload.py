@@ -140,6 +140,7 @@ def analysis_payload(analysis):
                 }
             ),
         },
+        "change_evidence": _round(analysis.change_evidence),
         "grids": {name: grid_payload(grid)
                   for name, grid in sorted(analysis.grids.items())},
         "parameters": _round(dict(sorted(analysis.parameters.items()))),
