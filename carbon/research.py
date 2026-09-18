@@ -181,18 +181,19 @@ def research_table(
     return tuple(rows)
 
 
-def decided_by_assumptions(rows: tuple[ResearchRow, ...]) -> tuple[str, ...]:
-    """Requests whose answer changes across the grid, under the official baseline only.
+def decided_by_assumptions(
+    rows: tuple[ResearchRow, ...], *, baseline_variant: str = BASELINE_OFFICIAL
+) -> tuple[str, ...]:
+    """Requests whose answer changes across the assumption grid for one baseline.
 
-    A request listed here is one where the reported Q depends on a signed assumption
-    rather than on the data alone. That is a limitation to state, not a knob to turn.
+    A request listed here is one where Q depends on a signed assumption rather than on
+    the data alone. That is a limitation to state, not a knob to turn until the answer
+    is convenient.
     """
-    official = [row for row in rows if row.baseline_variant == BASELINE_OFFICIAL]
+    selected = [row for row in rows if row.baseline_variant == baseline_variant]
     decided: list[str] = []
-    for request_id in dict.fromkeys(row.request_id for row in official):
-        answers = {
-            row.units for row in official if row.request_id == request_id
-        }
+    for request_id in dict.fromkeys(row.request_id for row in selected):
+        answers = {row.units for row in selected if row.request_id == request_id}
         if len(answers) > 1:
             decided.append(request_id)
     return tuple(decided)

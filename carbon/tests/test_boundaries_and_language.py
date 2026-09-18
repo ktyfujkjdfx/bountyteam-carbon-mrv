@@ -21,6 +21,8 @@ FORBIDDEN_IMPORT_ROOTS = (
     "requests", "httpx", "aiohttp", "urllib3",
     "sqlalchemy", "psycopg", "sqlite3", "django", "flask",
     "backend", "frontend", "rs",
+    # raster and projection work belongs to RS; the engine receives per-cell numbers
+    "rasterio", "pyproj", "shapely", "gdal", "osgeo",
 )
 
 # Wording that would claim more than the case rules establish.
@@ -104,3 +106,40 @@ def test_results_are_typed_and_serialisable_without_a_service_layer():
     assert UnitsResult.__annotations__["units"] == "int | None"
     assert ClaimResult.__annotations__["supported_share"] == "float | None"
     assert isinstance(DEFAULT_PARAMETERS.prices_rub, tuple)
+
+
+def test_the_engine_does_not_import_its_own_test_fixtures():
+    """The fixture builder reads rasters; it must stay a test tool, outside the package."""
+    for module in ENGINE_MODULES:
+        roots = imported_roots(module)
+        assert "carbon.tests" not in roots
+        assert "build_cells" not in roots
+
+
+def test_the_fixture_builder_lives_outside_the_engine():
+    package = Path(__file__).resolve().parents[1]
+    assert not (package / "build_cells.py").exists()
+    assert (package / "tests" / "fixtures" / "build_cells.py").is_file()
+
+
+@pytest.mark.parametrize("request_id", ["RU_TVER_01", "RU_MORDOVIA_03", "CHECK_TRANSFER_01"])
+def test_the_published_passport_and_page_avoid_unsupported_wordings(request_id, case):
+    """Everything a reader downloads is held to the same wording rule as the code."""
+    from carbon import build_passport, build_report, render_html
+
+    _, _, analysis, provenance = case(request_id)
+    passport = build_passport(analysis, provenance=provenance)
+    report = build_report(
+        analysis, passport=passport, created_at="2026-09-19T00:00:00Z", run_id="lint",
+    )
+    page = render_html(report).lower()
+    document = json.dumps(passport.content, ensure_ascii=False).lower()
+
+    # the source catalogue is quoted verbatim, so only our own prose is checked here
+    quoted = {
+        source["limitations"].lower() for source in provenance["sources"]
+    } | {source["required_attribution"].lower() for source in provenance["sources"]}
+    for surface in (page, document):
+        for phrase in FORBIDDEN_WORDINGS:
+            if phrase in surface:
+                assert any(phrase in text for text in quoted), phrase

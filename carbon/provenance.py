@@ -23,6 +23,10 @@ FILE_CATALOG_CSV = DATA_ROOT / "file_catalog.csv"
 SOURCES_CSV = DATA_ROOT / "sources.csv"
 AREAS_CSV = DATA_ROOT / "areas.csv"
 
+# Every result depends on these two tables, whatever rasters the request touched, so
+# they are checksummed into the provenance of every passport.
+METHODOLOGY_FILES = ("methodology/parameters.csv", "methodology/baseline.csv")
+
 CHECKSUM_OK = "MATCHES_CATALOGUE"
 CHECKSUM_MISMATCH = "DIFFERS_FROM_CATALOGUE"
 CHECKSUM_MISSING = "NOT_IN_CATALOGUE"
@@ -171,7 +175,8 @@ def build_provenance(
     """Provenance block of the passport: files, their digests, products and licences."""
     table = load_file_catalogue() if catalogue is None else catalogue
     catalogue_sources = load_sources() if sources is None else sources
-    checks = verify_files(relative_paths, catalogue=table, data_root=data_root)
+    requested = list(dict.fromkeys([*relative_paths, *METHODOLOGY_FILES]))
+    checks = verify_files(requested, catalogue=table, data_root=data_root)
 
     used_source_ids: list[str] = []
     files = []
