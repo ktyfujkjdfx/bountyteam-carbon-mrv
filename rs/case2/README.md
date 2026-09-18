@@ -1,7 +1,8 @@
-# Carbon Lens raster core (RS-1)
+# Carbon Lens raster core
 
-Turns a WGS84 contour and a pair of years into carbon stock, its change, the
-coverage that result rests on, and the per-cell layer the carbon engine needs.
+Turns a WGS84 contour and a pair of years into carbon stock, its change, where
+the change is and what supports it, the coverage the result rests on, and the
+per-cell layer the carbon engine needs.
 
 Inputs come only from `data/`, the set supplied by the organizers. Nothing here
 computes a baseline, an uncertainty interval, potential units or an investment
@@ -15,6 +16,8 @@ From the repository root:
 ```bash
 python -m rs.case2 --aoi RU_TVER_01      --start 2019 --end 2024 --out runs/tver
 python -m rs.case2 --geometry plot.geojson --start 2020 --end 2024 --out runs/plot
+python -m rs.case2.bench      --out runs/benchmark.json
+python -m rs.case2.research   --out runs/research
 ```
 
 Naming a supplied AOI is a shortcut for pasting its polygon. A contour drawn by
@@ -78,11 +81,85 @@ optical coverage answer different questions. A clouded scene says nothing about
 whether the biomass map covers the plot, and merging them into a single quality
 score would hide that.
 
+## Change zones
+
+Zones are drawn on the paired-valid part of the 20 m Sentinel grid, from three
+independent products: the burn and greenness index differences, the Global
+Forest Change loss year, and - where it was supplied - the MODIS burn date.
+Thresholds are fixed constants (dNBR 0.27, the Key & Benson class boundary;
+dNDVI 0.20; recovery at -0.10), a one hectare minimum mapping unit is the only
+filter, and a sensitivity table shows what other choices would have selected.
+None of it is tuned per request.
+
+**Fact and cause are separate properties.** `TREE_COVER_LOSS` means the
+loss-year product flags most of the zone. `FIRE_SUPPORTED` means a trusted
+MODIS burn date covers most of it, where QA bits 0 and 1 are set. With no such
+evidence the cause is `UNKNOWN`, and where the burn product was not supplied at
+all the reason says so - an absent product is not an absence of fire.
+`RECOVERY_INDICATION` is a regrowth signal, not evidence of recovered carbon.
+
+**Contributions reconcile.** Each zone's share of the stock change comes from
+its geodesic overlap with the CCI cells, and zone shares plus the remainder
+outside every zone add back to the same total, checked against a stated
+tolerance. They are never added to a separately computed fire emission, which
+would count one loss twice.
+
+**Detection resolution is not carbon resolution.** Zones are 20 m outlines;
+their carbon comes from cells about 100 m across, assuming the change is spread
+evenly inside each cell. That assumption ships with every result.
+
+### Two warnings the data earned
+
+Running this on the control plot produced a change zone across 99% of it, which
+no forest growth explains. The cause turned out to be radiometric: the two
+scenes came from either side of the processing baseline 04.00 offset change.
+Measured on every eligible pair, mixing conventions gives a median dNBR near
+-0.86 and flags the whole control forest as regrowth, while pairs on one
+convention give about -0.25 over the same ground and years.
+
+Two things follow, both implemented. Scene selection now prefers a pair sharing
+the offset convention, ahead of the seasonal-gap rule. And the result carries
+an explicit warning when zones cover most of the request, because a change that
+uniform is more often a difference between two observations than a disturbance.
+
+The residual matters too: even matched pairs give -0.25 on a control plot over
+five years, so a multi-year dNBR is not a reliable absolute measure of recovery.
+The disturbance signal is sturdier - every pair over the burned plot shows a
+loss, between +0.09 and +0.26 - so detection survives the scene choice even
+where the absolute level does not.
+
+## Retrieval from the open source
+
+`rs.case2.retrieve` fetches from Earth Search by geometry and date and reads a
+real window of a real asset, not just the catalogue JSON. It exists to satisfy
+the case requirement and to check our handling; it never substitutes for
+`data/`, and no analysis reads it.
+
+Retrieving the same item the supplied crop came from and applying the STAC
+scale and offset reproduces the supplied values to 1.5e-8 - float32 rounding.
+That is the version and compatibility check: same product, same version, our
+own scaling, their numbers.
+
+Three rules keep it honest. A cache miss with the network disabled is an error,
+never a local read presented as an acquisition. Hrefs are recorded without
+their query string and a URL carrying signing parameters is refused, so no
+temporary token reaches a manifest. And item selection is explicit, because
+Earth Search serves the same acquisition twice - at baseline 03.01 with offset
+0 and at 05.00 with offset -0.1 - and taking the first result would silently
+produce data that does not match the reference.
+
 ## Outputs
 
 `analysis.json` carries the request, the stock change, a 2015-2024 timeline on
-the requested period's support, the three coverages, per-scene optical quality
+the requested period's support, the three coverages, per-scene optical quality,
+the change evidence with its zones and reconciliation, the artifact records,
 and the limitations that apply to this particular result.
+
+`zones.geojson`, `before.png`, `after.png`, `dnbr_preview.png`,
+`paired_valid_mask.png` and `zone_mask.png` are the change artifacts. Each is
+listed in `analysis.json` with its SHA-256, its bounds in both the native grid
+and WGS84, its resolution and its unit, under an id namespaced by request. The
+records carry an API route, never a path from the machine that produced them.
 
 `cells.geojson` is the native CCI grid clipped to the request: `cell_id`,
 parent, centroid, `weight_ha`, and AGB with its standard deviation for every
@@ -116,11 +193,46 @@ observation of no-data, defective pixels or snow on any of the four plots; a
 further test asserts those classes really are absent, so the synthetic vectors
 get replaced if the data ever changes.
 
+Retrieval tests run offline against a committed cache fixture, so a cache miss,
+a replay and a refused signed URL are all covered without a network. The tests
+that reach the open catalogue are opt-in:
+
+```bash
+RS_CASE2_NETWORK=1 python -m pytest rs/tests/case2 -q
+```
+
+## Research
+
+`python -m rs.case2.research --out runs/research` runs two experiments and
+writes both a JSON pack and a readable report.
+
+**How does the publisher transfer uncertainty between years?** The set ships a
+CCI change product for 2019-2020 next to the annual maps, so the publisher's
+own answer can be recovered rather than assumed. Two findings, on all four
+areas: the published difference is exactly the difference of the annual maps,
+pixel for pixel; and its difference SD matches an independent combination of
+the two annual SDs to within 1%, against a fully correlated combination that
+would be roughly four times tighter. On the temporal axis, the publisher treats
+the two years as independent per pixel. The spatial axis between cells is not
+settled by this and remains the open question - it is the one that moves a
+carbon interval by more than an order of magnitude.
+
+**How much of an apparent change is the instrument?** Described above; the
+numbers are in the pack.
+
+Neither is ground truth. The set contains no independent field measurement of
+carbon, so comparing two satellite products is a consistency check and is
+labelled as one.
+
 ## Limits of this stage
 
-Scene *selection* is provisional. RS-1 reports the pair of scenes that sees the
-most of the request on both dates, and says so in the payload; the
-seasonal-comparability rule is RS-2 work, as is change-zone detection.
+Change zones are produced for the first parent area of a request. A contour
+spanning two supplied areas has two grids and two scene pairs, and merging
+zones across them needs a partition rule that does not exist yet; the stock
+result still covers every parent.
+
+Multi-year dNBR carries a residual even on matched scenes, so recovery zones
+are reported as indications and should not be read as recovered carbon.
 
 The serialisation boundary lives in `payload.py` alone. When G0 fixes the shared
 v2 contract, that module changes and the raster core does not.
