@@ -682,6 +682,7 @@ main {
 /* ---------------------------------------------------------------- tabs */
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   border-bottom: 1px solid var(--hairline);
   padding: 0 var(--sp-2);
 }
@@ -2449,6 +2450,168 @@ main {
   margin-top: var(--sp-3);
 }
 
+.lens-passport input[type='file'] {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-size: var(--fs-xs);
+  padding: var(--sp-2);
+}
+
+.lens-passport input[type='file']::file-selector-button {
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer-list,
+.lens-demo-list,
+.lens-history-list {
+  list-style: none;
+  margin: 0 0 var(--sp-3);
+  padding: 0;
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.lens-demo-list {
+  counter-reset: none;
+}
+
+.layer-item {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--sp-2) var(--sp-3);
+  display: grid;
+  gap: var(--sp-1);
+  background: var(--surface-sunken);
+}
+
+.layer-item[data-availability='NO_DATA'],
+.layer-item[data-availability='NOT_IN_THIS_MODE'] {
+  background: transparent;
+  border-style: dashed;
+}
+
+.layer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.layer-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+}
+
+.layer-name {
+  font-size: var(--fs-sm);
+}
+
+.layer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  color: var(--text-muted);
+}
+
+.legend-gap,
+.legend-optics,
+.legend-fire,
+.legend-stock,
+.legend-zone-supported,
+.legend-zone-unknown,
+.legend-contour {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+.legend-zone-supported {
+  background: #f0a06a;
+}
+
+.legend-zone-unknown {
+  background: #b3bfb8;
+}
+
+.legend-gap {
+  background: repeating-linear-gradient(45deg, #d8b46a, #d8b46a 3px, transparent 3px, transparent 6px);
+  border: 1px solid #d8b46a;
+}
+
+.legend-optics,
+.legend-fire,
+.legend-stock,
+.legend-contour {
+  border: 1px solid var(--border-subtle);
+}
+
+.lens-demo-item,
+.lens-history-item {
+  width: 100%;
+  display: grid;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border-subtle);
+  border-left: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--fs-sm);
+}
+
+.lens-demo-item.selected,
+.lens-history-item.selected {
+  border-left-color: var(--forest-active);
+  background: var(--surface-elevated);
+}
+
+.lens-demo-item:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.lens-demo-head,
+.lens-history-head,
+.lens-history-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.lens-history-head {
+  justify-content: space-between;
+}
+
+.lens-comparison .data-table th[scope='row'] {
+  white-space: normal;
+  font-weight: 500;
+}
+
+.lens-observations h3,
+.lens-passport h3 {
+  margin-top: var(--sp-4);
+}
+
+/* Attribution lines carry long DOIs and product URLs: they wrap instead of widening the page. */
+.lens-observations,
+.lens-passport,
+.layer-item {
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 1360px) {
   .lens-layout {
     grid-template-columns: 320px minmax(0, 1fr);
@@ -2466,6 +2629,11 @@ main {
   .lens-layout .rail-right,
   .lens-layout .center {
     grid-column: 1;
+    min-width: 0;
+  }
+  .lens-layout .panel,
+  .lens-layout .table-wrap {
+    max-width: 100%;
   }
   .lens-layout .center {
     order: 1;

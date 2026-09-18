@@ -32,7 +32,7 @@ async function runScenario(page: Page, scenario: string) {
 test('lens workspace runs the doc example end to end and keeps every value labelled', async ({ page }) => {
   const { pageErrors, external } = await openLens(page);
 
-  await expect(page.getByTestId('lens-mode')).toContainText('FIXTURE');
+  await expect(page.getByTestId('lens-mode')).toContainText('ПОМЕЧЕННЫЙ НАБОР');
   await expect(page.getByTestId('lens-source-bar')).toContainText('G0 ещё не опубликован');
   await expect(page.getByTestId('lens-aoi-select')).toHaveValue('RU_TVER_01');
   await expect(page.getByTestId('lens-map')).toBeVisible();
@@ -61,10 +61,88 @@ test('lens workspace runs the doc example end to end and keeps every value label
 
   await page.getByTestId('lens-tab-passport').click();
   await page.getByTestId('lens-passport-verify').click();
-  await expect(page.getByTestId('lens-passport-result')).toBeVisible();
+  await expect(page.getByTestId('lens-passport-result')).toContainText('совпадает');
   await expect(page.getByTestId('lens-sources')).toContainText('Copernicus');
 
   expect(external, 'no external hosts').toEqual([]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('lens shows the official observations behind a run and the layers it cannot draw', async ({ page }) => {
+  const { pageErrors, external } = await openLens(page);
+
+  await page.getByTestId('lens-demo-step-fire').click();
+  await expect(page.getByTestId('lens-q-value')).toBeVisible({ timeout: 20_000 });
+
+  await page.getByTestId('lens-tab-observations').click();
+  await expect(page.getByTestId('lens-scenes-table')).toContainText('2021');
+  await expect(page.getByTestId('lens-event-RU_MORDOVIA_03_MODIS_FIRE_202108')).toContainText('2021-08-05');
+  await expect(page.getByTestId('lens-event-RU_MORDOVIA_03_MODIS_FIRE_202108')).toContainText('Точный контур пожара');
+  await expect(page.getByTestId('lens-baseline-table')).toContainText('2021');
+
+  await expect(page.getByTestId('lens-layer-availability-OPTICAL_QUALITY')).toContainText('нет данных');
+  await expect(page.getByTestId('lens-layer-STOCK_PREVIEW')).toHaveAttribute('data-availability', 'NOT_IN_THIS_MODE');
+  await expect(page.getByTestId('lens-map-missing-layers')).toContainText('Пустая карта не означает');
+
+  await page.getByTestId('lens-tab-zones').click();
+  await expect(page.getByTestId('lens-zone-cause')).toContainText('ПРИЧИНА ПОДТВЕРЖДЕНА');
+  await expect(page.getByTestId('lens-zone-event')).toContainText('RU_MORDOVIA_03_MODIS_FIRE_202108');
+  await shot(page, 'lens-06-fire-evidence');
+
+  const zonePaths = page.locator('.leaflet-overlay-pane path');
+  const before = await zonePaths.count();
+  await page.getByTestId('lens-layer-toggle-CHANGE_ZONES').click();
+  await expect(zonePaths).toHaveCount(before - 2);
+
+  expect(external, 'no external hosts').toEqual([]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('lens keeps the session across a reload and compares runs without ranking them', async ({ page }) => {
+  const { pageErrors } = await openLens(page);
+
+  await runScenario(page, 'DOC_EXAMPLE_Q395');
+  await page.getByTestId('lens-demo-step-control').click();
+  await expect(page.getByTestId('lens-q-value')).toContainText('0', { timeout: 20_000 });
+  await expect(page.getByTestId('lens-notice')).toBeVisible();
+
+  await page.getByTestId('lens-tab-comparison').click();
+  const table = page.getByTestId('lens-comparison-table');
+  await expect(table).toContainText('395');
+  await expect(table).toContainText('RU_TVER_01');
+  await expect(page.getByTestId('lens-comparison-limits')).toContainText('не является рейтингом');
+  await shot(page, 'lens-07-comparison');
+
+  await page.reload();
+  await expect(page.getByTestId('lens-restored-note')).toContainText('сохранённый расчёт');
+  await expect(page.getByTestId('lens-q-value')).toBeVisible();
+  await expect(page.getByTestId('lens-history')).toContainText('НОВОЕ НАБЛЮДЕНИЕ');
+
+  expect(pageErrors).toEqual([]);
+});
+
+test('lens detects a modified copy of the downloaded passport', async ({ page }) => {
+  const { pageErrors } = await openLens(page);
+
+  await runScenario(page, 'DOC_EXAMPLE_Q395');
+  await page.getByTestId('lens-tab-passport').click();
+
+  const download = await Promise.all([page.waitForEvent('download'), page.getByTestId('lens-passport-download').click()]).then(([d]) => d);
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  const original = Buffer.concat(chunks).toString('utf8');
+
+  await page.getByTestId('lens-passport-upload').setInputFiles({ name: 'passport.json', mimeType: 'application/json', buffer: Buffer.from(original) });
+  await expect(page.getByTestId('lens-passport-file-result')).toContainText('не изменялся');
+
+  const tampered = original.replace('"q": 395', '"q": 9999');
+  expect(tampered).not.toBe(original);
+  await page.getByTestId('lens-passport-upload').setInputFiles({ name: 'passport-tampered.json', mimeType: 'application/json', buffer: Buffer.from(tampered) });
+  await expect(page.getByTestId('lens-passport-file-result')).toContainText('изменён после выдачи');
+  await expect(page.getByTestId('lens-passport-file-result')).toContainText('не намерение автора');
+  await shot(page, 'lens-08-passport-tampered');
+
   expect(pageErrors).toEqual([]);
 });
 
