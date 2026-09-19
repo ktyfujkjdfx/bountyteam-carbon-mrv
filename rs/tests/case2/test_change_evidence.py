@@ -280,7 +280,8 @@ def test_fact_and_cause_are_separate_claims():
     pixels[0:2, 0:2] = True
     zone = {"kind": "loss", "pixel_mask": pixels, "pixel_count": 4}
     evidence = {"gfc_loss": pixels.copy(), "spectral_change": pixels.copy(),
-                "paired_valid": pixels.copy()}
+                "paired_valid": pixels.copy(),
+                "dnbr": numpy.full((4, 4), 0.5)}
     fire = {"available": True, "burned": numpy.zeros((4, 4), dtype=bool)}
     result = zones.classify(zone, evidence, fire)
     assert result["fact"] == zones.FACT_TREE_COVER_LOSS, "cover loss is established"
@@ -291,7 +292,7 @@ def test_an_absent_burn_product_gives_unknown_with_the_product_reason():
     pixels = numpy.ones((2, 2), dtype=bool)
     zone = {"kind": "loss", "pixel_mask": pixels, "pixel_count": 4}
     evidence = {"gfc_loss": pixels, "spectral_change": pixels,
-                "paired_valid": pixels}
+                "paired_valid": pixels, "dnbr": numpy.full((2, 2), 0.5)}
     fire = {"available": False, "reason": "MODIS was not supplied for X",
             "burned": numpy.zeros((2, 2), dtype=bool)}
     result = zones.classify(zone, evidence, fire)

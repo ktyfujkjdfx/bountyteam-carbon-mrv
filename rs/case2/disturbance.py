@@ -133,6 +133,9 @@ def fire_on_grid(dataset, aoi_id, transform, width, height, crs,
             "date_max": end_date.isoformat(),
             "date_uncertainty_days_min": int(uncertainty[positive].min()),
             "date_uncertainty_days_max": int(uncertainty[positive].max()),
+            # Kept out of the payload; it is what lets a zone name the event
+            # that supports it instead of naming every event in the period.
+            "mask": positive,
         })
 
     return {

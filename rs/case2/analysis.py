@@ -245,6 +245,7 @@ def _change_evidence(data, request, parents, change_years, scenes, cells,
         raw, cells, request, change_years[0], change_years[1], total_delta_tc)
     raw["contribution"] = contribution
     raw["zones_geojson"] = zones_module_geojson(raw, contribution)
+    raw["gaps_geojson"] = _gaps_geojson(raw)
 
     sources = [_source(data, f"{parents[0]}/GFC_2025_v1_13.tif", "gfc_lossyear")]
     if raw["fire"]["available"]:
@@ -264,15 +265,33 @@ def _change_evidence(data, request, parents, change_years, scenes, cells,
         "observation_quality": raw["quality"],
         "indices": raw["indices"],
         "gfc": raw["gfc"],
-        "fire": {key: value for key, value in raw["fire"].items()
-                 if key != "burned"},
+        "fire": _fire_payload(raw["fire"]),
+        "observed_between": change_module.observed_between(raw),
         "zones": change_module.zone_payload(raw, contribution),
         "zone_summary": _zone_summary(raw, contribution),
+        # The complement of the zones: where the pair could not be compared at
+        # all, and why. A change map that shows only what was seen invites the
+        # reader to treat the rest as unchanged.
+        "observation_gaps": _gaps_payload(raw),
         "reconciliation": contribution["reconciliation"],
         "sensitivity": change_module.sensitivity(raw),
         "method_note": zones_method_note(),
     }
     return raw, evidence, sources
+
+
+def _fire_payload(fire):
+    """The burn evidence without its pixel masks.
+
+    Masks are how a zone names the one event that supports it; they are arrays,
+    and an array has no place in a result document.
+    """
+    payload = {key: value for key, value in fire.items() if key != "burned"}
+    if "detections" in payload:
+        payload["detections"] = [
+            {key: value for key, value in detection.items() if key != "mask"}
+            for detection in payload["detections"]]
+    return payload
 
 
 def _zone_scope(parents):
@@ -299,10 +318,24 @@ def _zone_scope(parents):
 
 
 def zones_module_geojson(raw, contribution):
+    from rs.case2 import change as change_module
     from rs.case2 import zones
 
     return zones.to_geojson(raw["zones"], raw["classifications"], contribution,
-                            raw["grid"].crs)
+                            raw["grid"].crs,
+                            change_module.observed_between(raw))
+
+
+def _gaps_geojson(raw):
+    from rs.case2 import zones
+
+    return zones.gaps_to_geojson(raw["gaps"], raw["grid"].crs)
+
+
+def _gaps_payload(raw):
+    from rs.case2 import zones
+
+    return zones.gaps_payload(raw["gaps"])
 
 
 def zones_method_note():
@@ -504,6 +537,18 @@ def _change_warnings(change_evidence):
         items.append(notices.warning(
             notices.ZONE_ATTRIBUTION_RESOLUTION, change_evidence["method_note"],
             detection_resolution_m=20, attribution_source="ESA CCI Biomass v7.0"))
+
+    gaps = change_evidence["observation_gaps"]
+    if gaps["gap_pixels"]:
+        items.append(notices.warning(
+            notices.OBSERVATION_GAP_ZONES,
+            f"{gaps['gap_fraction']:.2%} of the request could not be compared "
+            f"between the two dates and is published as its own layer; it is "
+            f"not an area where nothing happened",
+            gap_fraction=gaps["gap_fraction"],
+            gap_pixels=gaps["gap_pixels"],
+            by_reason={reason: block["area_ha"]
+                       for reason, block in gaps["by_reason"].items()}))
     return tuple(items)
 
 

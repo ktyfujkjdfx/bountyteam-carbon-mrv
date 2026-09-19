@@ -89,6 +89,9 @@ def analyse_change(dataset, request, aoi_id, year_start, year_end,
         "paired_valid": paired,
         "spectral_change": spectral_change,
         "gfc_loss": gfc_loss,
+        # Carried so a zone can report how large its change is, on the same
+        # array the zone was drawn from.
+        "dnbr": dnbr,
         # A zone may rest on spectral change, on the loss-year product, or on
         # both; which one is recorded per zone so a reader can tell them apart.
         "loss_candidate": spectral_change | gfc_loss,
@@ -96,6 +99,8 @@ def analyse_change(dataset, request, aoi_id, year_start, year_end,
             numpy.nan_to_num(dnbr, nan=0.0) <= indices.DNBR_RECOVERY),
     }
 
+    gaps = zones.observation_gaps(before_scl, after_scl, paired, footprint,
+                                  transform)
     detected = zones.detect(evidence, transform)
     classifications = [zones.classify(zone, evidence, fire)
                        for zone in detected["zones"]]
@@ -141,6 +146,7 @@ def analyse_change(dataset, request, aoi_id, year_start, year_end,
         },
         "fire": fire,
         "zones": detected["zones"],
+        "gaps": gaps,
         "classifications": classifications,
         "dropped_below_mmu": detected["dropped_below_mmu"],
         "dropped_below_mmu_ha": detected["dropped_below_mmu_ha"],
@@ -264,22 +270,24 @@ def attribute(change, cells, request, year_start, year_end, total_delta_tc):
     return contribution
 
 
+def observed_between(change):
+    """The window the pair could see, which is when the change is known to fit."""
+    pair = change["pair"]
+    return {
+        "start": pair["before_datetime_utc"],
+        "end": pair["after_datetime_utc"],
+        "note": ("the change happened somewhere inside this window; the two "
+                 "acquisitions are the only dates that were observed"),
+    }
+
+
 def zone_payload(change, contribution):
-    """Zone rows for the result document, without the pixel masks."""
-    rows = []
-    for zone, classification in zip(change["zones"], change["classifications"]):
-        zone_id = zone["zone_id"]
-        delta_tc = contribution["per_zone_delta_tc"].get(zone_id, 0.0)
-        rows.append({
-            "zone_id": zone_id,
-            "fact": classification["fact"],
-            "cause": classification["cause"],
-            "cause_reason": classification["cause_reason"],
-            "detected_area_ha": round(zone["pixel_count"] * zones.PIXEL_AREA_HA, 6),
-            "cci_overlap_ha": round(
-                contribution["per_zone_overlap_ha"].get(zone_id, 0.0), 9),
-            "delta_tc": round(delta_tc, 9),
-            "contribution_tco2e": round(-delta_tc * CO2_PER_C, 9),
-            "evidence": classification["evidence"],
-        })
-    return rows
+    """Zone rows for the result document, without the pixel masks.
+
+    Built from the same function that fills the GeoJSON properties, so a zone
+    opened from the map and a zone read from the result say the same thing.
+    """
+    window = observed_between(change)
+    return [zones.properties(zone, classification, contribution, window)
+            for zone, classification
+            in zip(change["zones"], change["classifications"])]

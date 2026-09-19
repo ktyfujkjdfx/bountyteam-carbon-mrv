@@ -172,20 +172,40 @@ def write_change_artifacts(out_dir, prefix, change, grid, root):
          role="zone_mask", media_type=MEDIA_PNG,
          provenance="detected change zones after the minimum mapping unit")
 
-    zones_bytes = write_json(out_dir / "zones.geojson", change["zones_geojson"])
-    records.append(record(
-        f"{prefix}:zones.geojson", role="change_zones", media_type=MEDIA_GEOJSON,
-        data=zones_bytes, relative_path="zones.geojson",
-        provenance="WGS84; fact and cause are separate properties"))
+    # The two vector layers carry the same grid metadata as the rasters: a
+    # consumer placing them on a map needs the CRS, the resolution they were
+    # detected at and the bounds, and must not have to infer any of it from the
+    # coordinates it was handed.
+    def emit_geojson(name, document, role, provenance):
+        data = write_json(out_dir / name, document)
+        records.append(record(
+            f"{prefix}:{name}", role=role, media_type=MEDIA_GEOJSON, data=data,
+            relative_path=name, grid=grid, bounds=bounds,
+            unit="ha for areas; t CO2e for contributions",
+            provenance=provenance))
+
+    emit_geojson(
+        "zones.geojson", change["zones_geojson"], "change_zones",
+        "WGS84 outlines detected on the 20 m grid; fact and cause are separate "
+        "properties and a zone with no established cause names no event")
+    emit_geojson(
+        "observation_gaps.geojson", change["gaps_geojson"],
+        "observation_gap_zones",
+        "WGS84 outlines of the request the two dates could not be compared "
+        "over, split by reason; not areas where nothing happened")
     return records
 
 
 def write_cell_artifacts(out_dir, prefix, cells_geojson, cci_grid):
+    """The per-cell layer, placed on its own grid rather than on the map's."""
     data = write_json(out_dir / "cells.geojson", cells_geojson)
-    native, wgs84 = (list(cci_grid.pixel_size), None)
+    bounds = wgs84_bounds(
+        rasterio.Affine.from_gdal(*cci_grid.transform),
+        cci_grid.width, cci_grid.height, cci_grid.crs)
     return [record(
         f"{prefix}:cells.geojson", role="cci_cell_layer",
         media_type=MEDIA_GEOJSON, data=data, relative_path="cells.geojson",
+        grid=cci_grid, bounds=bounds,
         unit="t/ha for AGB and AGB_SD; ha for weight",
-        provenance=("native ESA CCI model cells, not a resampled surface; "
-                    f"native pixel size {native} degrees"))]
+        provenance=("native ESA CCI model cells, not a resampled surface; the "
+                    "resolution recorded here is the product's own, in degrees"))]

@@ -148,7 +148,35 @@ would count one loss twice.
 
 **Detection resolution is not carbon resolution.** Zones are 20 m outlines;
 their carbon comes from cells about 100 m across, assuming the change is spread
-evenly inside each cell. That assumption ships with every result.
+evenly inside each cell. That assumption ships with every result, and both
+resolutions travel with every zone so neither can be read as the other.
+
+**A zone is something you can open.** `zone_id` is stable for a request and
+unique within it, and the map layer and the result document are filled from one
+function, so a zone opened from the map cannot say something different from the
+zone read from the result. Each one carries its fact, cause and reason, the
+magnitude of its spectral change with the basis of that number, the window the
+pair could see, its detected area, its overlap with the CCI cells and its share
+of the stock change. A `FIRE_SUPPORTED` zone also names the MODIS granule that
+supports it, with that product's own date range, uncertainty and 463 m
+resolution. A zone whose cause was never established names nothing: no event,
+and a null date range. The nearest event in the period would be an invented
+attribution, which is the one thing a traceable result may not contain.
+
+**Outlines are valid polygons, and the repair is checked.** Eight-connected
+labelling admits regions meeting at a pixel corner, whose outline is a ring
+touching itself - something GEOS computes with happily and a consumer is
+entitled to reject. Such an outline is repaired into the MultiPolygon it always
+was, and the area before and after must be identical to the last digit. The
+pixel mask stays the authority for every number.
+
+**What was not seen is its own layer.** `observation_gaps.geojson` is the
+complement of the change map: the part of the request the two dates could not
+be compared over, split by reason - cloud, shadow, snow, water, no data - at
+the same one-hectare minimum mapping unit. A change map showing only what was
+seen invites the reader to treat the rest as unchanged. The biomass result is
+unaffected, because cloud in an optical scene says nothing about the biomass
+map.
 
 ### Two warnings the data earned
 
@@ -206,8 +234,9 @@ them into one quality number cannot tell a cloudy request from a comparison
 that must not be read as change at all. That last case is the only `CRITICAL`
 severity the module defines.
 
-`zones.geojson`, `before.png`, `after.png`, `dnbr_preview.png`,
-`paired_valid_mask.png` and `zone_mask.png` are the change artifacts. Each is
+`zones.geojson`, `observation_gaps.geojson`, `before.png`, `after.png`,
+`dnbr_preview.png`, `paired_valid_mask.png` and `zone_mask.png` are the change
+artifacts. Each is
 listed in `analysis.json` with its SHA-256, its bounds in both the native grid
 and WGS84, its resolution and its unit, under an id namespaced by request. The
 records carry an API route, never a path from the machine that produced them.
