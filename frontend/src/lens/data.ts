@@ -4,13 +4,15 @@
 // (stock, E, R, H, Q) never come from this module; they arrive through the adapter.
 
 import areasCsv from '../../../data/areas.csv?raw';
+import areasGeoJson from '../../../data/areas.geojson?raw';
+import sampleRequestsGeoJson from '../../../data/sample_requests.geojson?raw';
 import eventsCsv from '../../../data/events.csv?raw';
 import scenesCsv from '../../../data/scenes.csv?raw';
 import baselineCsv from '../../../data/methodology/baseline.csv?raw';
 import parametersCsv from '../../../data/methodology/parameters.csv?raw';
 import sourcesCsv from '../../../data/sources.csv?raw';
-import { parseCsv } from './csv';
-import type { LensSource, PriceScenario } from './types';
+import { parseCsv, parseGeoJsonText } from './csv';
+import type { CatalogArea, CatalogSampleRequest, Geometry, PriceScenario } from './types';
 
 export interface SceneRecord {
   scene_key: string;
@@ -66,7 +68,13 @@ export interface ParameterRow {
   applicability: string;
 }
 
-export interface SourceRecord extends LensSource {
+export interface SourceRecord {
+  source_id: string;
+  title: string;
+  version: string;
+  license: string;
+  attribution: string;
+  accessed: string;
   product: string;
   primary_url: string;
   doi: string;
@@ -229,6 +237,61 @@ export function sourcesByIds(ids: readonly string[]): SourceRecord[] {
   return caseSources().filter((source) => wanted.has(source.source_id));
 }
 
-export function areaRows(): Record<string, string>[] {
-  return parseCsv(areasCsv);
+interface GeoFeature {
+  id?: string;
+  properties?: Record<string, unknown>;
+  geometry?: Geometry;
+}
+
+function features(raw: string): GeoFeature[] {
+  return parseGeoJsonText<{ features?: GeoFeature[] }>(raw).features ?? [];
+}
+
+export function geometryForAoi(aoiId: string): Geometry | null {
+  for (const feature of features(areasGeoJson)) {
+    const props = feature.properties ?? {};
+    if (props.aoi_id === aoiId || feature.id === aoiId) return feature.geometry ?? null;
+  }
+  return null;
+}
+
+/** Supplied areas exactly as the catalog of the service describes them, read from data/. */
+export function parsedAreas(): CatalogArea[] {
+  return parseCsv(areasCsv).map((row) => {
+    const aoiId = row.aoi_id ?? '';
+    const start = num(row.analysis_start_year) ?? 2019;
+    const end = num(row.analysis_end_year) ?? 2024;
+    const years: number[] = [];
+    for (let year = start; year <= end; year += 1) years.push(year);
+    return {
+      aoi_id: aoiId,
+      name: row.name ?? '',
+      region: row.region ?? '',
+      area_ha: num(row.area_ha) ?? 0,
+      analysis_start_year: start,
+      analysis_end_year: end,
+      selection_role: row.selection_role ?? '',
+      project_status: row.project_status ?? '',
+      baseline_id: row.baseline_id ?? '',
+      bbox: [num(row.bbox_west) ?? 0, num(row.bbox_south) ?? 0, num(row.bbox_east) ?? 0, num(row.bbox_north) ?? 0],
+      geometry: geometryForAoi(aoiId) ?? { type: 'Polygon', coordinates: [] },
+      available_years: years,
+    };
+  });
+}
+
+export function sampleRequests(): CatalogSampleRequest[] {
+  return features(sampleRequestsGeoJson).map((feature) => {
+    const props = feature.properties ?? {};
+    return {
+      request_id: String(props.request_id ?? feature.id ?? ''),
+      parent_aoi_id: props.parent_aoi_id === undefined ? null : String(props.parent_aoi_id),
+      year_start: Number(props.year_start ?? 2020),
+      year_end: Number(props.year_end ?? 2024),
+      area_ha: Number(props.area_ha ?? 0),
+      purpose: String(props.purpose ?? ''),
+      baseline_rule: String(props.baseline_rule ?? ''),
+      geometry: feature.geometry ?? { type: 'Polygon', coordinates: [] },
+    };
+  });
 }

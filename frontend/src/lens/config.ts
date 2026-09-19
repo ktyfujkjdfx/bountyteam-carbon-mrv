@@ -1,97 +1,63 @@
-// Mode selection for the Carbon Lens workspace. Switching between the labelled fixture set and a live
-// service is a configuration decision only — the app never substitutes one for the other by itself.
+// Which client answers, and where the live service lives. The choice is configuration only: a failing
+// service is reported as a failure and never replaced by the offline set behind the user's back.
 
-import { createFixtureLensClient, type LensApiClient } from './adapter';
+import { createFixtureLensClient } from './fixtureClient';
 import { createHttpLensClient } from './httpClient';
+import type { LensApiClient } from './client';
 
-export type LensMode = 'fixture' | 'http';
+export type LensMode = 'http' | 'fixture';
 
 export interface LensConfig {
   mode: LensMode;
   baseUrl: string;
-  token: string;
-  tokenSource: 'none' | 'session' | 'url';
-  source: 'env' | 'url';
+  source: 'env' | 'url' | 'default';
+  demoAccounts: boolean;
 }
 
 interface EnvLike {
   VITE_LENS_API_MODE?: string;
   VITE_LENS_API_BASE_URL?: string;
-}
-
-export const LENS_TOKEN_STORAGE_KEY = 'carbon-lens.token';
-
-interface StorageLike {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-  removeItem(key: string): void;
-}
-
-function safeStorage(): StorageLike | null {
-  try {
-    return globalThis.sessionStorage ?? null;
-  } catch {
-    return null;
-  }
+  VITE_LENS_DEMO_ACCOUNTS?: string;
 }
 
 /**
- * The credential is a runtime value: it comes from the URL of the session or from sessionStorage and is
- * never read from VITE_* build variables, so a published dist carries no session of its own.
+ * The live service is the default. The offline set is entered only by an explicit `?lens=fixture`
+ * or a build variable, and both are shown in the header so no one mistakes one for the other.
  */
-export function resolveLensConfig(env: EnvLike, search: string, storage: StorageLike | null = safeStorage()): LensConfig {
+export function resolveLensConfig(env: EnvLike, search: string): LensConfig {
   const params = new URLSearchParams(search);
-  const fromUrl = params.get('lensapi');
-  const envMode: LensMode = env.VITE_LENS_API_MODE === 'http' ? 'http' : 'fixture';
-  const mode: LensMode = fromUrl === 'http' || fromUrl === 'fixture' ? fromUrl : envMode;
-
-  const urlToken = params.get('token')?.trim() ?? '';
-  let token = '';
-  let tokenSource: LensConfig['tokenSource'] = 'none';
-  if (urlToken) {
-    token = urlToken;
-    tokenSource = 'url';
-    try {
-      storage?.setItem(LENS_TOKEN_STORAGE_KEY, urlToken);
-    } catch {
-      /* storage unavailable: the token simply stays for this page only */
-    }
-  } else {
-    const stored = storage?.getItem(LENS_TOKEN_STORAGE_KEY)?.trim() ?? '';
-    if (stored) {
-      token = stored;
-      tokenSource = 'session';
-    }
-  }
-
+  const fromUrl = params.get('lens');
+  const envMode = env.VITE_LENS_API_MODE === 'fixture' ? 'fixture' : env.VITE_LENS_API_MODE === 'http' ? 'http' : null;
+  const mode: LensMode = fromUrl === 'fixture' || fromUrl === 'http' ? fromUrl : (envMode ?? 'http');
+  const demoFlag = env.VITE_LENS_DEMO_ACCOUNTS === '1' || params.get('demo') === '1';
   return {
     mode,
     baseUrl: env.VITE_LENS_API_BASE_URL?.trim() || '/api/v2',
-    token,
-    tokenSource,
-    source: fromUrl === 'http' || fromUrl === 'fixture' ? 'url' : 'env',
+    source: fromUrl === 'fixture' || fromUrl === 'http' ? 'url' : envMode ? 'env' : 'default',
+    // Demo accounts are offered offline, or when a deployment explicitly asks for them.
+    demoAccounts: demoFlag || mode === 'fixture',
   };
 }
 
-export function setLensToken(value: string, storage: StorageLike | null = safeStorage()): void {
-  try {
-    if (value.trim() === '') storage?.removeItem(LENS_TOKEN_STORAGE_KEY);
-    else storage?.setItem(LENS_TOKEN_STORAGE_KEY, value.trim());
-  } catch {
-    /* ignore storage failures: the workspace keeps working without a stored credential */
-  }
+export interface ClientFactoryOptions {
+  getToken: () => string;
+  getActor?: (() => string) | undefined;
+  fetchImpl?: typeof fetch | undefined;
 }
 
-export function createLensClient(config: LensConfig): LensApiClient {
-  if (config.mode === 'http') {
-    return createHttpLensClient({ baseUrl: config.baseUrl, token: config.token });
-  }
-  return createFixtureLensClient();
+export function createLensClient(config: LensConfig, options: ClientFactoryOptions): LensApiClient {
+  if (config.mode === 'fixture') return createFixtureLensClient();
+  return createHttpLensClient({
+    baseUrl: config.baseUrl,
+    getToken: options.getToken,
+    getActor: options.getActor,
+    fetchImpl: options.fetchImpl,
+  });
 }
 
-export function switchLensModeHref(target: LensMode, location: Pick<Location, 'pathname' | 'search' | 'hash'>): string {
+export function switchModeHref(target: LensMode, location: Pick<Location, 'pathname' | 'search' | 'hash'>): string {
   const params = new URLSearchParams(location.search);
-  params.set('lensapi', target);
+  params.set('lens', target);
   params.delete('token');
   return `${location.pathname}?${params.toString()}${location.hash}`;
 }
