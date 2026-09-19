@@ -58,6 +58,7 @@ from .projection import (
 from .provenance import build_provenance, parameters_snapshot, verify_files
 from .report import build_report, render_html
 from .research import ResearchRow, research_rows, research_table
+from .risk import Risk, RiskReport, assess_risks
 from .rs_adapter import RasterInputs, RsPayloadError, from_fixture, from_rs_payload
 from .units import Coverage, ScenarioValue, UnitsResult, compute_units
 from .value import (
@@ -103,6 +104,8 @@ __all__ = [
     "ProjectionResult",
     "RasterInputs",
     "ResearchRow",
+    "Risk",
+    "RiskReport",
     "RsPayloadError",
     "SCENARIO_PROJECTION",
     "ScenarioValuation",
@@ -112,6 +115,7 @@ __all__ = [
     "UnitsResult",
     "ValueResult",
     "analyse",
+    "assess_risks",
     "baseline_stock",
     "build_manifest",
     "build_passport",
