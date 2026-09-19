@@ -31,6 +31,8 @@ PROVISIONAL_INPUT = "PROVISIONAL_INPUT"
 UNCERTAINTY_COVERAGE_NOT_REPORTED = "UNCERTAINTY_COVERAGE_NOT_REPORTED"
 CELLS_EXCLUDED = "CELLS_EXCLUDED"
 CANONICAL_E_DISAGREES = "CANONICAL_E_DISAGREES"
+BASELINE_PROJECTION = "BASELINE_PROJECTION"
+PROJECTION_CLIPPED = "PROJECTION_CLIPPED"
 
 CATALOGUE: dict[str, str] = {
     SCENARIO_INTERVAL: (
@@ -122,6 +124,15 @@ CATALOGUE: dict[str, str] = {
         "Изменение запаса, пересчитанное по пер-клеточному слою, расходится со значением, "
         "опубликованным поставщиком данных, больше объявленного допуска. Расхождение "
         "требует согласования сторон и не усредняется."
+    ),
+    BASELINE_PROJECTION: (
+        "Продолжение официальной базовой линии до сценарного горизонта — методическое "
+        "допущение кейса, а не прогноз будущей биомассы и не прогноз рынка. Оно "
+        "рассчитано по той же формуле и не влияет на Q за запрошенный период."
+    ),
+    PROJECTION_CLIPPED: (
+        "На части горизонта траектория базовой линии опускается ниже нуля и обрезается "
+        "по правилу max(0, …). Обрезанный участок не является оценкой запаса."
     ),
     PROVISIONAL_INPUT: (
         "Пер-клеточные входные данные получены предварительным локальным извлечением "

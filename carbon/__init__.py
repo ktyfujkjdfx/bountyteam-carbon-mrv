@@ -48,6 +48,13 @@ from .interval import (
 )
 from .parameters import DEFAULT_PARAMETERS, METHOD_VERSION, CaseParameters, load_parameters
 from .passport import Passport, PassportEnvelope, build_passport, link_versions, seal
+from .projection import (
+    OBSERVED,
+    SCENARIO_PROJECTION,
+    ProjectionPoint,
+    ProjectionResult,
+    project_baseline,
+)
 from .provenance import build_provenance, parameters_snapshot, verify_files
 from .report import build_report, render_html
 from .research import ResearchRow, research_rows, research_table
@@ -77,11 +84,15 @@ __all__ = [
     "IntervalResult",
     "IntervalVariant",
     "MethodOptions",
+    "OBSERVED",
     "Passport",
     "PassportEnvelope",
+    "ProjectionPoint",
+    "ProjectionResult",
     "RasterInputs",
     "ResearchRow",
     "RsPayloadError",
+    "SCENARIO_PROJECTION",
     "ScenarioValue",
     "TimelinePoint",
     "UnitsResult",
@@ -106,6 +117,7 @@ __all__ = [
     "manifest_hash",
     "notes",
     "parameters_snapshot",
+    "project_baseline",
     "reasons",
     "render_html",
     "research_rows",
