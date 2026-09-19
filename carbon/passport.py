@@ -226,6 +226,22 @@ def build_content(
         "coverage": {
             "biomass": analysis.coverage.biomass,
             "baseline": analysis.coverage.baseline,
+            "uncertainty": analysis.coverage.uncertainty,
+            "raw": analysis.coverage_raw,
+            "excluded_cells": analysis.excluded_cells,
+            "note": (
+                "Публичные доли ограничены [0, 1]; raw сохранён как есть, потому что "
+                "геодезическая площадь не аддитивна по разбиению."
+            ),
+        },
+        "cross_check": {
+            "declared_e_tco2e": analysis.declared_e_tco2e,
+            "recomputed_e_tco2e": analysis.interval.e_proj_tco2e,
+            "agrees": analysis.declared_e_agrees,
+            "note": (
+                "Изменение запаса принадлежит поставщику растровых данных. Пересчёт по "
+                "пер-клеточному слою — сверка, а не второе мнение."
+            ),
         },
         "optical_quality": analysis.optical_quality,
         "timeline": [

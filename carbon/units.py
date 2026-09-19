@@ -28,15 +28,28 @@ from .parameters import DEFAULT_PARAMETERS, METHOD_VERSION, CaseParameters
 
 # Literal factor of the statement, kept separate from the 0.15 buffer share on purpose.
 UNIT_SHARE = 0.85
-COVERAGE_TOLERANCE = 1e-9
+
+# Completeness is decided in hectares upstream, where the geodesic areas live, and the
+# share that arrives here is already clamped. Geodesic area is not additive over a
+# partition, so a share can miss 1.0 by a few ulp on arithmetic alone; demanding an exact
+# 1.0 here would turn seventh-digit rounding into "incomplete coverage".
+COVERAGE_TOLERANCE = 1e-6
 
 
 @dataclass(frozen=True)
 class Coverage:
-    """Shares of the requested area covered by the mandatory numeric inputs."""
+    """Shares of the requested area covered by the mandatory numeric inputs.
+
+    `uncertainty` is the share whose AGB_SD is present on both dates. It is tracked apart
+    from `biomass` because a source may ship the estimate and its deviation separately,
+    and a missing deviation must not silently become zero uncertainty — that would narrow
+    the interval and raise Q. `None` means the caller did not report it at all, which is
+    itself recorded rather than assumed complete.
+    """
 
     biomass: float
     baseline: float
+    uncertainty: float | None = None
 
 
 @dataclass(frozen=True)
@@ -96,12 +109,22 @@ def compute_units(
     if int(year_end) <= int(year_start):
         return _unavailable(reasons.NON_POSITIVE_PERIOD)
 
+    extra_notes: tuple[notes.Note, ...] = ()
     if coverage is not None:
-        shares = (coverage.biomass, coverage.baseline)
+        shares = [coverage.biomass, coverage.baseline]
+        if coverage.uncertainty is None:
+            # Not reported is not the same as complete, and it is not silently treated as
+            # either: the result carries the gap so a reader can see what was not checked.
+            extra_notes = (notes.note(notes.UNCERTAINTY_COVERAGE_NOT_REPORTED),)
+        else:
+            shares.append(coverage.uncertainty)
         if any(not math.isfinite(share) or not 0.0 <= share <= 1.0 for share in shares):
             raise ValueError("coverage shares must be finite values in [0, 1]")
         if any(share < 1.0 - COVERAGE_TOLERANCE for share in shares):
-            return _unavailable(reasons.INCOMPLETE_COVERAGE, (notes.note(notes.COVERAGE_INCOMPLETE),))
+            return _unavailable(
+                reasons.INCOMPLETE_COVERAGE,
+                (notes.note(notes.COVERAGE_INCOMPLETE), *extra_notes),
+            )
 
     estimate = float(e_proj_tco2e)
     lower = float(lower_tco2e)
@@ -128,7 +151,8 @@ def compute_units(
             zero_reason=reasons.NON_POSITIVE_RELATIVE_RESULT,
             units=0,
             scenario_values=_scenario_values(0, parameters),
-            notes=(notes.note(notes.NON_POSITIVE_RESULT), notes.note(notes.CASE_UNITS)),
+            notes=(notes.note(notes.NON_POSITIVE_RESULT), notes.note(notes.CASE_UNITS),
+                   *extra_notes),
             **common,
         )
 
@@ -143,6 +167,7 @@ def compute_units(
             notes=(
                 notes.note(notes.STOP_RULE_APPLIED, stop_ratio=parameters.unc_stop_ratio),
                 notes.note(notes.CASE_UNITS),
+                *extra_notes,
             ),
             **common,
         )
@@ -151,7 +176,7 @@ def compute_units(
     adjusted = relative * (1.0 - uncertainty_share)
     units = math.floor(adjusted * UNIT_SHARE)
     buffer = adjusted * parameters.buffer_share
-    collected = [notes.note(notes.CASE_UNITS), notes.note(notes.SCENARIO_PRICES)]
+    collected = [notes.note(notes.CASE_UNITS), notes.note(notes.SCENARIO_PRICES), *extra_notes]
     if units == 0:
         collected.insert(0, notes.note(notes.ROUNDED_BELOW_ONE_UNIT))
     if float(e_base_tco2e) > 0.0 and estimate > 0.0:

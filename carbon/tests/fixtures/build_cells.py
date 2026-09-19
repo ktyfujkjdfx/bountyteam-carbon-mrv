@@ -17,6 +17,11 @@ What it does, and why each step is defensible:
 * every supplied cell carries a value, `nodata` is empty in the catalogue, and the zeros
   are real zero biomass, so no mask is invented here. Masking belongs to RS.
 
+The file is written in the RS shape (`request`, `coverage`, `stock_change`, `timeline`,
+`cells` as a GeoJSON FeatureCollection with `valid`, `weight_ha`, `agb_t_ha` and
+`agb_sd_t_ha`). Writing it in the real shape means the tests exercise the same adapter
+path a real RS payload takes, and swapping in that payload changes no code.
+
 Run from the repository root:
 
     python -m carbon.tests.fixtures.build_cells
@@ -34,6 +39,7 @@ from pyproj import Geod
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_DIR = Path(__file__).resolve().parent
 SCHEMA = "carbon.fixture.cells/1"
+CO2_PER_C = 44 / 12
 GEOD = Geod(ellps="WGS84")
 TIMELINE_YEARS = tuple(range(2015, 2025))
 WEIGHT_DECIMALS = 9
@@ -129,6 +135,7 @@ def build(
 ) -> dict:
     with rasterio.open(REPO_ROOT / "data" / aoi_id / f"CCI_Biomass_{year_start}.tif") as ds:
         geometry = _cell_weights(ds, bbox)
+        width = ds.shape[1]
     weights = geometry["weight_ha"]
     flat_index = geometry["flat_index"]
 
@@ -148,40 +155,79 @@ def build(
             "recomputed_sha256": _sha256(REPO_ROOT / "data" / relative),
         })
 
+    covered = sum(weights)
+    requested = _box_area_ha(*bbox)
+    timeline = _timeline(aoi_id, weights, flat_index, cf)
+    by_year = {row["year"]: row for row in timeline}
+    delta_tc = by_year[year_end]["total_tc"] - by_year[year_start]["total_tc"]
+
+    features = []
+    for position, (row, weight) in enumerate(zip(flat_index, weights)):
+        features.append({
+            "type": "Feature",
+            # The engine reads properties only. Cell outlines are RS's to publish and
+            # would multiply this test file by twenty for values nothing here uses.
+            "geometry": None,
+            "properties": {
+                "cell_id": f"{aoi_id}:{row // width:04d}:{row % width:04d}",
+                "parent_aoi_id": aoi_id,
+                "weight_ha": weight,
+                "agb_t_ha": {str(year): observations[str(year)]["agb_t_ha"][position]
+                             for year in (year_start, year_end)},
+                "agb_sd_t_ha": {str(year): observations[str(year)]["agb_sd_t_ha"][position]
+                                for year in (year_start, year_end)},
+                "valid": True,
+            },
+        })
+
     return {
         "schema": SCHEMA,
         "status": "PROVISIONAL_LOCAL_EXTRACTION",
         "produced_by": "carbon/tests/fixtures/build_cells.py",
         "note": (
             "Not an RS result. Extracted from data/ so the carbon tests can lock real "
-            "numbers before the RS per-cell contract is fixed by G0."
+            "numbers before the RS per-cell layer is available. Test input only: "
+            "carbon.rs_adapter.guard_production_input refuses it for a published result."
         ),
         "request": {
             "request_id": request_id,
             "parent_aoi_id": aoi_id,
+            "parents": [aoi_id],
             "bbox_wgs84": [round(value, 9) for value in bbox],
             "year_start": year_start,
             "year_end": year_end,
-            "requested_area_ha": round(_box_area_ha(*bbox), 6),
+            "years": [year_start, year_end],
+            "area_ha": round(requested, 6),
             "pool": "AGB",
         },
         "grid": {"crs": "EPSG:4326", "cell_size_deg": 0.0008888888888888889,
                  "description": "native ESA CCI cells, not resampled"},
-        "cells": {
-            "count": len(weights),
-            "weight_ha": weights,
-            "weight_sum_ha": round(sum(weights), 6),
-            "observations": observations,
+        "stock_change": {
+            "stock_start_tc": by_year[year_start]["total_tc"],
+            "stock_end_tc": by_year[year_end]["total_tc"],
+            "delta_tc": round(delta_tc, 6),
+            "e_tco2e": round(-delta_tc * CO2_PER_C, 6),
+            "sign_convention": "POSITIVE_E_MEANS_POOL_LOSS",
         },
         "coverage": {
-            "biomass": 1.0,
-            "biomass_sd": 1.0,
+            "requested_ha": round(requested, 6),
+            "calculated_ha": round(covered, 6),
+            "missing_ha": round(max(0.0, requested - covered), 6),
+            "complete": max(0.0, requested - covered) <= 1e-4,
+            "biomass": {"area_ha": round(covered, 6), "fraction": covered / requested},
+            "biomass_sd": {"area_ha": round(covered, 6), "fraction": covered / requested},
+            "optical_paired": {"area_ha": 0.0, "fraction": 0.0},
             "note": (
                 "every supplied cell carries a value and the catalogue declares no "
                 "nodata, so a zero is zero biomass, not a gap; optical masking is RS work"
             ),
         },
-        "timeline": _timeline(aoi_id, weights, flat_index, cf),
+        "cells": {
+            "type": "FeatureCollection", "name": "cci_cells",
+            "note": "cell outlines are omitted: this is a test input, not a map layer",
+            "features": features,
+        },
+        "timeline": timeline,
         "sources": sources,
     }
 
@@ -232,12 +278,12 @@ def main() -> None:
         payload = build(cf=cf, catalogue=catalogue, **request)
         path = FIXTURE_DIR / f"cells_{request['request_id']}.json"
         path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+            json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n",
             encoding="utf-8",
         )
         print(
-            f"{path.name}: {payload['cells']['count']} cells, "
-            f"{payload['cells']['weight_sum_ha']} ha"
+            f"{path.name}: {len(payload['cells']['features'])} cells, "
+            f"{payload['coverage']['calculated_ha']} ha"
         )
 
 

@@ -26,7 +26,8 @@ from .units import Coverage, UnitsResult, compute_units
 
 DEFAULT_POOL = "AGB"
 DEFAULT_UNIT = "tCO2e"
-AREA_TOLERANCE_HA = 1e-6
+# Agreed with RS: completeness is judged in hectares, 1e-4 ha is 1 m².
+AREA_TOLERANCE_HA = 1e-4
 
 
 @dataclass(frozen=True)
@@ -91,6 +92,10 @@ class Analysis:
     timeline: tuple[TimelinePoint, ...] = ()
     optical_quality: dict[str, object] | None = None
     input_status: str = "RS_PAYLOAD"
+    coverage_raw: dict[str, float] | None = None
+    excluded_cells: int = 0
+    declared_e_tco2e: float | None = None
+    declared_e_agrees: bool | None = None
     method_version: str = METHOD_VERSION
     notes: tuple[notes.Note, ...] = field(default_factory=tuple)
 
@@ -121,6 +126,9 @@ def analyse(
     timeline: tuple[TimelinePoint, ...] = (),
     optical_quality: dict[str, object] | None = None,
     input_status: str = "RS_PAYLOAD",
+    coverage_raw: dict[str, float] | None = None,
+    excluded_cells: int = 0,
+    declared_e_tco2e: float | None = None,
     parameters: CaseParameters = DEFAULT_PARAMETERS,
     baseline_table: dict | None = None,
 ) -> Analysis:
@@ -175,6 +183,17 @@ def analyse(
         collected.append(notes.note(notes.AREA_NOT_FULLY_COVERED))
     if input_status != "RS_PAYLOAD":
         collected.append(notes.note(notes.PROVISIONAL_INPUT))
+    if excluded_cells:
+        collected.append(notes.note(notes.CELLS_EXCLUDED, excluded=excluded_cells))
+
+    # RS owns the stock difference. Recomputing it here is a cross-check, not a second
+    # opinion: a disagreement is reported, never averaged away.
+    agrees: bool | None = None
+    if declared_e_tco2e is not None and interval.e_proj_tco2e is not None:
+        scale = max(abs(declared_e_tco2e), abs(interval.e_proj_tco2e), 1.0)
+        agrees = abs(declared_e_tco2e - interval.e_proj_tco2e) <= 1e-6 * scale
+        if not agrees:
+            collected.append(notes.note(notes.CANONICAL_E_DISAGREES))
     unique: dict[str, notes.Note] = {}
     for item in collected:
         unique.setdefault(item.code, item)
@@ -192,5 +211,9 @@ def analyse(
         timeline=tuple(timeline),
         optical_quality=optical_quality,
         input_status=input_status,
+        coverage_raw=coverage_raw,
+        excluded_cells=excluded_cells,
+        declared_e_tco2e=declared_e_tco2e,
+        declared_e_agrees=agrees,
         notes=tuple(unique.values()),
     )

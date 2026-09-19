@@ -90,6 +90,7 @@ def build_case(
     """One official request as (AnalysisRequest, RasterInputs, Analysis, provenance)."""
     inputs = from_fixture(load_json(FIXTURE_DIR / f"cells_{request_id}.json"))
     aoi_id = parent_aoi(request_id, sample_requests)
+    assert aoi_id in dict(inputs.parent_weights_ha) or not inputs.parent_weights_ha
     request = AnalysisRequest(
         request_id=request_id,
         geometry=request_geometry(request_id, areas, sample_requests),
@@ -106,6 +107,9 @@ def build_case(
         area=inputs.area,
         timeline=inputs.timeline,
         input_status=inputs.input_status,
+        coverage_raw={name: report.raw for name, report in (inputs.coverage_raw or {}).items()},
+        excluded_cells=inputs.excluded_cells,
+        declared_e_tco2e=inputs.declared_e_tco2e,
     )
     provenance = build_provenance(relative_paths=list(inputs.source_files))
     return request, inputs, analysis, provenance

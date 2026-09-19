@@ -28,6 +28,9 @@ AREA_NOT_FULLY_COVERED = "AREA_NOT_FULLY_COVERED"
 RESEARCH_VARIANT = "RESEARCH_VARIANT"
 PASSPORT_NEW_OBSERVATION = "PASSPORT_NEW_OBSERVATION"
 PROVISIONAL_INPUT = "PROVISIONAL_INPUT"
+UNCERTAINTY_COVERAGE_NOT_REPORTED = "UNCERTAINTY_COVERAGE_NOT_REPORTED"
+CELLS_EXCLUDED = "CELLS_EXCLUDED"
+CANONICAL_E_DISAGREES = "CANONICAL_E_DISAGREES"
 
 CATALOGUE: dict[str, str] = {
     SCENARIO_INTERVAL: (
@@ -102,6 +105,20 @@ CATALOGUE: dict[str, str] = {
     PASSPORT_NEW_OBSERVATION: (
         "Период или контур отличаются от предыдущей версии паспорта, поэтому это новое "
         "наблюдение, а не пересчёт прежнего. Прежняя версия остаётся без изменений."
+    ),
+    UNCERTAINTY_COVERAGE_NOT_REPORTED: (
+        "Покрытие обязательного входа AGB_SD не сообщено вызывающей стороной, поэтому "
+        "полнота данных о неопределённости не проверена. Отсутствующее стандартное "
+        "отклонение не считается нулевым: нулевое SD сузило бы интервал и завысило Q."
+    ),
+    CELLS_EXCLUDED: (
+        "Из расчёта исключено ячеек: {excluded}. Их площадь остаётся непокрытой и "
+        "не заменяется нулевым запасом."
+    ),
+    CANONICAL_E_DISAGREES: (
+        "Изменение запаса, пересчитанное по пер-клеточному слою, расходится со значением, "
+        "опубликованным поставщиком данных, больше объявленного допуска. Расхождение "
+        "требует согласования сторон и не усредняется."
     ),
     PROVISIONAL_INPUT: (
         "Пер-клеточные входные данные получены предварительным локальным извлечением "
