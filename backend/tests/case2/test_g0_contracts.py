@@ -65,6 +65,8 @@ def test_openapi_v2_describes_exactly_the_agreed_routes():
     assert document["openapi"].startswith("3.1")
     assert {(path, method) for path, item in document["paths"].items() for method in item} == {
         ("/auth/login", "post"),
+        ("/auth/demo-accounts", "get"),
+        ("/auth/demo-login", "post"),
         ("/auth/me", "get"),
         ("/auth/logout", "post"),
         ("/catalog", "get"),
@@ -89,12 +91,19 @@ def test_openapi_v2_describes_exactly_the_agreed_routes():
     }
 
 
+# Two routes exist to get a session in the first place and are reachable without one, so
+# 401 is not among their answers: demanding it in the document would describe behaviour the
+# service does not have. Everything else needs a session and must say so.
+SESSIONLESS = {"/auth/demo-accounts", "/auth/demo-login"}
+
+
 def test_openapi_v2_documents_the_agreed_failure_codes():
     document = v2.openapi_v2_document()
     for path, item in document["paths"].items():
         for method, operation in item.items():
             codes = set(operation["responses"])
-            assert "401" in codes, f"{method} {path} does not document 401"
+            if path not in SESSIONLESS:
+                assert "401" in codes, f"{method} {path} does not document 401"
             assert "503" in codes, f"{method} {path} does not document 503"
             # A route with a body or a path parameter can be sent a malformed one.
             if "{" in path or method == "post":

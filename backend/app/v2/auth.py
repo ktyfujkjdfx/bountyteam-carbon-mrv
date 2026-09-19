@@ -209,6 +209,37 @@ def login(ctx: Any, *, username: str, password: str) -> dict:
     return {"token": token, "expires_at": expires_at, "user": principal.public}
 
 
+def demo_directory(accounts: tuple[tuple[str, str, str], ...]) -> dict:
+    """The demonstration accounts this deployment declared, without their passwords.
+
+    A deployment that declared none answers with an empty list, and then one-click entry
+    simply does not exist here. The password never appears in this answer: the client is
+    told which roles it may enter, not how to enter them.
+    """
+    return {"accounts": [{"username": username, "display_name": username, "role": role}
+                         for username, role, _password in accounts]}
+
+
+def demo_login(ctx: Any, *, username: str, accounts: tuple[tuple[str, str, str], ...]) -> dict:
+    """A session for a declared demonstration account, without typing its password.
+
+    The password is looked up in the environment of the service, so the browser never
+    holds it and a build cannot carry it. An account this deployment did not declare is
+    404 whether or not a user row with that name exists: the answer is about the
+    demonstration configuration, not about the user table.
+
+    The session itself goes through the ordinary `login`, so the token, the expiry, the
+    rate-limit reset and the audit record are the same as for anybody who typed a
+    password. A demonstration that behaved differently would not be a demonstration.
+    """
+    wanted = (username or "").strip()
+    match = next((item for item in accounts if item[0] == wanted), None)
+    if match is None:
+        raise ApiError(404, "NOT_FOUND",
+                       "Эта демонстрационная учётная запись на сервисе не настроена.")
+    return login(ctx, username=match[0], password=match[2])
+
+
 def resolve(ctx: Any, token: str | None) -> Principal:
     """The person this token belongs to, or 401. Expiry and revocation are the same no."""
     if not token:

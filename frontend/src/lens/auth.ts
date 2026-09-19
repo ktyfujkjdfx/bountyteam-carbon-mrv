@@ -139,7 +139,12 @@ export async function login(transport: AuthTransport, username: string, password
   if (!response.ok) {
     throw new LensError('AUTH_FAILED', `Вход не выполнен: сервис ответил HTTP ${response.status}.`, { status: response.status });
   }
-  const payload = asRecord(await response.json().catch(() => null));
+  return sessionFrom(await response.json().catch(() => null));
+}
+
+/** Сессия из ответа сервиса. Один разбор на вход по паролю и на вход по роли. */
+function sessionFrom(raw: unknown): LensSession {
+  const payload = asRecord(raw);
   const user = asRecord(payload.user);
   const token = typeof payload.token === 'string' ? payload.token : typeof payload.access_token === 'string' ? payload.access_token : '';
   const role = serviceRole(user.role);
@@ -151,6 +156,62 @@ export async function login(transport: AuthTransport, username: string, password
     display_name: String(user.display_name ?? user.username),
     source: 'SERVICE',
   };
+}
+
+/** Роль, в которую можно войти одним нажатием. Пароля здесь нет и быть не может. */
+export interface ServiceDemoAccount {
+  username: string;
+  display_name: string;
+  role: LensRole;
+}
+
+/**
+ * Какие роли сервис разрешает открыть одним нажатием. Пустой список — обычный ответ: в таком
+ * развёртывании быстрый вход просто не существует, и экран показывает обычную форму.
+ */
+export async function fetchDemoAccounts(transport: AuthTransport): Promise<ServiceDemoAccount[]> {
+  let response: Response;
+  try {
+    response = await call(transport, '/auth/demo-accounts', { headers: { Accept: 'application/json' } });
+  } catch {
+    return [];
+  }
+  if (!response.ok) return [];
+  const payload = asRecord(await response.json().catch(() => null));
+  const accounts = Array.isArray(payload.accounts) ? payload.accounts : [];
+  return accounts.flatMap((item) => {
+    const account = asRecord(item);
+    const role = serviceRole(account.role);
+    if (!role || typeof account.username !== 'string') return [];
+    return [{ username: account.username, display_name: String(account.display_name ?? account.username), role }];
+  });
+}
+
+/**
+ * Вход в демонстрационную роль без пароля: пароль сервис берёт из своего окружения, поэтому в
+ * браузер он не попадает и в сборку тоже. Сессия возвращается обычная.
+ */
+export async function demoServiceLogin(transport: AuthTransport, username: string): Promise<LensSession> {
+  let response: Response;
+  try {
+    response = await call(transport, '/auth/demo-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ username }),
+    });
+  } catch (error) {
+    throw new LensError('NETWORK', `Сервис недоступен: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (response.status === 404) {
+    throw new LensError('DEMO_NOT_CONFIGURED', 'Быстрый вход на этом сервисе не настроен: войдите по имени и паролю.', { status: response.status });
+  }
+  if (response.status === 429) {
+    throw new LensError('AUTH_RATE_LIMITED', 'Слишком много попыток входа. Повторите позже.', { status: response.status });
+  }
+  if (!response.ok) {
+    throw new LensError('AUTH_FAILED', `Вход не выполнен: сервис ответил HTTP ${response.status}.`, { status: response.status });
+  }
+  return sessionFrom(await response.json().catch(() => null));
 }
 
 /** Restore a session on reload. Returns null when the service has no /auth/me yet. */

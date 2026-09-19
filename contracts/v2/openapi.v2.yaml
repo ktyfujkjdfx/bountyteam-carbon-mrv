@@ -71,6 +71,64 @@ paths:
         '429': {$ref: '#/components/responses/Failure'}
         '503': {$ref: '#/components/responses/Failure'}
 
+  /auth/demo-accounts:
+    get:
+      tags: [auth]
+      operationId: demoAccounts
+      summary: Demonstration accounts this deployment turned on, if any
+      description: |
+        A deployment that wants a one-click walkthrough declares demonstration
+        accounts; everywhere else this returns an empty list, and then one-click
+        entry does not exist. No password is ever returned: the client learns
+        which roles it may enter, not how to enter them.
+
+        The list is public on purpose. It says nothing an attacker can use: these
+        accounts exist only where somebody deliberately enabled them, and the
+        passwords behind them live in the environment of the service.
+      responses:
+        '200':
+          description: The demonstration accounts, possibly none
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/DemoAccountList'
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /auth/demo-login:
+    post:
+      tags: [auth]
+      operationId: demoLogin
+      summary: Enter a configured demonstration account without typing its password
+      description: |
+        For a walkthrough where a person should click a role rather than retype a
+        password that is not a secret to them anyway. The service resolves the
+        password from its own environment, so the browser never holds it and a
+        build cannot carry it.
+
+        An account that this deployment did not declare is 404, whether or not a
+        user row with that name exists: the answer describes the demonstration
+        configuration, not the user table. The session it returns is an ordinary
+        session — same token shape, same expiry, same audit record — because a
+        demonstration that behaved differently from the real thing would not be
+        a demonstration of it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: 'api-models.v2.schema.json#/components/schemas/DemoLoginRequest'
+      responses:
+        '200':
+          description: A session
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/Session'
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '429': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
   /auth/me:
     get:
       tags: [auth]

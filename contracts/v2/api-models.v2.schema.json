@@ -98,6 +98,35 @@
         "required": ["token", "expires_at", "user"],
         "additionalProperties": false
       },
+      "DemoAccount": {
+        "type": "object",
+        "description": "A demonstration account this deployment turned on. It carries no password: the password stays in the environment of the service and never reaches a browser or a build.",
+        "properties": {
+          "username": {"type": "string"},
+          "display_name": {"type": "string"},
+          "role": {"$ref": "#/components/schemas/Role"}
+        },
+        "required": ["username", "display_name", "role"],
+        "additionalProperties": false
+      },
+      "DemoAccountList": {
+        "type": "object",
+        "description": "The demonstration accounts a person may enter with one click. An empty list is the normal answer: one-click entry exists only where somebody deliberately configured demonstration accounts.",
+        "properties": {
+          "accounts": {"type": "array", "items": {"$ref": "#/components/schemas/DemoAccount"}}
+        },
+        "required": ["accounts"],
+        "additionalProperties": false
+      },
+      "DemoLoginRequest": {
+        "type": "object",
+        "description": "Which configured demonstration account to enter. There is no password field on purpose: the service looks the password up in its own environment, so a demonstration cannot be turned on from the client side.",
+        "properties": {
+          "username": {"type": "string", "minLength": 1, "maxLength": 64}
+        },
+        "required": ["username"],
+        "additionalProperties": false
+      },
       "RiskCode": {
         "type": "string",
         "enum": ["FIRE", "FOREST_LOSS", "DATA_QUALITY"],

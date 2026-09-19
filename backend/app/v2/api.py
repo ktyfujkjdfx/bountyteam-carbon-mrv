@@ -58,6 +58,11 @@ class LoginBody(_Strict):
     password: str
 
 
+class DemoLoginBody(_Strict):
+    """Только имя учётной записи: пароль сервис берёт из своего окружения."""
+    username: str
+
+
 class AreaMeasureBody(_Strict):
     geometry: dict[str, Any]
 
@@ -129,6 +134,17 @@ router = APIRouter()
 @router.post("/auth/login")
 def login(lens: Lens, body: LoginBody):
     return auth.login(lens.app, username=body.username, password=body.password)
+
+
+@router.get("/auth/demo-accounts")
+def demo_accounts(lens: Lens):
+    return auth.demo_directory(lens.app.settings.lens_demo_accounts)
+
+
+@router.post("/auth/demo-login")
+def demo_login(lens: Lens, body: DemoLoginBody):
+    return auth.demo_login(lens.app, username=body.username,
+                           accounts=lens.app.settings.lens_demo_accounts)
 
 
 @router.get("/auth/me")

@@ -10,7 +10,7 @@ import pytest
 
 from backend.app.v2 import auth
 
-from .conftest import ACCOUNTS, PASSWORD, TVER
+from .conftest import ACCOUNTS, PASSWORD, TVER, Harness
 
 BODY = {"aoi_id": "RU_TVER_01", "year_start": 2019, "year_end": 2024}
 
@@ -22,6 +22,57 @@ def _login(harness, username="", password=PASSWORD, **kwargs):
 
 def _as(harness, role):
     return {"Authorization": "Bearer " + harness.api.tokens[role]}
+
+
+# -- entering a role without typing its password -----------------------------------------
+def test_a_deployment_without_demo_accounts_offers_none(harness):
+    """The ordinary answer. One-click entry exists only where somebody enabled it."""
+    body = harness.client.get("/api/v2/auth/demo-accounts").json()
+    assert body == {"accounts": []}
+
+
+def test_demo_login_is_404_for_an_existing_user_when_demo_is_off(harness):
+    """The refusal describes the demonstration configuration, not the user table.
+
+    `owner` is a real row here and its password is known to the suite; without a declared
+    demonstration account the service still refuses, so nobody can walk into a role by
+    guessing a username.
+    """
+    response = harness.client.post("/api/v2/auth/demo-login", json={"username": "owner"})
+    assert response.status_code == 404, response.text
+    assert response.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_declared_demo_accounts_are_listed_without_their_passwords(tmp_path):
+    accounts = (("owner", "PROJECT_OWNER", PASSWORD), ("verifier", "VERIFIER", PASSWORD))
+    demo = Harness(tmp_path, lens_demo_accounts=accounts)
+    body = demo.client.get("/api/v2/auth/demo-accounts").json()
+    assert [item["username"] for item in body["accounts"]] == ["owner", "verifier"]
+    assert [item["role"] for item in body["accounts"]] == ["PROJECT_OWNER", "VERIFIER"]
+    assert PASSWORD not in demo.client.get("/api/v2/auth/demo-accounts").text
+    for item in body["accounts"]:
+        assert "password" not in item
+
+
+def test_entering_a_declared_role_gives_an_ordinary_session(tmp_path):
+    """Same token, same /auth/me, same role. A demonstration of the real thing or nothing."""
+    accounts = (("verifier", "VERIFIER", PASSWORD),)
+    demo = Harness(tmp_path, lens_demo_accounts=accounts)
+    session = demo.client.post("/api/v2/auth/demo-login", json={"username": "verifier"})
+    assert session.status_code == 200, session.text
+    body = session.json()
+    assert body["user"]["role"] == "VERIFIER"
+    assert len(body["token"]) >= 32
+    me = demo.client.get("/api/v2/auth/me",
+                         headers={"Authorization": "Bearer " + body["token"]})
+    assert me.status_code == 200, me.text
+    assert me.json()["role"] == "VERIFIER"
+
+
+def test_an_undeclared_name_is_refused_even_while_demo_is_on(tmp_path):
+    demo = Harness(tmp_path, lens_demo_accounts=(("owner", "PROJECT_OWNER", PASSWORD),))
+    response = demo.client.post("/api/v2/auth/demo-login", json={"username": "investor"})
+    assert response.status_code == 404, response.text
 
 
 # -- passwords ---------------------------------------------------------------------------
