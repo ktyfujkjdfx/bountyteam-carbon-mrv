@@ -98,6 +98,90 @@
         "required": ["token", "expires_at", "user"],
         "additionalProperties": false
       },
+      "RequestStatus": {
+        "type": "string",
+        "enum": ["DRAFT", "SUBMITTED", "ANALYSING", "CALCULATED", "FINALIZED"],
+        "description": "Where a verification request has got to. Only a verifier moves it to FINALIZED, and only from CALCULATED: a failed run and a result that could not produce a number never advance on their own."
+      },
+      "VerificationRequest": {
+        "type": "object",
+        "description": "One contour, one period and one stated volume, followed from a draft to a finalized passport. Finalizing pins a particular passport version; it never changes a number.",
+        "properties": {
+          "request_id": {"$ref": "#/components/schemas/Id"},
+          "status": {"$ref": "#/components/schemas/RequestStatus"},
+          "owner": {"$ref": "#/components/schemas/User"},
+          "aoi_id": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "geometry": {"$ref": "#/components/schemas/Geometry"},
+          "geometry_hash": {"$ref": "#/components/schemas/Hash"},
+          "area_ha": {"type": "number", "exclusiveMinimum": 0},
+          "year_start": {"$ref": "#/components/schemas/Year"},
+          "year_end": {"$ref": "#/components/schemas/Year"},
+          "claimed_units": {"oneOf": [{"type": "number", "minimum": 0}, {"type": "null"}]},
+          "claim_pool": {"type": "string"},
+          "claim_unit": {"type": "string"},
+          "analysis_id": {"oneOf": [{"$ref": "#/components/schemas/Uuid"}, {"type": "null"}]},
+          "analysis_url": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+          "passport_hash": {
+            "oneOf": [{"$ref": "#/components/schemas/Hash"}, {"type": "null"}],
+            "description": "The content hash a verifier pinned when finalizing. A later recalculation produces a new passport and never rewrites this one."
+          },
+          "finalized_by": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "finalized_at": {"oneOf": [{"$ref": "#/components/schemas/Timestamp"}, {"type": "null"}]},
+          "created_at": {"$ref": "#/components/schemas/Timestamp"},
+          "updated_at": {"$ref": "#/components/schemas/Timestamp"},
+          "events": {"type": "array", "items": {"$ref": "#/components/schemas/RequestEvent"}}
+        },
+        "required": ["request_id", "status", "owner", "aoi_id", "geometry", "geometry_hash",
+                     "area_ha", "year_start", "year_end", "claimed_units", "claim_pool",
+                     "claim_unit", "analysis_id", "analysis_url", "passport_hash",
+                     "finalized_by", "finalized_at", "created_at", "updated_at", "events"],
+        "additionalProperties": false
+      },
+      "RequestEvent": {
+        "type": "object",
+        "description": "One recorded move of a request. The history is append-only.",
+        "properties": {
+          "occurred_at": {"$ref": "#/components/schemas/Timestamp"},
+          "from_status": {"oneOf": [{"$ref": "#/components/schemas/RequestStatus"}, {"type": "null"}]},
+          "to_status": {"$ref": "#/components/schemas/RequestStatus"},
+          "user_id": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "note": {"type": "string"}
+        },
+        "required": ["occurred_at", "from_status", "to_status", "user_id", "note"],
+        "additionalProperties": false
+      },
+      "VerificationRequestList": {
+        "type": "object",
+        "description": "The requests this role may see: an owner's own, all of them for a verifier, and the finalized ones for an investor.",
+        "properties": {
+          "requests": {"type": "array",
+                       "items": {"$ref": "#/components/schemas/VerificationRequest"}}
+        },
+        "required": ["requests"],
+        "additionalProperties": false
+      },
+      "CreateRequest": {
+        "type": "object",
+        "description": "Either geometry or aoi_id identifies the contour, exactly as in an analysis request.",
+        "properties": {
+          "aoi_id": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "geometry": {"oneOf": [{"$ref": "#/components/schemas/Geometry"}, {"type": "null"}]},
+          "year_start": {"$ref": "#/components/schemas/Year"},
+          "year_end": {"$ref": "#/components/schemas/Year"},
+          "claimed_units": {"oneOf": [{"type": "number", "minimum": 0}, {"type": "null"}]}
+        },
+        "required": ["year_start", "year_end"],
+        "additionalProperties": false
+      },
+      "UpdateRequest": {
+        "type": "object",
+        "description": "What an owner may still change while the request is a draft. The contour and the period are not among them: changing those is a different request.",
+        "properties": {
+          "claimed_units": {"oneOf": [{"type": "number", "minimum": 0}, {"type": "null"}]}
+        },
+        "required": ["claimed_units"],
+        "additionalProperties": false
+      },
       "JobState": {
         "type": "string",
         "enum": ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED"],

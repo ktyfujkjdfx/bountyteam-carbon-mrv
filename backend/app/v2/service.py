@@ -24,7 +24,7 @@ from ..contracts import digest
 from ..db import utc_now
 from ..errors import ApiError, invalid, not_found
 from ..operations import idempotent
-from . import assemble, auth as lens_auth, catalog, geometry
+from . import assemble, auth as lens_auth, catalog, geometry, verification
 from .adapters import build_ports
 from .adapters.carbon import POOL, CarbonEngineUnavailable
 from .adapters.raster import RasterCoreUnavailable
@@ -240,6 +240,7 @@ def run_analysis(lens: LensContext, analysis_id: str) -> str:
     except ApiError as exc:
         lens.store.fail(analysis_id, {"code": exc.code, "message": exc.message,
                                       "details": exc.details})
+        verification.on_analysis_finished(lens.app, analysis_id, succeeded=False)
         return "FAILED"
     except (CarbonEngineUnavailable, RasterCoreUnavailable) as exc:
         # An engine that vanished mid-flight ends the job. It never ends in a number,
@@ -249,12 +250,14 @@ def run_analysis(lens: LensContext, analysis_id: str) -> str:
             "code": "DEPENDENCY_UNAVAILABLE",
             "message": "Расчётный движок недоступен, результат не формировался.",
             "details": {"dependency": type(exc).__name__}})
+        verification.on_analysis_finished(lens.app, analysis_id, succeeded=False)
         return "FAILED"
     except Exception as exc:  # no stack traces, no local paths, no secrets
         log.exception("lens analysis failed")
         lens.store.fail(analysis_id, {"code": "ANALYSIS_ERROR",
                                       "message": "Анализ не удалось выполнить.",
                                       "details": {"reason": type(exc).__name__}})
+        verification.on_analysis_finished(lens.app, analysis_id, succeeded=False)
         return "FAILED"
 
     validate(api_validator("AnalysisResult"), result, "AnalysisResult")
@@ -262,6 +265,7 @@ def run_analysis(lens: LensContext, analysis_id: str) -> str:
     if not lens.store.publish(analysis_id, result, report, artifacts):
         # Another worker published first. Its passport stands; this run is discarded.
         return "SKIPPED"
+    verification.on_analysis_finished(lens.app, analysis_id, succeeded=True)
     return "SUCCEEDED"
 
 
@@ -369,18 +373,21 @@ def _readable(lens: LensContext, analysis_id: str, who: Any):
     if who is None:
         return row
     if not lens_auth.may_read_analysis(who, owner_id=row["actor"],
-                                       finalized=_is_finalized(row)):
+                                       finalized=_is_finalized(lens, row)):
         raise not_found("Analysis")
     return row
 
 
-def _is_finalized(row: Any) -> bool:
-    from ..contracts import loads_json
+def _is_finalized(lens: LensContext, row: Any) -> bool:
+    """Whether a verifier pinned this analysis.
 
+    The stored result always says DRAFT, because that is what it was when it was
+    computed. Finalization is a separate record, so this asks that record rather than
+    the bytes the worker wrote.
+    """
     if not row["result_json"]:
         return False
-    result = loads_json(row["result_json"])
-    return result.get("passport", {}).get("status") == "FINALIZED"
+    return verification.finalization_of(lens.app, row["analysis_id"]) is not None
 
 
 def analysis_view(lens: LensContext, analysis_id: str, *, who: Any = None) -> dict:
@@ -398,7 +405,11 @@ def analysis_view(lens: LensContext, analysis_id: str, *, who: Any = None) -> di
         "report_url": f"/api/v2/analyses/{analysis_id}/report" if ready else None,
         "proof_url": f"/api/v2/analyses/{analysis_id}/proof" if ready else None,
         "error": loads_json(row["error_json"]) if row["error_json"] else None,
-        "result": loads_json(row["result_json"]) if row["result_json"] else None,
+        # The stored result always says DRAFT, because that is what it was when it was
+        # computed. A finalization is a separate record, overlaid here at read time.
+        "result": verification.apply_passport_status(
+            lens.app, analysis_id, loads_json(row["result_json"]))
+        if row["result_json"] else None,
     }
     return validate(api_validator("Analysis"), view, "Analysis")
 
@@ -409,14 +420,23 @@ def _report(lens: LensContext, analysis_id: str, who: Any):
     if stored is None:
         raise not_found("Report")
     if who is not None:
-        lens_auth.require(who, "report.read.final" if _is_finalized(row)
+        lens_auth.require(who, "report.read.final" if _is_finalized(lens, row)
                           else "report.read.draft")
         lens_auth.audit(lens.app, who.user_id, who.role, "REPORT_DOWNLOADED", analysis_id)
     return stored
 
 
 def report_view(lens: LensContext, analysis_id: str, *, who: Any = None) -> dict:
-    return validate(api_validator("Report"), _report(lens, analysis_id, who)[0], "Report")
+    """The stored report, with the passport status it has now.
+
+    The document is stored exactly as it was generated. Only the passport status is
+    overlaid, and that status is outside the report hash by construction, so the
+    document still identifies the same content it was published with.
+    """
+    document = dict(_report(lens, analysis_id, who)[0])
+    document["result"] = verification.apply_passport_status(
+        lens.app, analysis_id, document["result"])
+    return validate(api_validator("Report"), document, "Report")
 
 
 def report_html(lens: LensContext, analysis_id: str, *, who: Any = None) -> bytes:
@@ -428,6 +448,7 @@ def proof_view(lens: LensContext, analysis_id: str, *, who: Any = None) -> dict:
     result = lens.store.result(analysis_id)
     if result is None:
         raise not_found("Result")
+    result = verification.apply_passport_status(lens.app, analysis_id, result)
     proof = {
         "analysis_id": analysis_id,
         "identity": result["identity"],
@@ -467,3 +488,56 @@ def artifact_bytes(lens: LensContext, analysis_id: str, artifact_id: str, *,
         lens_auth.audit(lens.app, who.user_id, who.role, "ARTIFACT_DOWNLOADED",
                         analysis_id, artifact_id=artifact_id)
     return data
+
+
+# -- verification requests ---------------------------------------------------------------
+def create_request(lens: LensContext, *, who: Any, body: dict) -> dict:
+    document = verification.create(lens.app, who=who, body=body)
+    return validate(api_validator("VerificationRequest"), document, "VerificationRequest")
+
+
+def list_requests(lens: LensContext, *, who: Any) -> dict:
+    document = verification.listing(lens.app, who=who)
+    return validate(api_validator("VerificationRequestList"), document,
+                    "VerificationRequestList")
+
+
+def request_view(lens: LensContext, request_id: str, *, who: Any) -> dict:
+    document = verification.view(lens.app, request_id, who=who)
+    return validate(api_validator("VerificationRequest"), document, "VerificationRequest")
+
+
+def update_request(lens: LensContext, request_id: str, *, who: Any, body: dict) -> dict:
+    document = verification.update_claim(lens.app, request_id, who=who, body=body)
+    return validate(api_validator("VerificationRequest"), document, "VerificationRequest")
+
+
+def submit_request(lens: LensContext, request_id: str, *, who: Any) -> dict:
+    document = verification.submit(lens.app, request_id, who=who)
+    return validate(api_validator("VerificationRequest"), document, "VerificationRequest")
+
+
+def start_request_analysis(lens: LensContext, request_id: str, *, who: Any,
+                           key: str) -> dict:
+    """Queue the calculation a request describes.
+
+    The request module owns the workflow and knows nothing about how an analysis is
+    submitted; this closure is the only place the two meet.
+    """
+    def queue(body: dict) -> str:
+        return submit(lens, who=who, key=key, body=body)["analysis_id"]
+
+    document, _analysis_id = verification.start_analysis(
+        lens.app, request_id, who=who, queue=queue)
+    return validate(api_validator("VerificationRequest"), document, "VerificationRequest")
+
+
+def finalize_request(lens: LensContext, request_id: str, *, who: Any) -> dict:
+    """A verifier pins a passport version. Nothing about the calculation moves."""
+    def passport_of(analysis_id: str) -> dict | None:
+        result = lens.store.result(analysis_id)
+        return result["passport"] if result else None
+
+    document = verification.finalize(lens.app, request_id, who=who,
+                                     passport_of=passport_of)
+    return validate(api_validator("VerificationRequest"), document, "VerificationRequest")

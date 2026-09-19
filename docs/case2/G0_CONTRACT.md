@@ -78,6 +78,43 @@ cannot be used to learn which ones exist. An investor sees a passport only once 
 has finalized it: a draft is not a finding, and presenting one as if it were would be the
 most consequential mistake this screen could make.
 
+## The verification request
+
+An analysis is a calculation; a request is the thing somebody is responsible for. They
+are separate resources on purpose: the calculation is immutable once published, the
+request moves through states, and neither rewrites the other.
+
+```
+POST  /api/v2/requests                                  -> 201 DRAFT
+GET   /api/v2/requests
+GET   /api/v2/requests/{request_id}
+PATCH /api/v2/requests/{request_id}                     claimed_units only, DRAFT only
+POST  /api/v2/requests/{request_id}/submit
+POST  /api/v2/requests/{request_id}/analysis            -> 202, queues the calculation
+POST  /api/v2/requests/{request_id}/finalize            verifier only, from CALCULATED
+```
+
+`DRAFT → SUBMITTED → ANALYSING → CALCULATED → FINALIZED`, and a move that is not in that
+table is `409 INVALID_TRANSITION` rather than a silently ignored call.
+
+Two rules the whole workflow rests on:
+
+- **Nothing advances on its own.** A run that fails returns the request to `SUBMITTED` so
+  it can be tried again. A run that finishes with `q = null` still reaches `CALCULATED`,
+  because the calculation did finish and "we could not tell" is a result; what it may
+  never do is arrive at `FINALIZED` without a verifier putting it there.
+- **Finalizing changes no number.** It records that a named person accepted a particular
+  passport content hash at a particular time. `units`, `change`, `uncertainty`,
+  `baseline`, `claim` and `scenario_values` are byte-identical before and after, and a
+  test asserts exactly that.
+
+`passport.status` is served from that finalization record and overlaid at read time; the
+stored result keeps saying `DRAFT`, because that is what it was when it was computed.
+The overlay cannot disturb a hash: the passport block is not part of `content_view`, so
+`content_hash` and `report_hash` are the same before and after finalizing. Recalculating
+later produces a new passport and leaves the pinned one exactly as it was — nothing leads
+out of `FINALIZED`, and a further verification of the same contour is a new request.
+
 `POST /areas/measure` answers "how big is this, and may I submit it" without creating an
 analysis. It runs the same normalisation and the same geodesic area as the analysis path,
 so a figure shown before submitting cannot disagree with the run that follows. A contour

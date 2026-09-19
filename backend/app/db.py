@@ -290,6 +290,55 @@ CREATE TABLE lens_audit (
 CREATE INDEX lens_audit_user ON lens_audit(user_id, seq);
 CREATE INDEX lens_audit_subject ON lens_audit(subject, seq);
 """),
+    (4, "carbon lens verification requests", """
+-- What a person actually works with: a contour, a period and a stated volume,
+-- followed from a draft to a finalized passport. The calculation lives in
+-- lens_analyses; this table is the workflow around it and holds no numbers.
+CREATE TABLE lens_requests (
+    request_id TEXT PRIMARY KEY,
+    owner_id TEXT NOT NULL REFERENCES lens_users(user_id),
+    status TEXT NOT NULL CHECK (status IN
+        ('DRAFT','SUBMITTED','ANALYSING','CALCULATED','FINALIZED')),
+    aoi_id TEXT,
+    geometry_json TEXT NOT NULL,
+    geometry_hash TEXT NOT NULL,
+    area_ha REAL NOT NULL CHECK (area_ha > 0),
+    year_start INTEGER NOT NULL,
+    year_end INTEGER NOT NULL,
+    claimed_units REAL,
+    claim_pool TEXT NOT NULL,
+    claim_unit TEXT NOT NULL,
+    analysis_id TEXT REFERENCES lens_analyses(analysis_id),
+    -- The passport content hash a verifier pinned. A later recalculation makes a
+    -- new passport and never rewrites this one.
+    passport_hash TEXT,
+    finalized_by TEXT REFERENCES lens_users(user_id),
+    finalized_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    -- Finalized means a verifier pinned something. The three must arrive together.
+    CHECK ((status = 'FINALIZED') = (passport_hash IS NOT NULL)),
+    CHECK ((passport_hash IS NULL) = (finalized_at IS NULL)),
+    CHECK ((passport_hash IS NULL) = (finalized_by IS NULL))
+);
+CREATE INDEX lens_requests_owner ON lens_requests(owner_id, created_at);
+CREATE INDEX lens_requests_status ON lens_requests(status, created_at);
+CREATE INDEX lens_requests_analysis ON lens_requests(analysis_id);
+
+-- Append-only history. A request cannot quietly acquire a status nobody moved it to.
+CREATE TABLE lens_request_events (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id TEXT NOT NULL REFERENCES lens_requests(request_id),
+    occurred_at TEXT NOT NULL,
+    from_status TEXT,
+    to_status TEXT NOT NULL,
+    user_id TEXT,
+    note TEXT NOT NULL
+);
+CREATE INDEX lens_request_events_request ON lens_request_events(request_id, seq);
+CREATE TRIGGER lens_request_events_append_only BEFORE UPDATE ON lens_request_events
+BEGIN SELECT RAISE(ABORT, 'the request history is append-only'); END;
+"""),
 ]
 
 

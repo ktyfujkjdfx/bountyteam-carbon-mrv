@@ -30,6 +30,7 @@ tags:
   - name: auth
   - name: catalog
   - name: areas
+  - name: requests
   - name: analyses
 
 paths:
@@ -163,6 +164,188 @@ paths:
                 $ref: 'api-models.v2.schema.json#/components/schemas/AreaMeasurement'
         '401': {$ref: '#/components/responses/Failure'}
         '403': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests:
+    post:
+      tags: [requests]
+      operationId: createRequest
+      summary: Start a verification request as a draft
+      description: |
+        A request is the thing a person works with: a contour, a period and an
+        optional stated volume, followed from a draft to a finalized passport.
+        It starts as DRAFT and nothing is calculated yet.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: 'api-models.v2.schema.json#/components/schemas/CreateRequest'
+      responses:
+        '201':
+          description: The draft request
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/VerificationRequest'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+    get:
+      tags: [requests]
+      operationId: listRequests
+      summary: The requests this role is allowed to see
+      description: |
+        An owner sees their own. A verifier sees all of them, because reviewing
+        them is the job. An investor sees only the finalized ones: a draft is
+        not a finding.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+      responses:
+        '200':
+          description: Requests visible to this role
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/VerificationRequestList'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}:
+    get:
+      tags: [requests]
+      operationId: getRequest
+      summary: One request with its recorded history
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The request
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/VerificationRequest'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+    patch:
+      tags: [requests]
+      operationId: updateRequest
+      summary: Change the stated volume while the request is still a draft
+      description: |
+        Only the owner, and only in DRAFT. The contour and the period are not
+        editable: changing those is a different request, and a claim compared
+        against a different scope is not a comparison.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: 'api-models.v2.schema.json#/components/schemas/UpdateRequest'
+      responses:
+        '200':
+          description: The updated draft
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/VerificationRequest'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}/submit:
+    post:
+      tags: [requests]
+      operationId: submitRequest
+      summary: Hand a draft over for verification
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The submitted request
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/VerificationRequest'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}/analysis:
+    post:
+      tags: [requests]
+      operationId: runRequestAnalysis
+      summary: Queue the calculation for a submitted request
+      description: |
+        Moves the request to ANALYSING and queues the analysis with the
+        contour, period and claim the request holds. A run that fails returns
+        the request to SUBMITTED so it can be tried again; it never advances.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: The request, now analysing
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/VerificationRequest'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}/finalize:
+    post:
+      tags: [requests]
+      operationId: finalizeRequest
+      summary: A verifier pins this passport version as the finalized one
+      description: |
+        Only a verifier, and only from CALCULATED. Finalizing does not change
+        Q, the interval, the claim comparison or anything else the calculation
+        produced: it records that a named person accepted a particular passport
+        content hash at a particular time. A later recalculation produces a new
+        passport and leaves this record intact.
+
+        A result whose q is null may be finalized. "We could not tell" is a
+        legitimate verified outcome, and the passport says so; what it may not
+        do is turn into units.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The finalized request
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/VerificationRequest'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
         '422': {$ref: '#/components/responses/Failure'}
         '503': {$ref: '#/components/responses/Failure'}
 
@@ -340,6 +523,13 @@ components:
         type: string
         minLength: 8
         maxLength: 128
+    RequestId:
+      name: request_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Opaque identifier. Consumers must not parse it.
     AnalysisId:
       name: analysis_id
       in: path

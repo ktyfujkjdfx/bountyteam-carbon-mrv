@@ -38,6 +38,7 @@ UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
 
 AnalysisId = Annotated[str, Path(pattern=ID_PATTERN)]
 ArtifactId = Annotated[str, Path(pattern=ID_PATTERN)]
+RequestId = Annotated[str, Path(pattern=ID_PATTERN)]
 
 
 class _Strict(BaseModel):
@@ -59,6 +60,18 @@ class LoginBody(_Strict):
 
 class AreaMeasureBody(_Strict):
     geometry: dict[str, Any]
+
+
+class CreateRequestBody(_Strict):
+    year_start: int
+    year_end: int
+    aoi_id: str | None = None
+    geometry: dict[str, Any] | None = None
+    claimed_units: int | float | None = None
+
+
+class UpdateRequestBody(_Strict):
+    claimed_units: int | float | None
 
 
 class AnalysisRequestBody(_Strict):
@@ -127,6 +140,44 @@ def whoami(who: Who):
 def logout(lens: Lens, token: Token, who: Who):
     auth.audit(lens.app, who.user_id, who.role, "LOGOUT", who.user_id)
     return auth.logout(lens.app, token)
+
+
+# -- verification requests ---------------------------------------------------------------
+@router.post("/requests", status_code=201)
+def create_request(lens: Lens, who: Who, body: CreateRequestBody):
+    auth.require(who, "analysis.create")
+    return service.create_request(lens, who=who, body=body.model_dump())
+
+
+@router.get("/requests")
+def list_requests(lens: Lens, who: Who):
+    auth.require(who, "catalog.read")
+    return service.list_requests(lens, who=who)
+
+
+@router.get("/requests/{request_id}")
+def get_request(lens: Lens, who: Who, request_id: RequestId):
+    return service.request_view(lens, request_id, who=who)
+
+
+@router.patch("/requests/{request_id}")
+def update_request(lens: Lens, who: Who, request_id: RequestId, body: UpdateRequestBody):
+    return service.update_request(lens, request_id, who=who, body=body.model_dump())
+
+
+@router.post("/requests/{request_id}/submit")
+def submit_request(lens: Lens, who: Who, request_id: RequestId):
+    return service.submit_request(lens, request_id, who=who)
+
+
+@router.post("/requests/{request_id}/analysis", status_code=202)
+def run_request_analysis(lens: Lens, who: Who, request_id: RequestId, key: KeyHeader):
+    return service.start_request_analysis(lens, request_id, who=who, key=key)
+
+
+@router.post("/requests/{request_id}/finalize")
+def finalize_request(lens: Lens, who: Who, request_id: RequestId):
+    return service.finalize_request(lens, request_id, who=who)
 
 
 # -- the work --------------------------------------------------------------------------
