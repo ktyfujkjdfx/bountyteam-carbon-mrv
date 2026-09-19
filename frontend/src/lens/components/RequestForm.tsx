@@ -46,8 +46,8 @@ export function RequestForm(props: Props) {
   const min = catalog?.year_min ?? 2019;
   const max = catalog?.year_max ?? 2024;
   for (let year = min; year <= max; year += 1) years.push(year);
-  const maxArea = catalog?.max_area_ha ?? LENS_MAX_AREA_HA;
-  const overLimit = measurement !== null && measurement.area_ha > maxArea;
+  const maxArea = measurement?.max_area_ha ?? catalog?.max_area_ha ?? LENS_MAX_AREA_HA;
+  const overLimit = measurement !== null && !measurement.within_limit && measurement.area_ha !== null;
 
   const chooseArea = (aoiId: string) => {
     const area = catalog?.areas.find((item) => item.aoi_id === aoiId) ?? null;
@@ -140,7 +140,7 @@ export function RequestForm(props: Props) {
           <dd data-testid="lens-area">
             {measuring && <span className="muted">измеряется сервисом…</span>}
             {!measuring && measurement === null && <span className="muted">—</span>}
-            {!measuring && measurement !== null && (
+            {!measuring && measurement !== null && measurement.area_ha !== null && (
               <>
                 <span className="mono">{measurement.area_ha.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} га</span>
                 <div className="muted small" data-testid="lens-area-source">
@@ -158,7 +158,7 @@ export function RequestForm(props: Props) {
           <span>{measureError}</span>
         </div>
       )}
-      {overLimit && (
+      {overLimit && measurement?.area_ha !== null && (
         <div className="state state-error compact" role="alert" data-testid="lens-area-over-limit">
           <strong>Контур больше предела</strong>
           <span>
@@ -212,7 +212,13 @@ export function RequestForm(props: Props) {
         </div>
       )}
 
-      <button type="button" className="btn lens-run" onClick={onSubmit} disabled={busy || overLimit} data-testid="lens-submit">
+      <button
+        type="button"
+        className="btn lens-run"
+        onClick={onSubmit}
+        disabled={busy || measuring || measurement === null || !measurement.valid || !measurement.within_limit || measureError !== null}
+        data-testid="lens-submit"
+      >
         {busy ? 'Выполняется…' : submitLabel}
       </button>
     </div>

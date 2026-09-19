@@ -284,10 +284,10 @@ def _measure(harness, geometry, *, status: int = 200):
     return body
 
 
-def _square(side_degrees: float) -> dict:
-    return {"type": "Polygon", "coordinates": [[[35.0, 57.0], [35.0 + side_degrees, 57.0],
-                                                [35.0 + side_degrees, 57.0 + side_degrees],
-                                                [35.0, 57.0 + side_degrees], [35.0, 57.0]]]}
+def _square(side_degrees: float, west: float = 32.92, south: float = 56.60) -> dict:
+    return {"type": "Polygon", "coordinates": [[[west, south], [west + side_degrees, south],
+                                                [west + side_degrees, south + side_degrees],
+                                                [west, south + side_degrees], [west, south]]]}
 
 
 def test_measuring_a_contour_creates_no_analysis(harness):
@@ -316,8 +316,10 @@ def test_a_contour_over_the_limit_is_reported_with_its_size_not_thrown(harness):
     body = _measure(harness, _square(0.5))
     assert body["area_ha"] > MAX_AREA_HA
     assert body["within_limit"] is False and body["valid"] is False
-    assert [item["code"] for item in body["errors"]] == ["AREA_LIMIT_EXCEEDED"]
-    assert body["errors"][0]["details"]["max_area_ha"] == MAX_AREA_HA
+    assert "AREA_LIMIT_EXCEEDED" in [item["code"] for item in body["errors"]]
+    limit_error = next(item for item in body["errors"]
+                       if item["code"] == "AREA_LIMIT_EXCEEDED")
+    assert limit_error["details"]["max_area_ha"] == MAX_AREA_HA
 
 
 def test_the_limit_the_measurement_states_is_the_limit_the_analysis_enforces(harness):
@@ -342,6 +344,29 @@ def test_an_unusable_contour_is_a_measurement_with_named_errors(harness):
     assert body["area_ha"] is None and body["geometry_hash"] is None
     assert [item["code"] for item in body["errors"]] == ["INVALID_GEOMETRY"]
     assert body["errors"][0]["severity"] == "BLOCKING"
+
+
+@pytest.mark.parametrize("geometry", [
+    {"type": "Polygon", "coordinates": []},
+    {"type": "Point", "coordinates": [32.93, 56.61]},
+    {"type": "Polygon", "coordinates": [[[3300000, 6200000], [3300100, 6200000],
+                                             [3300100, 6200100], [3300000, 6200100],
+                                             [3300000, 6200000]]]},
+])
+def test_empty_unsupported_and_wrong_crs_geometries_are_named(harness, geometry):
+    body = _measure(harness, geometry)
+    assert body["valid"] is False
+    assert body["errors"][0]["code"] == "INVALID_GEOMETRY"
+
+
+def test_a_contour_outside_the_supplied_aoi_coverage_is_blocked(harness):
+    outside = _square(0.01, west=35.0, south=57.0)
+    body = _measure(harness, outside)
+    assert body["valid"] is False
+    assert body["within_limit"] is True
+    assert body["geometry_hash"] is not None
+    assert [item["code"] for item in body["errors"]] == ["OUTSIDE_DATA_COVERAGE"]
+
 
 
 def test_measuring_still_needs_a_session(harness):

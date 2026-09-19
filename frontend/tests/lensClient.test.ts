@@ -43,14 +43,30 @@ describe('live client', () => {
     await expect(client.getCatalog()).rejects.toMatchObject({ code, status, details: { field: 'geometry' } });
   });
 
-  it('falls back to a labelled client estimate only when the measure route is missing', async () => {
+  it('uses the authoritative measurement response and sends the exact geometry', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse({
+      valid: true,
+      area_ha: 77.25,
+      max_area_ha: 2000,
+      within_limit: true,
+      geometry_hash: `0x${'a'.repeat(64)}`,
+      geometry: square,
+      errors: [],
+    }));
+    const client = createHttpLensClient({ ...BASE, fetchImpl });
+    const measurement = await client.measureArea(square);
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://service.test/api/v2/areas/measure');
+    expect(JSON.parse(String(init.body))).toEqual({ geometry: square });
+    expect(measurement).toMatchObject({ area_ha: 77.25, source: 'SERVICE', valid: true, within_limit: true });
+  });
+
+  it('does not replace a missing measurement route with a browser estimate', async () => {
     const missing = createHttpLensClient({
       ...BASE,
       fetchImpl: (async () => jsonResponse({ error: { code: 'NOT_FOUND', message: 'нет маршрута', details: {} }, request_id: 'r' }, 404)) as unknown as typeof fetch,
     });
-    const estimate = await missing.measureArea(square);
-    expect(estimate.source).toBe('CLIENT_ESTIMATE');
-    expect(estimate.area_ha).toBeGreaterThan(0);
+    await expect(missing.measureArea(square)).rejects.toMatchObject({ code: 'NOT_FOUND', status: 404 });
 
     const failing = createHttpLensClient({
       ...BASE,
@@ -148,6 +164,7 @@ describe('geometry rules', () => {
     const client = createFixtureLensClient();
     const official = await client.measureArea(square);
     expect(official.source).toBe('CLIENT_ESTIMATE');
-    expect(approximateAreaHa(square)).toBeCloseTo(official.area_ha, 6);
+    expect(official.area_ha).not.toBeNull();
+    expect(approximateAreaHa(square)).toBeCloseTo(official.area_ha as number, 6);
   });
 });

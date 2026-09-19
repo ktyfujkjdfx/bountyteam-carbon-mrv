@@ -81,6 +81,11 @@ class ResolvedRequest:
     input_hash: str
 
 
+def _inside_supplied_coverage(geom: Any) -> bool:
+    """The official rasters cover only the four published AOIs."""
+    return any(geometry.load(item.geometry).covers(geom) for item in catalog.areas())
+
+
 def resolve(body: dict) -> ResolvedRequest:
     """Turn a validated wire request into what the analysis will actually be run against."""
     aoi_id = body.get("aoi_id")
@@ -147,6 +152,11 @@ def measure_area(lens: LensContext, body: dict) -> dict:
         geom, area_ha = geometry.validate(body["geometry"], max_area_ha=float("inf"))
         canonical = geometry.canonical_geometry(geom)
         geometry_hash = geometry.geometry_hash(geom)
+        if not _inside_supplied_coverage(geom):
+            errors.append(assemble.warning(
+                "OUTSIDE_DATA_COVERAGE",
+                "Контур находится вне четырёх AOI предоставленного набора данных.",
+                "BLOCKING"))
     except ApiError as exc:
         errors.append(assemble.warning(exc.code, exc.message, "BLOCKING", **exc.details))
 

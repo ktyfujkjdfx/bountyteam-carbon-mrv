@@ -4,12 +4,14 @@
 // src/lens/auth.ts and passed in through a getter. Nothing here falls back to the offline set when
 // the service fails — a failure is reported as a failure.
 //
-// `measureArea` calls POST /areas/measure and, on 404/405, falls back to the client's own
-//     spherical estimate, clearly marked as an estimate rather than the authoritative area.
+// `measureArea` calls POST /areas/measure. HTTP mode never substitutes a browser estimate for
+// an unavailable authoritative measurement.
 
-import { LensError, normalizeAnalysis, normalizeResult, type ArtifactPayload, type LensApiClient, type SubmitOptions, asRecord } from './client';
-import { approximateAreaHa } from './geometry';
+import { LensError, normalizeAnalysis, normalizeResult, normalizeWarnings, type ArtifactPayload, type LensApiClient, type SubmitOptions, asRecord } from './client';
+import type { components as LensApiComponents } from '../api/generated/openapi.v2';
 import type { Analysis, AnalysisAccepted, AnalysisRequestBody, AreaMeasurement, Artifact, Catalog, Geometry, Proof, Report } from './types';
+
+type WireAreaMeasurement = LensApiComponents['schemas']['AreaMeasurement'];
 
 export interface LensHttpConfig {
   baseUrl: string;
@@ -99,21 +101,24 @@ export function createHttpLensClient(config: LensHttpConfig): LensApiClient {
     },
 
     async measureArea(geometry: Geometry, signal?: AbortSignal): Promise<AreaMeasurement> {
-      try {
-        const payload = await json<{ area_ha?: number }>('/areas/measure', { method: 'POST', body: { geometry }, signal });
-        if (typeof payload.area_ha !== 'number' || !Number.isFinite(payload.area_ha)) {
-          throw new LensError('CONTRACT', 'Сервис не вернул площадь контура');
-        }
-        return { area_ha: payload.area_ha, source: 'SERVICE', note: 'Геодезическая площадь, рассчитанная сервисом.' };
-      } catch (error) {
-        const missing = error instanceof LensError && (error.status === 404 || error.status === 405);
-        if (!missing) throw error;
-        return {
-          area_ha: approximateAreaHa(geometry),
-          source: 'CLIENT_ESTIMATE',
-          note: 'Предварительная оценка в браузере: сервис пока не измеряет произвольный контур. Точную площадь вернёт расчёт.',
-        };
+      const payload = await json<WireAreaMeasurement>('/areas/measure', { method: 'POST', body: { geometry }, signal });
+      if (typeof payload.valid !== 'boolean' || typeof payload.within_limit !== 'boolean' ||
+          typeof payload.max_area_ha !== 'number' ||
+          (payload.area_ha !== null && (typeof payload.area_ha !== 'number' || !Number.isFinite(payload.area_ha))) ||
+          (payload.geometry_hash !== null && typeof payload.geometry_hash !== 'string')) {
+        throw new LensError('CONTRACT', 'Сервис вернул некорректное измерение контура');
       }
+      return {
+        valid: payload.valid,
+        area_ha: payload.area_ha,
+        max_area_ha: payload.max_area_ha,
+        within_limit: payload.within_limit,
+        geometry_hash: payload.geometry_hash,
+        geometry: payload.geometry as Geometry | null,
+        errors: normalizeWarnings(payload.errors),
+        source: 'SERVICE',
+        note: 'Геодезическая площадь и нормализованный контур рассчитаны сервисом.',
+      };
     },
 
     createAnalysis(body: AnalysisRequestBody, options: SubmitOptions) {

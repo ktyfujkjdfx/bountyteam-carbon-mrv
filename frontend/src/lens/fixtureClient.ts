@@ -137,16 +137,22 @@ export function createFixtureLensClient(options: FixtureClientOptions = {}): Len
       const key = JSON.stringify(geometry.coordinates);
       for (const area of parsedAreas()) {
         if (JSON.stringify(area.geometry.coordinates) === key) {
-          return { area_ha: area.area_ha, source: 'SERVICE', note: 'Площадь участка из data/areas.csv.' };
+          return { area_ha: area.area_ha, valid: true, max_area_ha: 2000, within_limit: area.area_ha <= 2000, geometry_hash: null, geometry, errors: [], source: 'SERVICE', note: 'Площадь участка из data/areas.csv.' };
         }
       }
       for (const sample of sampleRequests()) {
         if (JSON.stringify(sample.geometry.coordinates) === key) {
-          return { area_ha: sample.area_ha, source: 'SERVICE', note: 'Площадь подучастка из data/sample_requests.geojson.' };
+          return { area_ha: sample.area_ha, valid: true, max_area_ha: 2000, within_limit: sample.area_ha <= 2000, geometry_hash: null, geometry, errors: [], source: 'SERVICE', note: 'Площадь подучастка из data/sample_requests.geojson.' };
         }
       }
       return {
         area_ha: approximateAreaHa(geometry),
+        valid: true,
+        max_area_ha: 2000,
+        within_limit: approximateAreaHa(geometry) <= 2000,
+        geometry_hash: null,
+        geometry,
+        errors: [],
         source: 'CLIENT_ESTIMATE',
         note: 'Предварительная сферическая оценка офлайн-набора: геодезическую площадь считает сервис.',
       };
@@ -159,6 +165,7 @@ export function createFixtureLensClient(options: FixtureClientOptions = {}): Len
       const geometry = body.geometry ?? parsedAreas().find((area) => area.aoi_id === body.aoi_id)?.geometry ?? null;
       validateGeometry(geometry);
       const measured = await this.measureArea(geometry as Geometry);
+      if (measured.area_ha === null) throw new LensError('INVALID_GEOMETRY', 'Площадь контура не рассчитана.');
       validateRequest(body, measured.area_ha);
 
       const existing = idempotency.get(options_.idempotencyKey);

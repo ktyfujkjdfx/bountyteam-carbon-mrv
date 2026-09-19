@@ -93,16 +93,21 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
   const measurement = useMemo(() => {
     if (!geometry || geometryError) return null;
     if (measureResource.data) return measureResource.data;
-    if (measureResource.error) {
-      return {
-        area_ha: approximateAreaHa(geometry),
-        source: 'CLIENT_ESTIMATE' as const,
-        note: 'Сервис не ответил на измерение; показана предварительная оценка в браузере.',
-      };
-    }
-    return null;
-  }, [geometry, geometryError, measureResource.data, measureResource.error]);
-  const measureError = geometryError ?? (measureResource.error ? measureResource.error.message : null);
+    const area = approximateAreaHa(geometry);
+    return {
+      area_ha: area,
+      valid: true,
+      max_area_ha: catalog?.max_area_ha ?? 2000,
+      within_limit: area <= (catalog?.max_area_ha ?? 2000),
+      geometry_hash: null,
+      geometry,
+      errors: [],
+      source: 'CLIENT_ESTIMATE' as const,
+      note: 'Предварительная сферическая оценка в браузере; отправка ждёт ответ сервиса.',
+    };
+  }, [catalog?.max_area_ha, geometry, geometryError, measureResource.data]);
+  const measurementErrors = measureResource.data?.errors.map((item) => item.message).join(' ') || null;
+  const measureError = geometryError ?? measurementErrors ?? (measureResource.error ? measureResource.error.message : null);
 
   const persist = useCallback((next: Submission[]) => {
     submissionsRef.current = next;
@@ -124,6 +129,12 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
         setRequestError('Контур не задан: выберите участок, нарисуйте его или импортируйте GeoJSON.');
         return null;
       }
+      const acceptedMeasurement = measureResource.data ?? (client.kind === 'fixture' ? measurement : null);
+      if (!acceptedMeasurement || !acceptedMeasurement.valid || !acceptedMeasurement.within_limit ||
+          acceptedMeasurement.area_ha === null || !acceptedMeasurement.geometry) {
+        setRequestError('Дождитесь корректного измерения контура сервисом и исправьте указанные ошибки.');
+        return null;
+      }
       if (draft.yearEnd <= draft.yearStart) {
         setRequestError('Конечный год должен быть больше начального.');
         return null;
@@ -137,7 +148,8 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
         owner_email: actorEmail,
         title,
         aoi_id: draft.aoiId,
-        geometry: draft.geometry,
+        geometry: acceptedMeasurement.geometry,
+        geometry_hash: acceptedMeasurement.geometry_hash,
         year_start: draft.yearStart,
         year_end: draft.yearEnd,
         claimed_units: claimed === '' ? null : Number(claimed),
@@ -146,7 +158,7 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
       setActiveSubmissionId(submission.submission_id);
       return submission;
     },
-    [actorEmail, draft, persist],
+    [actorEmail, client.kind, draft, measureResource.data, measurement, persist],
   );
 
   const runAnalysis = useCallback(
@@ -158,15 +170,27 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
       const result = await analysis.run(
         {
           aoi_id: submission.aoi_id,
-          geometry: submission.aoi_id ? null : submission.geometry,
+          geometry: submission.geometry,
           year_start: submission.year_start,
           year_end: submission.year_end,
           claimed_units: submission.claimed_units,
           claim_origin: submission.claimed_units === null ? null : 'USER_INPUT',
+          claim_scope: submission.claimed_units === null || submission.geometry_hash === null
+            ? null
+            : {
+                geometry_hash: submission.geometry_hash,
+                year_start: submission.year_start,
+                year_end: submission.year_end,
+                pool: 'AGB_LIVE_WOODY',
+                unit: 'POTENTIAL_UNIT_OF_THE_CASE',
+              },
         },
         scenario,
       );
       if (!result) return null;
+      if (submission.geometry_hash && result.identity.geometry_hash !== submission.geometry_hash) {
+        throw new LensError('GEOMETRY_HASH_MISMATCH', 'Сервис рассчитал другой нормализованный контур; результат не принят.');
+      }
       const updated: Submission = {
         ...submission,
         status: submission.status === 'FINALIZED' ? 'FINALIZED' : 'CALCULATED',

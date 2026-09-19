@@ -6,7 +6,7 @@ import type { AnalysisResult, Geometry } from './types';
 import type { LensRole } from './auth';
 
 export const WORKSPACE_STORAGE_KEY = 'carbon-lens.workspace';
-export const WORKSPACE_SCHEMA = 'carbon-lens-workspace-2';
+export const WORKSPACE_SCHEMA = 'carbon-lens-workspace-3';
 
 export type SubmissionStatus = 'SUBMITTED' | 'CALCULATED' | 'FINALIZED' | 'INTEGRITY_FAILED';
 export type PassportStatus = 'DRAFT' | 'CALCULATED' | 'FINALIZED' | 'INTEGRITY_FAILED';
@@ -34,6 +34,7 @@ export interface Submission {
   title: string;
   aoi_id: string | null;
   geometry: Geometry;
+  geometry_hash: string | null;
   year_start: number;
   year_end: number;
   claimed_units: number | null;
@@ -93,6 +94,7 @@ export function newSubmission(input: {
   title: string;
   aoi_id: string | null;
   geometry: Geometry;
+  geometry_hash?: string | null;
   year_start: number;
   year_end: number;
   claimed_units: number | null;
@@ -107,6 +109,7 @@ export function newSubmission(input: {
     title: input.title,
     aoi_id: input.aoi_id,
     geometry: input.geometry,
+    geometry_hash: input.geometry_hash ?? null,
     year_start: input.year_start,
     year_end: input.year_end,
     claimed_units: input.claimed_units,

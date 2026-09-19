@@ -470,7 +470,13 @@ export interface Report {
 }
 
 export interface AreaMeasurement {
-  area_ha: number;
+  area_ha: number | null;
+  valid: boolean;
+  max_area_ha: number;
+  within_limit: boolean;
+  geometry_hash: string | null;
+  geometry: Geometry | null;
+  errors: EvidenceWarning[];
   /** Where the number came from: the service, or the client's own spherical estimate. */
   source: 'SERVICE' | 'CLIENT_ESTIMATE';
   note: string;
