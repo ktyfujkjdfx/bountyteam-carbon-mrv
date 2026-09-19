@@ -22,7 +22,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from . import canonical
-from .passport import Passport
+from .passport import (
+    REPORT_FILE_HASH,
+    SCIENTIFIC_CONTENT_HASH,
+    SOURCE_MANIFEST_HASH,
+    Passport,
+)
 
 MANIFEST_FORMAT = "carbon.integrity-manifest/1"
 
@@ -98,7 +103,8 @@ def build_manifest(
     return {
         "format": MANIFEST_FORMAT,
         "passport_format": passport.format,
-        "passport_content_hash": passport.content_hash,
+        SCIENTIFIC_CONTENT_HASH: passport.content_hash,
+        SOURCE_MANIFEST_HASH: passport.source_manifest_hash,
         "previous_content_hash": passport.content["previous_content_hash"],
         "previous_manifest_hash": previous_manifest_hash,
         "method_version": passport.content["method_version"],
@@ -107,7 +113,7 @@ def build_manifest(
                 "name": artifact.name,
                 "media_type": artifact.media_type,
                 "size_bytes": artifact.size_bytes,
-                "sha256": artifact.sha256,
+                REPORT_FILE_HASH: artifact.sha256,
             }
             for artifact in sorted(artifacts, key=lambda item: item.name)
         ],
@@ -148,21 +154,22 @@ def verify(
     for name, entry in sorted(declared.items()):
         data = artifacts.get(name)
         if data is None:
-            checks.append(Check(name, ARTIFACT_MISSING, entry["sha256"], None))
+            checks.append(Check(name, ARTIFACT_MISSING, entry[REPORT_FILE_HASH], None))
             continue
         if len(data) != entry["size_bytes"]:
             checks.append(Check(name, ARTIFACT_SIZE_MISMATCH, entry["size_bytes"], len(data)))
             continue
         actual = canonical.HASH_PREFIX + hashlib.sha256(data).hexdigest()
-        status = CHECK_OK if actual == entry["sha256"] else ARTIFACT_HASH_MISMATCH
-        checks.append(Check(name, status, entry["sha256"], actual))
+        expected = entry[REPORT_FILE_HASH]
+        status = CHECK_OK if actual == expected else ARTIFACT_HASH_MISMATCH
+        checks.append(Check(name, status, expected, actual))
 
     for name in sorted(set(artifacts) - set(declared)):
         checks.append(Check(name, ARTIFACT_NOT_IN_MANIFEST, None, None))
 
     if passport_content is not None:
         recomputed = canonical.content_hash(dict(passport_content))
-        declared_hash = manifest.get("passport_content_hash")
+        declared_hash = manifest.get(SCIENTIFIC_CONTENT_HASH)
         status = CHECK_OK if recomputed == declared_hash else PASSPORT_HASH_MISMATCH
         checks.append(Check("passport_content", status, declared_hash, recomputed))
 
@@ -175,9 +182,10 @@ def verify(
     elif trusted_manifest_hash is None:
         outcome = SELF_CONSISTENT_ONLY
         explanation = (
-            "Файлы согласованы с приложенным манифестом, но доверенное значение хеша "
-            "манифеста не предоставлено. Подменённая копия вместе со своим манифестом "
-            "прошла бы эту проверку, поэтому она не является подтверждением подлинности."
+            "Это не независимая проверка. Файлы согласованы с приложенным манифестом, но "
+            "доверенное значение хеша манифеста не предоставлено. Подменённая копия "
+            "вместе со своим манифестом прошла бы эту проверку, поэтому она не является "
+            "подтверждением подлинности."
         )
     else:
         outcome = VERIFIED_AGAINST_TRUSTED_HASH

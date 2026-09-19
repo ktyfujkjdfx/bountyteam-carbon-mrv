@@ -46,6 +46,7 @@ def test_the_manifest_never_contains_its_own_hash(sealed):
     serialised = json.dumps(manifest, ensure_ascii=False)
     assert manifest_hash(manifest) not in serialised
     assert "manifest_hash" not in manifest
+    assert "integrity_manifest_hash" not in manifest
 
 
 def test_a_tampered_artifact_is_caught(sealed):
@@ -180,4 +181,5 @@ def test_the_manifest_records_the_version_chain(case):
         previous_manifest_hash=manifest_hash(first_manifest),
     )
     assert second_manifest["previous_content_hash"] == first.content_hash
+    assert second_manifest["scientific_passport_content_hash"] == second.content_hash
     assert second_manifest["previous_manifest_hash"] == manifest_hash(first_manifest)

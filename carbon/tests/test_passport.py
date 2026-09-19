@@ -193,3 +193,94 @@ def test_a_claim_is_recorded_as_an_input_label_and_does_not_move_q(case):
     content = build_passport(with_claim, provenance=provenance).content
     assert content["claim"]["source"] == reasons.CLAIM_SOURCE_DEMO
     assert content["claim"]["claimed_units"] == 1000.0
+
+
+# -- the four hashes --------------------------------------------------------------------
+
+
+def test_the_four_hashes_are_named_apart(sealed):
+    """Four hashes answer four questions; nobody should have to guess which is which."""
+    from carbon import build_manifest, build_report, describe, manifest_hash
+    from carbon import passport as module
+
+    analysis, passport = sealed
+    assert set(passport.hashes()) == {
+        module.SCIENTIFIC_CONTENT_HASH, module.SOURCE_MANIFEST_HASH,
+    }
+    assert passport.hashes()[module.SCIENTIFIC_CONTENT_HASH] == passport.content_hash
+    assert passport.source_manifest_hash.startswith("0x")
+    assert passport.source_manifest_hash != passport.content_hash
+
+    page = b"<!DOCTYPE html><html><body>x</body></html>"
+    manifest = build_manifest(
+        passport=passport,
+        artifacts=[describe("report.html", page, media_type="text/html")],
+        created_at="2026-09-19T00:00:00Z", run_id="hashes",
+    )
+    assert manifest[module.SCIENTIFIC_CONTENT_HASH] == passport.content_hash
+    assert manifest[module.SOURCE_MANIFEST_HASH] == passport.source_manifest_hash
+    assert manifest["artifacts"][0][module.REPORT_FILE_HASH].startswith("0x")
+    # the manifest hash itself lives outside the manifest
+    assert manifest_hash(manifest) not in json.dumps(manifest, ensure_ascii=False)
+
+    report = build_report(
+        analysis, passport=passport, manifest_hash=manifest_hash(manifest),
+        created_at="2026-09-19T00:00:00Z", run_id="hashes",
+    )
+    assert report["hashes"]["scientific_passport_content_hash"] == passport.content_hash
+    assert report["hashes"]["source_manifest_hash"] == passport.source_manifest_hash
+
+
+def test_the_source_manifest_hash_covers_the_inputs_only(case):
+    """Changing an input must move it; changing a method assumption must not."""
+    _, _, analysis, provenance = case("RU_VOLOGDA_02")
+    first = build_passport(analysis, provenance=provenance)
+    _, _, other_options, _ = case(
+        "RU_VOLOGDA_02", options=MethodOptions(spatial_dependence="FULL_SPATIAL_CORRELATION")
+    )
+    second = build_passport(other_options, provenance=provenance)
+    assert first.content_hash != second.content_hash
+    assert first.source_manifest_hash == second.source_manifest_hash
+
+    edited = json.loads(json.dumps(provenance))
+    edited["files"][0]["declared_sha256"] = "0xdeadbeef"
+    third = build_passport(analysis, provenance=edited)
+    assert third.source_manifest_hash != first.source_manifest_hash
+
+
+def test_the_passport_records_everything_a_reader_must_check(sealed):
+    _, passport = sealed
+    content = passport.content
+    request = content["request"]
+    assert {"request_id", "geometry", "geometry_hash", "year_start", "year_end",
+            "pool", "unit", "baseline_parts"} <= set(request)
+    assert content["area"]["requested_ha"] > 0
+    assert set(content["coverage"]) >= {"biomass", "uncertainty", "baseline", "raw"}
+    assert content["timeline"], "the annual series is part of the record"
+    interval = content["interval"]
+    assert interval["lower_tco2e"] <= interval["e_proj_tco2e"] <= interval["upper_tco2e"]
+    units = content["units"]
+    assert {"h_tco2e", "r_tco2e", "ratio", "uncertainty_share", "r_adj_tco2e",
+            "buffer_tco2e", "units", "rounding_residual_tco2e"} <= set(units)
+    assert content["baseline"]["e_base_tco2e"] is not None
+    assert content["cross_check"]["agrees"] is True
+    assert content["limitations"]
+    assert content["method_version"]
+    assert content["provenance"]["source_manifest_hash"]
+
+
+def test_a_self_consistent_check_is_not_offered_as_an_independent_one(sealed):
+    from carbon import integrity, verify
+
+    _, passport = sealed
+    page = b"<html></html>"
+    from carbon import build_manifest, describe
+
+    manifest = build_manifest(
+        passport=passport, artifacts=[describe("r.html", page, media_type="text/html")],
+        created_at="2026-09-19T00:00:00Z", run_id="x",
+    )
+    report = verify(manifest=manifest, artifacts={"r.html": page})
+    assert report.outcome == integrity.SELF_CONSISTENT_ONLY
+    assert report.ok is False
+    assert "не независимая проверка" in report.explanation

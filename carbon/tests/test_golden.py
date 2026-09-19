@@ -169,7 +169,9 @@ def test_the_full_publication_chain_verifies(request_id, areas, sample_requests)
         passport_content=passport.content,
     )
     assert outcome.outcome == integrity.VERIFIED_AGAINST_TRUSTED_HASH
-    assert manifest["passport_content_hash"] == EXPECTED[request_id]["passport_content_hash"]
+    assert manifest["scientific_passport_content_hash"] == (
+        EXPECTED[request_id]["passport_content_hash"]
+    )
 
 
 def test_the_html_report_opens_without_the_repository(areas, sample_requests, tmp_path):

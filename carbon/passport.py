@@ -15,6 +15,16 @@ Versions are linked by `previous_content_hash`, and the link is inside the conte
 chain cannot be rewritten without changing every later hash. Comparability of two versions
 is assessed and stated, never assumed: a different period is a new observation of the same
 place, not a correction of the earlier one, and it never writes off the earlier Q.
+
+Four hashes travel with a result and they answer four different questions. They are named
+apart so that nobody has to guess which one they are looking at:
+
+* `scientific_passport_content_hash` — this canonical scientific record;
+* `source_manifest_hash` — the official input files and the parameters it was built from;
+* `api_result_content_hash` — the public representation Backend serves (Backend's to
+  compute; the passport only names the field);
+* `report_file_hash` — the bytes of a downloaded report, which differ between two renders
+  of the same analysis because the page prints its run time.
 """
 from __future__ import annotations
 
@@ -25,6 +35,12 @@ from . import canonical, notes, reasons
 from .analysis import Analysis
 from .interval import INTERVAL_KIND
 from .parameters import METHOD_VERSION
+
+# The four hash fields, named once so no consumer has to infer which is which.
+SCIENTIFIC_CONTENT_HASH = "scientific_passport_content_hash"
+SOURCE_MANIFEST_HASH = "source_manifest_hash"
+API_RESULT_CONTENT_HASH = "api_result_content_hash"
+REPORT_FILE_HASH = "report_file_hash"
 
 # How two passports of the same place relate to each other.
 VERSION_INITIAL = "INITIAL"
@@ -56,6 +72,18 @@ class Passport:
     def canonical_bytes(self) -> bytes:
         return canonical.canonical_bytes(self.content)
 
+    @property
+    def source_manifest_hash(self) -> str:
+        """Hash of the inputs alone, so a reader can check them without the whole record."""
+        return self.content["provenance"]["source_manifest_hash"]
+
+    def hashes(self) -> dict[str, str | None]:
+        """Every hash this role owns, under the name the contract uses."""
+        return {
+            SCIENTIFIC_CONTENT_HASH: self.content_hash,
+            SOURCE_MANIFEST_HASH: self.source_manifest_hash,
+        }
+
 
 @dataclass(frozen=True)
 class PassportEnvelope:
@@ -68,7 +96,8 @@ class PassportEnvelope:
     def to_dict(self) -> dict[str, Any]:
         return {
             "format": self.passport.format,
-            "content_hash": self.passport.content_hash,
+            SCIENTIFIC_CONTENT_HASH: self.passport.content_hash,
+            SOURCE_MANIFEST_HASH: self.passport.source_manifest_hash,
             "content": self.passport.content,
             "run": {
                 "created_at": self.created_at,
@@ -261,7 +290,14 @@ def build_content(
         "baseline": _baseline_block(analysis),
         "units": _units_block(analysis),
         "claim": _claim_block(analysis),
-        "provenance": provenance,
+        "provenance": dict(
+            provenance,
+            source_manifest_hash=canonical.content_hash({
+                "files": provenance.get("files", []),
+                "parameters": provenance.get("parameters", {}),
+                "method_version": provenance.get("method_version"),
+            }),
+        ),
         "notes": [{"code": item.code, "text": item.text} for item in analysis.notes],
         "limitations": list(LIMITATIONS),
     }

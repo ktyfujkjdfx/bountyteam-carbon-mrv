@@ -56,6 +56,15 @@ def build_report(
     content = passport.content
     return {
         "format": REPORT_FORMAT,
+        "hashes": {
+            "scientific_passport_content_hash": passport.content_hash,
+            "source_manifest_hash": passport.source_manifest_hash,
+            "integrity_manifest_hash": manifest_hash,
+            "note": (
+                "api_result_content_hash и report_file_hash принадлежат слою выдачи: "
+                "первый считает Backend, второй считается по байтам скачанного файла."
+            ),
+        },
         "passport_content_hash": passport.content_hash,
         "manifest_hash": manifest_hash,
         "method_version": analysis.method_version,
@@ -322,8 +331,9 @@ footer {{ margin-top: 2.5rem; font-size: .85rem; }}
 </head>
 <body>
 <h1>Углеродный паспорт участка {_escape(request['request_id'])}</h1>
-<p class="hash">content_hash: {_escape(report['passport_content_hash'])}<br>
-manifest_hash: {_escape(report['manifest_hash'])}<br>
+<p class="hash">scientific_passport_content_hash: {_escape(report['passport_content_hash'])}<br>
+source_manifest_hash: {_escape(report['hashes']['source_manifest_hash'])}<br>
+integrity_manifest_hash: {_escape(report['manifest_hash'])}<br>
 method_version: {_escape(report['method_version'])}</p>
 {provisional}
 

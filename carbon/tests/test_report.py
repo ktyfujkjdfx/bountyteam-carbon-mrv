@@ -115,6 +115,8 @@ def test_a_stop_rule_result_does_not_get_a_normal_waterfall():
     assert stopped.units == 0 and stopped.r_adj_tco2e is None
     page = render_html({
         "format": REPORT_FORMAT, "passport_content_hash": "0x0", "manifest_hash": None,
+        "hashes": {"scientific_passport_content_hash": "0x0",
+                   "source_manifest_hash": "0x0", "integrity_manifest_hash": None},
         "method_version": "test", "run": RUN,
         "request": {"request_id": "S", "geometry_hash": "0x0", "year_start": 2019,
                     "year_end": 2024, "pool": "AGB", "unit": "tCO2e", "baseline_parts": []},
