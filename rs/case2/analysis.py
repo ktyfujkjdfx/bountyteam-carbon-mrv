@@ -6,7 +6,7 @@ polygon. Nothing here computes a baseline, an uncertainty interval, potential
 units or an investment conclusion - those belong to other owners and are
 deliberately absent.
 """
-from rs.case2 import biomass, errors, notices, optical
+from rs.case2 import biomass, errors, notices, optical, risk
 from rs.case2.catalog import Dataset, DatasetError, InsufficientData, sha256_file
 from rs.case2.geometry import geodesic_area_ha, validate, validate_years
 from rs.case2.models import (
@@ -122,6 +122,8 @@ def analyse(geometry, year_start, year_end, *, dataset=None, include_optical=Tru
                                  change_years, include_optical, change_evidence),
         warnings=_warnings(coverage, paired, cells, change_years, include_optical,
                            change_evidence, scenes, weight_sum, parents),
+        risks=risk.assess(coverage, scenes, change_evidence, parents,
+                          change_years, include_optical),
         change_evidence=change_evidence,
         raw_change=raw_change,
     )

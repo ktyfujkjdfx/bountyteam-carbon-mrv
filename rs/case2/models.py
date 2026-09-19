@@ -196,6 +196,9 @@ class RasterAnalysis:
     limitations: Sequence[str] = field(default_factory=tuple)
     # Structured cautions, each {code, severity, message, details}.
     warnings: Sequence[Mapping[str, object]] = field(default_factory=tuple)
+    # Three independent evidence-based risk blocks for an investor panel. None
+    # of them enters any carbon number; see `rs.case2.risk`.
+    risks: Mapping[str, object] = field(default_factory=dict)
     # Change evidence: scene pair, observation quality, zones, their share of
     # the stock change and the reconciliation. None when optical reading was
     # switched off, which is not the same as "no change was found".

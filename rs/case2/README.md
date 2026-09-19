@@ -247,6 +247,30 @@ instead of describing them, and prints which were demonstrated. The online
 claim is reported as `NOT_ATTEMPTED` unless `--allow-network` is passed: "we did
 not try" and "it worked" are different statements.
 
+## Risk flags
+
+Three blocks for an investor panel, and they are an extra page rather than a
+step in the method: `fire_risk_evidence`, `forest_loss_evidence` and
+`data_quality_risk`. Each carries a level, the measurement it was banded from,
+the product it came from, the period, its own limitations, and `affects_q:
+false` - repeated on every block, because a block gets quoted on its own.
+
+They stay independent on purpose. A cloudy request is not a risky forest, and a
+clear one is not a safe investment; merging observation quality into a hazard
+flag is how a dashboard ends up telling an investor something the data never
+said. The bands are stated and applied to measured shares, so a reader who
+disagrees with a band can use the number instead.
+
+Two levels are deliberately never LOW. Where the burn product was not supplied
+the fire level is `UNKNOWN`, because LOW would claim an absence of fire from an
+absence of a product. Where optical reading was off, data quality is `UNKNOWN`
+rather than zero.
+
+What these flags may not become is a probability of fire or a financial
+discount. Turning "one confirmed episode in this period" into a chance of
+burning needs a hazard model, a calibration set and a validation that none of
+this package contains.
+
 ## Outputs
 
 `analysis.json` carries the request, the stock change, a 2015-2024 timeline on

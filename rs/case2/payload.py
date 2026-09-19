@@ -218,6 +218,10 @@ def analysis_payload(analysis):
         "parameters": _round(dict(sorted(analysis.parameters.items()))),
         "limitations": list(analysis.limitations),
         "warnings": _round([dict(item) for item in analysis.warnings]),
+        # An informational panel. Nothing in it enters a carbon number, and
+        # every block repeats `affects_q: false` so a block that travels alone
+        # still says so.
+        "risks": _round(dict(analysis.risks)),
     }
 
 
