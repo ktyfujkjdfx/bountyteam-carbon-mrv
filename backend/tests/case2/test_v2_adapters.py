@@ -17,8 +17,6 @@ from backend.app.v2.contracts import fixture, internal_validator, schema_errors
 from backend.app.v2.ports import (CarbonAssessmentPort, CarbonRequest, RasterAnalysisPort,
                                   RasterRequest, RasterUnavailable)
 
-# The test double that stands in for carbon/ until it is merged. It lives in the test
-# tree on purpose: nothing under backend/app/ can import it.
 REFERENCE = REPO_ROOT / "backend" / "tests" / "case2" / "reference_engine.py"
 METHOD_NUMBERS = (re.compile(r"0\.85"), re.compile(r"44\s*/\s*12"), re.compile(r"0\.47"),
                   re.compile(r"\bmath\.floor\b"), re.compile(r"0\.15\b"))
@@ -43,7 +41,7 @@ def _code_only(source: str) -> str:
 # -- the boundary -------------------------------------------------------------------------
 @pytest.mark.parametrize("module", [service, assemble, report_module, store, lens_api,
                                     geometry, raster_adapter])
-def test_no_module_outside_the_reference_engine_contains_the_method(module):
+def test_no_backend_module_contains_the_method(module):
     source = REPO_ROOT.joinpath(*module.__name__.split(".")).with_suffix(".py").read_text(
         encoding="utf-8")
     for pattern in METHOD_NUMBERS:
@@ -70,20 +68,19 @@ def test_no_scientific_stand_in_lives_under_the_application(harness):
         assert "reference_carbon" not in source, path
 
 
-def test_the_test_double_is_labelled_and_reachable_only_from_the_tests():
-    source = REFERENCE.read_text(encoding="utf-8")
-    assert "floor(adjusted * UNIT_SHARE)" in source
-    assert "test double" in source.lower()
-    assert "carbon/" in source
+def test_the_duplicate_reference_engine_is_not_shipped():
+    assert not REFERENCE.exists()
 
 
-def test_the_carbon_adapter_composes_the_engine_and_adds_nothing():
+def test_the_carbon_adapter_calls_the_authoritative_workflow_and_adds_nothing():
     source = (REPO_ROOT / "backend" / "app" / "v2" / "adapters" / "carbon.py").read_text(
         encoding="utf-8")
     for pattern in METHOD_NUMBERS:
         assert not pattern.search(source), pattern.pattern
+    assert "api.from_rs_payload(" in source
+    assert "api.analyse(" in source
     for call in ("compute_interval", "compute_baseline", "compute_units", "compare_claim"):
-        assert f"api.{call}(" in source
+        assert f"api.{call}(" not in source
 
 
 def test_the_ports_are_satisfied_by_the_running_adapters(harness):
@@ -238,19 +235,15 @@ def test_a_payload_that_breaks_the_internal_contract_is_refused(harness, monkeyp
 
 # -- the carbon port ----------------------------------------------------------------------
 def _engine_under_test():
-    """The engine this branch actually runs: `carbon` once merged, the double until then."""
-    from .conftest import engine_override
-
-    module = engine_override().get("carbon_module_override")
-    return module if module is not None else carbon_adapter.engine()
+    """The only engine this branch runs."""
+    return carbon_adapter.engine()
 
 
 def _assess(raster: dict, cells: dict, year_start: int, year_end: int, **claim):
-    from .conftest import engine_override
-
-    module = engine_override().get("carbon_module_override")
-    return carbon_adapter.CarbonAdapter(module=module).assess(CarbonRequest(
-        raster=raster, cells=cells, geometry_hash="0x" + "0" * 64, year_start=year_start,
+    polygon = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}
+    return carbon_adapter.CarbonAdapter().assess(CarbonRequest(
+        raster=raster, cells=cells, geometry=polygon,
+        geometry_hash=carbon_adapter.engine().geometry_hash(polygon), year_start=year_start,
         year_end=year_end, claimed_units=claim.get("claimed_units"),
         claim_origin=claim.get("claim_origin"), claim_scope=claim.get("claim_scope")))
 
@@ -314,9 +307,18 @@ def test_missing_uncertainty_is_not_silently_treated_as_certainty():
     stripped = {**raster.cells, "features": [
         {**feature, "properties": {**feature["properties"], "valid": False}}
         for feature in raster.cells["features"]]}
-    assessment = _assess(raster.analysis, stripped, 2019, 2024).assessment
-    assert assessment["units"]["status"] == "UNAVAILABLE"
-    assert assessment["units"]["units"] is None
+    with pytest.raises(ValueError, match="excluded as invalid"):
+        _assess(raster.analysis, stripped, 2019, 2024)
+
+
+def test_a_missing_sd_value_is_an_explicit_adapter_error():
+    adapter = raster_adapter.ReplayRasterAdapter()
+    raster = adapter.analyse(_raster_request("RU_TVER_01", 2019, 2024))
+    cells = {**raster.cells, "features": [dict(feature) for feature in raster.cells["features"]]}
+    first = cells["features"][0]
+    first["properties"] = {**first["properties"], "agb_sd_t_ha": {"2019": 1.0}}
+    with pytest.raises(ValueError, match="agb_sd_t_ha has no value for 2024"):
+        _assess(raster.analysis, cells, 2019, 2024)
 
 
 def test_cell_weights_decide_the_parent_parts_without_double_counting():
@@ -341,9 +343,17 @@ def test_the_claim_comparison_runs_through_the_engine():
 
 
 def test_the_engine_never_imports_a_web_or_chain_library():
-    source = REFERENCE.read_text(encoding="utf-8")
-    for forbidden in ("fastapi", "web3", "sqlite3", "requests", "httpx"):
-        assert forbidden not in source
+    import ast
+
+    imported = set()
+    for path in sorted((REPO_ROOT / "carbon").glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name.split(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module.split(".")[0])
+    assert imported.isdisjoint({"fastapi", "web3", "sqlite3", "requests", "httpx"})
 
 
 # -- service-level wiring -----------------------------------------------------------------

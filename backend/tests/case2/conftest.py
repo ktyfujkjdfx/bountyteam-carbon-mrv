@@ -60,19 +60,12 @@ def engine_override() -> dict:
     packages import. That is the division: controlled vectors here, one honest end-to-end
     run there.
 
-    The carbon engine is still the real one whenever it is importable. Only when it is
-    absent does the suite inject `reference_engine`, a test double that lives in this
-    directory precisely so that nothing under `backend/app/` can reach a second
-    implementation of the formulas.
+    Carbon is always the real package. If it is absent, context construction fails with
+    an explicit dependency error; this suite never supplies a second implementation.
     """
-    from backend.app.v2.adapters import FIXTURE, carbon as carbon_module
+    from backend.app.v2.adapters import FIXTURE
 
-    override: dict = {"engine_mode": FIXTURE}
-    if not carbon_module.CARBON_AVAILABLE:
-        from . import reference_engine
-
-        override["carbon_module_override"] = reference_engine
-    return override
+    return {"engine_mode": FIXTURE}
 
 
 def make_settings(tmp_path: Path, **overrides) -> Settings:

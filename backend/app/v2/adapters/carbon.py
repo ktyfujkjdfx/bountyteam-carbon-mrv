@@ -1,4 +1,4 @@
-"""The carbon port: interval, baseline, potential units and the claim comparison.
+"""The carbon port: one call into the authoritative Carbon workflow.
 
 The engine of record is the `carbon/` package owned by Trust, and it is the only engine
 this module will load. There is no fallback: if `carbon` is not importable the port
@@ -27,11 +27,6 @@ log = logging.getLogger("backend.lens.carbon")
 POOL = "AGB_LIVE_WOODY"
 UNIT = "POTENTIAL_UNIT_OF_THE_CASE"
 SCHEMA = "carbon.case2.assessment/1"
-# RS treats a request as fully covered below this many hectares of gap, because geodesic
-# area is not additive over a partition. Passing the raw fraction to an engine that wants
-# an exact 1.0 would turn seventh-digit arithmetic into "incomplete coverage".
-COMPLETE = 1.0
-
 # The method freeze names the two spatial scenarios; an engine may spell them its own way.
 # Translating names is the adapter's job and changes no number.
 SPATIAL_NAMES = {
@@ -119,26 +114,6 @@ def _notes(*results: Any) -> list[str]:
     return collected
 
 
-def cell_observations(cells: dict, year_start: int, year_end: int):
-    """Project the per-cell layer onto the five sequences the interval needs."""
-    area, agb_start, agb_end, sd_start, sd_end = [], [], [], [], []
-    start, end = str(year_start), str(year_end)
-    for feature in cells.get("features", ()):
-        properties = feature["properties"]
-        if not properties.get("valid", True):
-            continue
-        agb = properties["agb_t_ha"]
-        sd = properties["agb_sd_t_ha"]
-        if start not in agb or end not in agb:
-            continue
-        area.append(float(properties["weight_ha"]))
-        agb_start.append(float(agb[start]))
-        agb_end.append(float(agb[end]))
-        sd_start.append(float(sd.get(start, 0.0)))
-        sd_end.append(float(sd.get(end, 0.0)))
-    return area, agb_start, agb_end, sd_start, sd_end
-
-
 def baseline_parts(cells: dict, fallback_parents: list[str], calculated_ha: float):
     """Non-overlapping parts by parent area, from the cell weights that produced the stock.
 
@@ -161,7 +136,7 @@ def baseline_parts(cells: dict, fallback_parents: list[str], calculated_ha: floa
 
 
 class CarbonAdapter:
-    """Composes the engine's four pure functions; contains no arithmetic of its own."""
+    """Adapts the RS wire payload, then calls `carbon.analyse` exactly once."""
 
     def __init__(self, module: Any | None = None, name: str | None = None):
         self._engine = module if module is not None else engine()
@@ -172,47 +147,36 @@ class CarbonAdapter:
         api = self._engine
         parameters = api.load_parameters()
         raster = request.raster
-        coverage = raster["coverage"]
-
-        area, agb_start, agb_end, sd_start, sd_end = cell_observations(
-            request.cells, request.year_start, request.year_end)
-        if area:
-            interval = api.compute_interval(
-                api.CellObservations.from_sequences(
-                    area_ha=area, agb_start=agb_start, agb_end=agb_end,
-                    sd_start=sd_start, sd_end=sd_end),
-                year_start=request.year_start, year_end=request.year_end,
-                parameters=parameters)
-        else:
-            # No usable cell is an answer about the inputs, not a crash in the engine.
-            interval = api.IntervalResult(const(api, "UNAVAILABLE"),
-                                          const(api, "MISSING_INPUT"))
-
-        parts = baseline_parts(request.cells, list(raster["request"]["parents"]),
-                               coverage["calculated_ha"])
-        baseline = api.compute_baseline(
-            [api.BaselinePart(aoi_id=aoi_id, area_ha=area_ha) for aoi_id, area_ha in parts],
-            year_start=request.year_start, year_end=request.year_end, parameters=parameters)
-
-        biomass_share = COMPLETE if coverage.get("complete") else \
-            min(1.0, max(0.0, float(coverage["biomass"]["fraction"])))
-        available = const(api, "AVAILABLE")
-        baseline_share = COMPLETE if getattr(baseline, "status", None) == available else 0.0
-        units = api.compute_units(
-            e_proj_tco2e=getattr(interval, "e_proj_tco2e", None),
-            e_base_tco2e=getattr(baseline, "e_base_tco2e", None),
-            lower_tco2e=getattr(interval, "lower_tco2e", None),
-            upper_tco2e=getattr(interval, "upper_tco2e", None),
-            area_ha=getattr(interval, "area_ha", None),
-            year_start=request.year_start, year_end=request.year_end,
-            coverage=api.Coverage(biomass=biomass_share, baseline=baseline_share),
-            parameters=parameters)
-
-        context = api.AnalysisContext(geometry_hash=request.geometry_hash,
-                                      year_start=request.year_start, year_end=request.year_end,
-                                      pool=POOL, unit=UNIT)
-        claim = api.compare_claim(self._claim_input(api, request), analysis=context,
-                                  units=units.units, parameters=parameters)
+        inputs = api.from_rs_payload(raster, request.cells)
+        parts = list(inputs.parent_weights_ha) or baseline_parts(
+            request.cells, list(raster["request"]["parents"]),
+            raster["coverage"]["calculated_ha"])
+        analysis = api.analyse(
+            api.AnalysisRequest(
+                request_id=request.geometry_hash,
+                geometry=request.geometry,
+                year_start=request.year_start,
+                year_end=request.year_end,
+                parts=tuple(api.BaselinePart(aoi_id=aoi_id, area_ha=area_ha)
+                            for aoi_id, area_ha in parts),
+                pool=POOL,
+                unit=UNIT,
+            ),
+            inputs.cells,
+            claim=self._claim_input(api, request),
+            coverage=inputs.coverage,
+            area=inputs.area,
+            timeline=inputs.timeline,
+            optical_quality=inputs.optical_quality,
+            input_status=inputs.input_status,
+            coverage_raw={name: report.raw for name, report in
+                          (inputs.coverage_raw or {}).items()},
+            excluded_cells=inputs.excluded_cells,
+            declared_e_tco2e=inputs.declared_e_tco2e,
+            parameters=parameters,
+        )
+        interval, baseline, units, claim = (
+            analysis.interval, analysis.baseline, analysis.units, analysis.claim)
 
         assessment = {
             "schema": SCHEMA,
@@ -223,7 +187,7 @@ class CarbonAdapter:
                 api, parts, [entry["year"] for entry in raster["timeline"]])),
             "units": _units_payload(units),
             "claim": _claim_payload(claim),
-            "notes": _notes(interval, baseline, units, claim),
+            "notes": _notes(analysis),
         }
         validate(internal_validator("CarbonAssessment"), assessment, "CarbonAssessment")
         return CarbonResult(assessment=assessment, adapter=self.name)

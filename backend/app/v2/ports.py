@@ -56,6 +56,7 @@ class RasterUnavailable(RuntimeError):
 class CarbonRequest:
     raster: dict
     cells: dict
+    geometry: dict
     geometry_hash: str
     year_start: int
     year_end: int

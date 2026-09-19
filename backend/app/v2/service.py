@@ -301,7 +301,8 @@ def _compute(lens: LensContext, *, analysis_id: str, run_id: str, created_at: st
         return result, []
 
     carbon = lens.ports.carbon.assess(CarbonRequest(
-        raster=raster.analysis, cells=raster.cells, geometry_hash=row["geometry_hash"],
+        raster=raster.analysis, cells=raster.cells, geometry=stored["geometry"],
+        geometry_hash=row["geometry_hash"],
         year_start=row["year_start"], year_end=row["year_end"],
         claimed_units=stored["claimed_units"], claim_origin=stored["claim_origin"],
         claim_scope=stored.get("claim_scope")))
