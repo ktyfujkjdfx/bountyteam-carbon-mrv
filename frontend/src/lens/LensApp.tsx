@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { MethodologyDialog } from '../components/MethodologyDialog';
 import { LensError, type LensApiClient } from './client';
 import { createLensClient, resolveLensConfig, switchModeHref, type LensConfig } from './config';
-import { FORBIDDEN_NOTE, ROLE_LABELS, demoLogin, fetchMe, login as serviceLogin, permissionsFor, type LensSession } from './auth';
+import { FORBIDDEN_NOTE, ROLE_LABELS, demoLogin, fetchMe, login as serviceLogin, permissionsFor, sessionTokenLogin, type LensSession } from './auth';
 import { getActor, getSession, getToken, setSession, subscribeSession } from './sessionStore';
 import { LoginScreen } from './components/LoginScreen';
 import { InvestorWorkspace, OwnerWorkspace, VerifierWorkspace } from './components/Workspaces';
@@ -78,7 +78,7 @@ export function LensApp({ client: injected, config: injectedConfig }: { client?:
       } catch (error) {
         if (error instanceof LensError && error.code === 'AUTH_NOT_DEPLOYED' && config.demoAccounts) {
           try {
-            const fallback = demoLogin(email, password);
+            const fallback = config.mode === 'http' ? sessionTokenLogin(email, password) : demoLogin(email, password);
             setSession(fallback);
             goTo(fallback.role);
             return;
@@ -211,6 +211,12 @@ function AuthenticatedShell({
         <div className="state state-error" role="alert" data-testid="lens-catalog-error">
           <strong>Каталог недоступен</strong>
           <span>{workspace.catalogError}</span>
+          {config.authScheme === 'bearer' && /Failed to fetch|NetworkError|CORS|недоступен/i.test(workspace.catalogError) && (
+            <span className="muted small" data-testid="lens-auth-hint">
+              Если сервис ещё не пропускает заголовок Authorization через CORS, откройте адрес с <span className="mono">?auth=demo</span> —
+              тогда доступ передаётся заголовком сессии.
+            </span>
+          )}
           <span className="muted small">Офлайн-набор не подставляется автоматически: переключение режима — явное действие.</span>
         </div>
       )}

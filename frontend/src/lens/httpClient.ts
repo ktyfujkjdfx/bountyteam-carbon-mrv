@@ -14,13 +14,21 @@ import { LensError, normalizeAnalysis, normalizeResult, type ArtifactPayload, ty
 import { approximateAreaHa } from './geometry';
 import type { Analysis, AnalysisAccepted, AnalysisRequestBody, AreaMeasurement, Artifact, Catalog, Geometry, Proof, Report } from './types';
 
+export type LensAuthScheme = 'bearer' | 'demo-header';
+
 export interface LensHttpConfig {
   baseUrl: string;
-  /** Runtime bearer token; read at call time so a re-login is picked up without rebuilding the client. */
+  /** Runtime token; read at call time so a re-login is picked up without rebuilding the client. */
   getToken: () => string;
-  /** Actor label the legacy demo header needs; the calculation itself does not depend on it. */
+  /** Actor label the demo header needs; the calculation itself does not depend on it. */
   getActor?: (() => string) | undefined;
-  legacyDemoHeaders?: boolean | undefined;
+  /**
+   * `bearer` sends Authorization: Bearer and is the target scheme. `demo-header` sends only
+   * X-Demo-Session / X-Demo-Actor, which is what the service deployed today allows through CORS —
+   * it does not list Authorization in Access-Control-Allow-Headers, so a bearer request never
+   * reaches it. The choice is explicit configuration, never a silent retry.
+   */
+  authScheme?: LensAuthScheme | undefined;
   fetchImpl?: typeof fetch | undefined;
   timeoutMs?: number | undefined;
 }
@@ -42,7 +50,7 @@ export function createHttpLensClient(config: LensHttpConfig): LensApiClient {
   const apiRoot = baseUrl.slice(0, -'/api/v2'.length);
   const timeoutMs = config.timeoutMs ?? 30_000;
   const fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
-  const legacy = config.legacyDemoHeaders !== false;
+  const scheme: LensAuthScheme = config.authScheme ?? 'bearer';
 
   async function send(
     path: string,
@@ -51,10 +59,10 @@ export function createHttpLensClient(config: LensHttpConfig): LensApiClient {
     const token = config.getToken();
     const headers: Record<string, string> = { Accept: init.accept ?? 'application/json' };
     if (token) {
-      headers.Authorization = `Bearer ${token}`;
-      if (legacy) headers['X-Demo-Session'] = token;
+      if (scheme === 'bearer') headers.Authorization = `Bearer ${token}`;
+      else headers['X-Demo-Session'] = token;
     }
-    if (legacy && init.method === 'POST') headers['X-Demo-Actor'] = config.getActor?.() || 'issuer';
+    if (scheme === 'demo-header' && init.method === 'POST') headers['X-Demo-Actor'] = config.getActor?.() || 'issuer';
     if (init.idempotencyKey) headers['Idempotency-Key'] = init.idempotencyKey;
     if (init.body !== undefined) headers['Content-Type'] = 'application/json';
 

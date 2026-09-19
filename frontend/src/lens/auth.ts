@@ -153,6 +153,18 @@ export async function fetchMe(transport: AuthTransport, token: string): Promise<
   return { token, role, email: String(payload.email ?? ''), display_name: String(payload.display_name ?? ''), source: 'SERVICE' };
 }
 
+/**
+ * Sign in against a service that has no /auth/login yet: the role is picked from the labelled account
+ * list and the typed password is used as the session token the service already accepts. Nothing is
+ * stored in the build and nothing is written into the URL.
+ */
+export function sessionTokenLogin(email: string, token: string): LensSession {
+  const account = DEMO_ACCOUNTS.find((item) => item.email.toLowerCase() === email.trim().toLowerCase());
+  if (!account) throw new LensError('AUTH_REJECTED', 'Роль определяется по перечисленным учётным записям; такой почты в списке нет.');
+  if (token.trim().length < 8) throw new LensError('AUTH_REJECTED', 'Введите токен сессии сервиса (не короче 8 символов) в поле пароля.');
+  return { token: token.trim(), role: account.role, email: account.email, display_name: account.display_name, source: 'SERVICE' };
+}
+
 /** Sign in offline against a labelled demo account. */
 export function demoLogin(email: string, password: string): LensSession {
   const account = DEMO_ACCOUNTS.find((item) => item.email.toLowerCase() === email.trim().toLowerCase());

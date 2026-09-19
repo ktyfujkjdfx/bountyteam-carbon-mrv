@@ -15,7 +15,7 @@ import { parsedAreas } from '../src/lens/data';
 import { newSubmission, saveSubmissions } from '../src/lens/workspace';
 import type { AnalysisResult } from '../src/lens/types';
 
-const offline = { mode: 'fixture' as const, baseUrl: '/api/v2', source: 'url' as const, demoAccounts: true };
+const offline = { mode: 'fixture' as const, baseUrl: '/api/v2', source: 'url' as const, demoAccounts: true, authScheme: 'bearer' as const };
 
 async function resultOf(scenario: string, body: Record<string, unknown> = {}): Promise<AnalysisResult> {
   const client = createFixtureLensClient({ queuedMs: 0, runningMs: 0 });
