@@ -2,7 +2,7 @@ import { useId, useState } from 'react';
 import { Hash, StatusBadge } from '../../components/common';
 import { metaFor } from '../../domain/status';
 import { ANCHOR_META, COMPARISON_META } from '../status';
-import { passportContent, passportPayload, renderReportHtml, sha256HexOfText, verifyPassportFile, type PassportFileVerdict } from '../passport';
+import { contentHashOf, passportPayload, renderReportHtml, reportHashOf, verifyPassportFile, type PassportFileVerdict } from '../passport';
 import { PASSPORT_STATUS_TEXT, type PassportStatus } from '../workspace';
 import type { AnalysisResult, Proof } from '../types';
 
@@ -45,7 +45,7 @@ export function PassportPanel({ result, proof, status, submittedBy, finalizedBy,
 
   const verifyContent = async () => {
     setCheck({ kind: 'checking' });
-    const hash = await sha256HexOfText(passportContent(result));
+    const hash = await contentHashOf(result);
     if (hash === null) {
       setCheck({ kind: 'unsupported' });
       return;
@@ -64,7 +64,7 @@ export function PassportPanel({ result, proof, status, submittedBy, finalizedBy,
       setReportCheck({ kind: 'unsupported' });
       return;
     }
-    const hash = await sha256HexOfText(JSON.stringify({ report: 'carbon-lens-report/2.0.0', content: passportContent(result) }));
+    const hash = await reportHashOf(result);
     if (hash === null) setReportCheck({ kind: 'unsupported' });
     else setReportCheck(hash === expected ? { kind: 'match', hash } : { kind: 'mismatch', hash, expected });
   };

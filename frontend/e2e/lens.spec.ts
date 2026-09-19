@@ -198,7 +198,10 @@ test('passport: a modified copy of the downloaded report is detected', async ({ 
   await runAsVerifier(page, 'DOC_EXAMPLE_Q395');
 
   await page.getByTestId('lens-passport-verify').click();
-  await expect(page.getByTestId('lens-passport-result')).toContainText('совпадает');
+  // Not bare "совпадает": that substring also appears in "не совпадает", so the assertion would
+  // hold whichever answer the check gave.
+  await expect(page.getByTestId('lens-passport-result')).toContainText('содержания совпадает');
+  await expect(page.getByTestId('lens-passport-result')).not.toContainText('не совпадает');
 
   const download = await Promise.all([page.waitForEvent('download'), page.getByTestId('lens-passport-download').click()]).then(([d]) => d);
   const stream = await download.createReadStream();

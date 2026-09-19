@@ -1,55 +1,99 @@
 // Passport content, report rendering and the integrity check an outside reader can repeat.
 //
-// The canonical content mirrors what the service hashes: the scientific content without the passport
+// The content view mirrors what the service hashes: the scientific content without the passport
 // itself, without ids and without run time. A value cannot hash itself, and a file that changes only
 // because it was fetched at another moment is not a changed result.
+//
+// Two forms of the same object, for two different jobs:
+//
+// - `passportContent` is the readable one, indented, and it is what goes into the downloaded file.
+// - `canonicalJson` is RFC 8785 (JCS) — sorted keys, no whitespace — and it is the only form whose
+//   hash can be compared with the service's. The service computes `sha256(rfc8785.dumps(view))`, so
+//   hashing a pretty-printed rendering instead produces a number that matches nothing and quietly
+//   reports every genuine passport as altered.
 
 import type { AnalysisResult } from './types';
 
-export function passportContent(result: Omit<AnalysisResult, 'passport'> | AnalysisResult): string {
-  const record = result as AnalysisResult;
+/** Must equal the service's REPORT_SCHEMA_VERSION; it is part of the report hash preimage. */
+export const REPORT_SCHEMA_VERSION = 'carbon-lens-report/2.0.0';
+
+/**
+ * RFC 8785 canonical JSON.
+ *
+ * JCS was specified against ECMAScript, so `JSON.stringify` already produces the required form for
+ * every primitive; all this adds is sorted keys and no whitespace. Keys sort by UTF-16 code unit,
+ * which is what `<` does on JavaScript strings.
+ */
+export function canonicalJson(value: unknown): string {
+  if (value === null) return 'null';
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new Error(`не сериализуемое число в паспорте: ${String(value)}`);
+    return JSON.stringify(value);
+  }
+  if (typeof value === 'boolean' || typeof value === 'string') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`;
+  }
+  throw new Error(`не сериализуемое значение в паспорте: ${typeof value}`);
+}
+
+/** The scientific content, exactly the fields the service hashes and only those. */
+export function contentView(result: Omit<AnalysisResult, 'passport'> | AnalysisResult): Record<string, unknown> {
+  const record = result as AnalysisResult & Record<string, unknown>;
   const identity = { ...record.identity };
   delete (identity as { analysis_id?: string }).analysis_id;
   const request = { ...record.request };
   delete (request as { aoi_id?: string | null }).aoi_id;
-  return JSON.stringify(
-    {
-      identity,
-      request,
-      calculation_status: record.calculation_status,
-      evidence_status: record.evidence_status,
-      areas: record.areas,
-      coverage: record.coverage,
-      timeline: record.timeline,
-      change: record.change,
-      uncertainty: record.uncertainty,
-      baseline: record.baseline,
-      units: record.units,
-      scenario_values: record.scenario_values,
-      claim: record.claim,
-      zones: record.zones,
-      evidence: record.evidence,
-      sources: record.sources,
-      artifacts: record.artifacts.map(({ artifact_id, role, media_type, sha256, size_bytes, bbox_wgs84, crs, resolution, resolution_units, unit, provenance }) => ({
-        artifact_id,
-        role,
-        media_type,
-        sha256,
-        size_bytes,
-        bbox_wgs84,
-        crs,
-        resolution,
-        resolution_units,
-        unit,
-        provenance,
-      })),
-      limitations: record.limitations,
-      notes: record.notes,
-      fixture: record.fixture,
-    },
-    null,
-    2,
-  );
+  return {
+    identity,
+    request,
+    calculation_status: record.calculation_status,
+    evidence_status: record.evidence_status,
+    areas: record.areas,
+    coverage: record.coverage,
+    timeline: record.timeline,
+    change: record.change,
+    uncertainty: record.uncertainty,
+    baseline: record.baseline,
+    units: record.units,
+    scenario_values: record.scenario_values,
+    claim: record.claim,
+    zones: record.zones,
+    // Risks and the projection are part of what the service hashes. Leaving them out was the
+    // difference between a check that verifies the passport and one that always refuses it.
+    risks: record.risks,
+    projection: record.projection,
+    evidence: record.evidence,
+    sources: record.sources,
+    // Written out rather than picked by key list: the service hashes exactly these eleven fields,
+    // and naming them here is what makes a field added to Artifact fail to compile instead of
+    // silently changing the hash.
+    artifacts: record.artifacts.map(({ artifact_id, role, media_type, sha256, size_bytes, bbox_wgs84, crs, resolution, resolution_units, unit, provenance }) => ({
+      artifact_id, role, media_type, sha256, size_bytes, bbox_wgs84, crs, resolution, resolution_units, unit, provenance,
+    })),
+    limitations: record.limitations,
+    notes: record.notes,
+    fixture: record.fixture,
+  };
+}
+
+/** The readable rendering that goes into the downloaded file. Never the hash preimage. */
+export function passportContent(result: Omit<AnalysisResult, 'passport'> | AnalysisResult): string {
+  return JSON.stringify(contentView(result), null, 2);
+}
+
+/** The scientific content hash, computed the way the service computes it. */
+export function contentHashOf(result: Omit<AnalysisResult, 'passport'> | AnalysisResult): Promise<string | null> {
+  return sha256HexOfText(canonicalJson(contentView(result)));
+}
+
+/** The report hash: the same content view inside the wrapper the service hashes. */
+export function reportHashOf(result: Omit<AnalysisResult, 'passport'> | AnalysisResult): Promise<string | null> {
+  return sha256HexOfText(canonicalJson({ report: REPORT_SCHEMA_VERSION, content: contentView(result) }));
 }
 
 /** Downloaded passport: canonical content plus the integrity block it is checked against. */
@@ -88,7 +132,9 @@ export async function verifyPassportFile(text: string): Promise<PassportFileVerd
   if (!record.content || typeof record.integrity?.content_sha256 !== 'string') {
     return { kind: 'invalid', message: 'Это не паспорт Carbon Lens: нет блока content или integrity.content_sha256.' };
   }
-  const hash = await sha256HexOfText(JSON.stringify(record.content, null, 2));
+  // The file is readable JSON; the hash is taken over its canonical form, so reformatting the file
+  // is not reported as tampering while any change to a value still is.
+  const hash = await sha256HexOfText(canonicalJson(record.content));
   if (hash === null) return { kind: 'invalid', message: 'Проверка недоступна: в этом браузере нет Web Crypto.' };
   const content = record.content as { identity?: { input_hash?: unknown } };
   const analysis = String(content.identity?.input_hash ?? 'без идентификатора');

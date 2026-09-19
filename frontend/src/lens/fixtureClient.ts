@@ -5,7 +5,7 @@ import { LensError, type ArtifactPayload, type LensApiClient, type SubmitOptions
 import { caseSources, casePrices, parsedAreas, sampleRequests } from './data';
 import { approximateAreaHa, validateGeometry } from './geometry';
 import { buildCellsLayer, buildFixtureResult, scenarioNumbers, FIXTURE_SCENARIO_ORDER, type FixtureContext, type FixtureScenarioId } from './fixtures';
-import { passportContent, sha256HexOfText } from './passport';
+import { contentHashOf, reportHashOf, sha256HexOfText } from './passport';
 import type { Analysis, AnalysisAccepted, AnalysisRequestBody, AnalysisResult, AreaMeasurement, Artifact, Catalog, Geometry, Proof, Report } from './types';
 import { LENS_MAX_AREA_HA, LENS_YEAR_MAX, LENS_YEAR_MIN } from './types';
 
@@ -249,7 +249,9 @@ export function createFixtureLensClient(options: FixtureClientOptions = {}): Len
         zones: built.zones.map((zone) => ({ ...zone, artifact_ref: zonesArtifact.artifact_id })),
         artifacts: [cellsArtifact, zonesArtifact],
       };
-      const contentHash = (await sha256HexOfText(passportContent(withoutPassport as AnalysisResult))) ?? '0x00';
+      // The same canonical form the service hashes, so a passport produced offline is checked by
+      // exactly the procedure a live one is.
+      const contentHash = (await contentHashOf(withoutPassport as AnalysisResult)) ?? '0x00';
       const result: AnalysisResult = {
         ...withoutPassport,
         passport: {
@@ -265,7 +267,7 @@ export function createFixtureLensClient(options: FixtureClientOptions = {}): Len
           created_at: createdAt,
         },
       };
-      const reportHash = (await sha256HexOfText(JSON.stringify({ report: 'carbon-lens-report/2.0.0', content: passportContent(result) }))) ?? '0x00';
+      const reportHash = (await reportHashOf(result)) ?? '0x00';
       result.passport = { ...result.passport, report_hash: reportHash };
 
       const analysis: Analysis = {
