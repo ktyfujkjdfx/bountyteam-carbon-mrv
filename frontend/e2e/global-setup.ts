@@ -1,4 +1,3 @@
-import type { FullConfig } from '@playwright/test';
 import { preview, type PreviewServer } from 'vite';
 
 /**
@@ -7,7 +6,7 @@ import { preview, type PreviewServer } from 'vite';
  * inherited pipes open, leaving a green suite hung forever. The returned teardown is
  * awaited by Playwright and closes every keep-alive connection before the HTTP server.
  */
-export default async function globalSetup(_config: FullConfig) {
+export default async function globalSetup() {
   if (process.env.E2E_BASE_URL) return undefined;
   const port = Number(process.env.E2E_PORT ?? 4173);
   const server: PreviewServer = await preview({

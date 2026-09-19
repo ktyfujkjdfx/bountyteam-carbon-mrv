@@ -14,6 +14,10 @@ import type {
   Proof,
   Report,
 } from './types';
+import type { components as LensApiComponents } from '../api/generated/openapi.v2';
+
+export type VerificationRequest = LensApiComponents['schemas']['VerificationRequest'];
+export type CreateVerificationRequest = LensApiComponents['schemas']['CreateRequest'];
 
 export class LensError extends Error {
   readonly code: string;
@@ -57,6 +61,11 @@ export interface LensApiClient {
   getReport(analysisId: string, format: 'json', signal?: AbortSignal): Promise<Report>;
   getReportHtml(analysisId: string, signal?: AbortSignal): Promise<string>;
   getArtifact(artifact: Artifact, signal?: AbortSignal): Promise<ArtifactPayload>;
+  listRequests?(signal?: AbortSignal): Promise<VerificationRequest[]>;
+  createRequest?(body: CreateVerificationRequest, signal?: AbortSignal): Promise<VerificationRequest>;
+  submitRequest?(requestId: string, signal?: AbortSignal): Promise<VerificationRequest>;
+  startRequestAnalysis?(requestId: string, options: SubmitOptions): Promise<VerificationRequest>;
+  finalizeRequest?(requestId: string, signal?: AbortSignal): Promise<VerificationRequest>;
 }
 
 export function asRecord(value: unknown): Record<string, unknown> {

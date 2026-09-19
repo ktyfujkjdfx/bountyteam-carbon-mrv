@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useResource } from '../hooks/useResource';
-import { LensError, type LensApiClient } from './client';
+import { LensError, type CreateVerificationRequest, type LensApiClient, type VerificationRequest } from './client';
 import { approximateAreaHa, validateGeometry } from './geometry';
 import { renderReportHtml } from './passport';
 import { useAnalysis } from './useAnalysis';
@@ -14,6 +14,7 @@ import {
   recordStep,
   saveSubmissions,
   type LifecycleStep,
+  type LifecycleEntry,
   type Submission,
 } from './workspace';
 
@@ -25,6 +26,34 @@ const EMPTY_DRAFT: RequestDraft = {
   yearEnd: 2024,
   claimedUnits: '',
 };
+
+function serverSubmission(request: VerificationRequest, result: AnalysisResult | null): Submission {
+  const status = request.status === 'FINALIZED' ? 'FINALIZED' : request.status === 'CALCULATED' ? 'CALCULATED' : 'SUBMITTED';
+  return {
+    submission_id: request.request_id,
+    created_at: request.created_at,
+    updated_at: request.updated_at,
+    owner_email: request.owner.username,
+    title: request.aoi_id ?? 'Контур пользователя',
+    aoi_id: request.aoi_id,
+    geometry: request.geometry as Geometry,
+    geometry_hash: request.geometry_hash,
+    year_start: request.year_start,
+    year_end: request.year_end,
+    claimed_units: request.claimed_units,
+    status,
+    analysis_id: request.analysis_id,
+    result,
+    notes: [],
+    finalized_by: request.finalized_by,
+    finalized_at: request.finalized_at,
+    lifecycle: request.events.flatMap((event): LifecycleEntry[] => {
+      if (event.to_status === 'CALCULATED') return [{ step: 'CALCULATION' as const, at: event.occurred_at, by: event.user_id ?? 'service', note: event.note }];
+      if (event.to_status === 'FINALIZED') return [{ step: 'VERIFICATION' as const, at: event.occurred_at, by: event.user_id ?? 'verifier', note: event.note }];
+      return [];
+    }),
+  };
+}
 
 function cellsFromGeoJson(data: unknown): CellFeature[] {
   const collection = data as { features?: Array<{ geometry?: Geometry; properties?: Record<string, unknown> }> };
@@ -101,9 +130,9 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
   const [drawing, setDrawing] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
 
-  const [submissions, setSubmissions] = useState<Submission[]>(() => loadSubmissions());
+  const [submissions, setSubmissions] = useState<Submission[]>(() => client.kind === 'fixture' ? loadSubmissions() : []);
   const submissionsRef = useRef<Submission[]>(submissions);
-  const [activeSubmissionId, setActiveSubmissionId] = useState<string | null>(() => loadSubmissions()[0]?.submission_id ?? null);
+  const [activeSubmissionId, setActiveSubmissionId] = useState<string | null>(() => client.kind === 'fixture' ? loadSubmissions()[0]?.submission_id ?? null : null);
 
   const [priceKey, setPriceKey] = useState<PriceKey>('base');
   const [customPrice, setCustomPrice] = useState<number | null>(null);
@@ -115,6 +144,37 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
   const [proof, setProof] = useState<Proof | null>(null);
 
   const analysis = useAnalysis(client);
+
+  const refreshRequests = useCallback(async (signal?: AbortSignal) => {
+    if (client.kind !== 'http' || !client.listRequests) return;
+    try {
+      const requests = await client.listRequests(signal);
+      const next = await Promise.all(requests.map(async (request) => {
+        if (!request.analysis_id) return serverSubmission(request, null);
+        try {
+          const item = await client.getAnalysis(request.analysis_id, signal);
+          return serverSubmission(request, item.result);
+        } catch (error) {
+          if (signal?.aborted) throw error;
+          return serverSubmission(request, null);
+        }
+      }));
+      if (signal?.aborted) return;
+      submissionsRef.current = next;
+      setSubmissions(next);
+      setActiveSubmissionId((current) => current && next.some((item) => item.submission_id === current) ? current : next[0]?.submission_id ?? null);
+      setRequestError(null);
+    } catch (error) {
+      if (!signal?.aborted) setRequestError(error instanceof LensError ? `${error.code}: ${error.message}` : String(error));
+    }
+  }, [client]);
+
+  useEffect(() => {
+    if (client.kind !== 'http') return;
+    const controller = new AbortController();
+    queueMicrotask(() => void refreshRequests(controller.signal));
+    return () => controller.abort();
+  }, [actorEmail, client.kind, refreshRequests]);
 
   // A contour is checked in the browser before anything is sent, so a fixable mistake gets its own
   // message instead of a generic failure from the service.
@@ -153,9 +213,9 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
 
   const persist = useCallback((next: Submission[]) => {
     submissionsRef.current = next;
-    saveSubmissions(next);
+    if (client.kind === 'fixture') saveSubmissions(next);
     setSubmissions(next);
-  }, []);
+  }, [client.kind]);
 
   const activeSubmission = useMemo(
     () => submissions.find((item) => item.submission_id === activeSubmissionId) ?? null,
@@ -208,7 +268,7 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
   }, [client, rawResult]);
 
   const submitRequest = useCallback(
-    (title: string) => {
+    async (title: string) => {
       setRequestError(null);
       if (!draft.geometry) {
         setRequestError('Контур не задан: выберите участок, нарисуйте его или импортируйте GeoJSON.');
@@ -229,6 +289,26 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
         setRequestError('Заявленный объём должен быть неотрицательным числом.');
         return null;
       }
+      if (client.kind === 'http') {
+        if (!client.createRequest || !client.submitRequest) throw new LensError('CONTRACT', 'Сервисный клиент не поддерживает заявки.');
+        try {
+          const created = await client.createRequest({
+            aoi_id: draft.aoiId,
+            geometry: acceptedMeasurement.geometry as NonNullable<CreateVerificationRequest['geometry']>,
+            year_start: draft.yearStart,
+            year_end: draft.yearEnd,
+            claimed_units: claimed === '' ? null : Number(claimed),
+          });
+          const submitted = await client.submitRequest(created.request_id);
+          const submission = serverSubmission(submitted, null);
+          persist([submission, ...submissionsRef.current.filter((item) => item.submission_id !== submission.submission_id)]);
+          setActiveSubmissionId(submission.submission_id);
+          return submission;
+        } catch (error) {
+          setRequestError(error instanceof LensError ? `${error.code}: ${error.message}` : String(error));
+          return null;
+        }
+      }
       const submission = newSubmission({
         owner_email: actorEmail,
         title,
@@ -243,7 +323,7 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
       setActiveSubmissionId(submission.submission_id);
       return submission;
     },
-    [actorEmail, client.kind, draft, measureResource.data, measurement, persist],
+    [actorEmail, client, draft, measureResource.data, measurement, persist],
   );
 
   const runAnalysis = useCallback(
@@ -252,7 +332,20 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
       setSelectedCellId(null);
       setCells({ kind: 'hidden' });
       setProof(null);
-      const result = await analysis.run(
+      let result: AnalysisResult | null;
+      let analysisId: string | null = null;
+      if (client.kind === 'http') {
+        if (!client.startRequestAnalysis) throw new LensError('CONTRACT', 'Сервисный клиент не поддерживает lifecycle заявок.');
+        try {
+          const accepted = await client.startRequestAnalysis(submission.submission_id, { idempotencyKey: `lens-request-${crypto.randomUUID()}` });
+          analysisId = accepted.analysis_id;
+          if (!analysisId) throw new LensError('CONTRACT', 'Сервис не вернул analysis_id для заявки.');
+          result = await analysis.watch(analysisId);
+        } catch (error) {
+          setRequestError(error instanceof LensError ? `${error.code}: ${error.message}` : String(error));
+          return null;
+        }
+      } else result = await analysis.run(
         {
           aoi_id: submission.aoi_id,
           geometry: submission.geometry,
@@ -279,7 +372,7 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
       const updated: Submission = {
         ...submission,
         status: submission.status === 'FINALIZED' ? 'FINALIZED' : 'CALCULATED',
-        analysis_id: analysis.state.analysis?.analysis_id ?? result.identity.analysis_id,
+        analysis_id: analysisId ?? result.identity.analysis_id,
         result,
         updated_at: new Date().toISOString(),
       };
@@ -322,7 +415,19 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
   }, [client, shownResult]);
 
   const finalize = useCallback(
-    (submission: Submission, verifier: string) => {
+    async (submission: Submission, verifier: string) => {
+      if (client.kind === 'http') {
+        if (!client.finalizeRequest) throw new LensError('CONTRACT', 'Сервисный клиент не поддерживает финализацию.');
+        try {
+          const finalized = await client.finalizeRequest(submission.submission_id);
+          const updated = serverSubmission(finalized, submission.result);
+          persist(submissionsRef.current.map((item) => item.submission_id === submission.submission_id ? updated : item));
+          return;
+        } catch (error) {
+          setRequestError(error instanceof LensError ? `${error.code}: ${error.message}` : String(error));
+          return;
+        }
+      }
       const updated = recordStep(
         { ...submission, status: 'FINALIZED', finalized_by: verifier, finalized_at: new Date().toISOString() },
         'VERIFICATION',
@@ -330,7 +435,7 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
       );
       persist(submissionsRef.current.map((item) => (item.submission_id === submission.submission_id ? updated : item)));
     },
-    [persist],
+    [client, persist],
   );
 
   const addNote = useCallback(

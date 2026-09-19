@@ -114,6 +114,51 @@ export function useAnalysis(client: LensApiClient) {
     [client],
   );
 
+  const watch = useCallback(async (analysisId: string): Promise<AnalysisResult | null> => {
+    if (busyRef.current) return null;
+    busyRef.current = true;
+    const runId = ++runIdRef.current;
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    const fresh = () => runId === runIdRef.current && !controller.signal.aborted;
+    setState({ phase: 'polling', analysis: null, result: null, error: null });
+    try {
+      const polled = await pollUntilTerminal<Analysis>({
+        fetch: (signal) => client.getAnalysis(analysisId, signal),
+        isTerminal: (value) => isTerminal(String(value.job_state)),
+        onUpdate: (value) => { if (fresh()) setState((current) => ({ ...current, analysis: value })); },
+        signal: controller.signal,
+        initialDelayMs: 300,
+        maxDurationMs: 180_000,
+      });
+      if (!fresh()) return null;
+      if (polled.status === 'timeout') {
+        setState((current) => ({ ...current, phase: 'timeout' }));
+        return null;
+      }
+      if (polled.status === 'error') {
+        setState((current) => ({ ...current, phase: 'error', error: { code: polled.error.code ?? 'POLL_FAILED', message: polled.error.message, detail: null } }));
+        return null;
+      }
+      if (polled.status !== 'terminal') return null;
+      const finished = polled.value;
+      if (String(finished.job_state) === 'FAILED' || !finished.result) {
+        setState({ phase: 'error', analysis: finished, result: null, error: finished.error
+          ? { code: finished.error.code, message: finished.error.message, detail: null }
+          : { code: 'JOB_FAILED', message: 'Расчёт завершился без результата', detail: null } });
+        return null;
+      }
+      setState({ phase: 'done', analysis: finished, result: finished.result, error: null });
+      return finished.result;
+    } catch (error) {
+      if (fresh()) setState({ phase: 'error', analysis: null, result: null, error: toError(error) });
+      return null;
+    } finally {
+      if (runId === runIdRef.current) busyRef.current = false;
+    }
+  }, [client]);
+
   const busy = state.phase === 'submitting' || state.phase === 'polling';
-  return { state, busy, run, reset, show };
+  return { state, busy, run, watch, reset, show };
 }

@@ -120,7 +120,7 @@ export function OwnerWorkspace({ workspace, session }: { workspace: WorkspaceSta
             measureError={workspace.measureError}
             drawing={workspace.drawing}
             onToggleDrawing={() => workspace.setDrawing(!workspace.drawing)}
-            onSubmit={() => workspace.submitRequest(workspace.draft.aoiId ?? 'Контур пользователя')}
+            onSubmit={() => void workspace.submitRequest(workspace.draft.aoiId ?? 'Контур пользователя')}
             submitLabel="Подать заявку"
             busy={workspace.analysis.busy}
             allowClaim
@@ -254,7 +254,7 @@ export function VerifierWorkspace({ workspace, session, offline }: { workspace: 
                 <button
                   type="button"
                   className="btn btn-small btn-secondary"
-                  onClick={() => workspace.finalize(active, session.username)}
+                  onClick={() => void workspace.finalize(active, session.username)}
                   disabled={!active.result || active.status === 'FINALIZED'}
                   data-testid="lens-finalize"
                 >

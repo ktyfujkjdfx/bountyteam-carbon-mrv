@@ -7,7 +7,7 @@
 // `measureArea` calls POST /areas/measure. HTTP mode never substitutes a browser estimate for
 // an unavailable authoritative measurement.
 
-import { LensError, normalizeAnalysis, normalizeResult, normalizeWarnings, type ArtifactPayload, type LensApiClient, type SubmitOptions, asRecord } from './client';
+import { LensError, normalizeAnalysis, normalizeResult, normalizeWarnings, type ArtifactPayload, type CreateVerificationRequest, type LensApiClient, type SubmitOptions, type VerificationRequest, asRecord } from './client';
 import type { components as LensApiComponents } from '../api/generated/openapi.v2';
 import type { Analysis, AnalysisAccepted, AnalysisRequestBody, AreaMeasurement, Artifact, Catalog, Geometry, Proof, Report } from './types';
 
@@ -41,7 +41,7 @@ export function createHttpLensClient(config: LensHttpConfig): LensApiClient {
 
   async function send(
     path: string,
-    init: { method?: 'GET' | 'POST'; body?: unknown; idempotencyKey?: string; accept?: string; signal?: AbortSignal | undefined },
+    init: { method?: 'GET' | 'POST' | 'PATCH'; body?: unknown; idempotencyKey?: string; accept?: string; signal?: AbortSignal | undefined },
   ): Promise<Response> {
     const token = config.getToken();
     const headers: Record<string, string> = { Accept: init.accept ?? 'application/json' };
@@ -119,6 +119,29 @@ export function createHttpLensClient(config: LensHttpConfig): LensApiClient {
         source: 'SERVICE',
         note: 'Геодезическая площадь и нормализованный контур рассчитаны сервисом.',
       };
+    },
+
+    async listRequests(signal) {
+      const payload = await json<LensApiComponents['schemas']['VerificationRequestList']>('/requests', { signal });
+      return payload.requests;
+    },
+
+    createRequest(body: CreateVerificationRequest, signal?: AbortSignal) {
+      return json<VerificationRequest>('/requests', { method: 'POST', body, signal });
+    },
+
+    submitRequest(requestId: string, signal?: AbortSignal) {
+      return json<VerificationRequest>(`/requests/${encodeURIComponent(requestId)}/submit`, { method: 'POST', signal });
+    },
+
+    startRequestAnalysis(requestId: string, options: SubmitOptions) {
+      return json<VerificationRequest>(`/requests/${encodeURIComponent(requestId)}/analysis`, {
+        method: 'POST', idempotencyKey: options.idempotencyKey, signal: options.signal,
+      });
+    },
+
+    finalizeRequest(requestId: string, signal?: AbortSignal) {
+      return json<VerificationRequest>(`/requests/${encodeURIComponent(requestId)}/finalize`, { method: 'POST', signal });
     },
 
     createAnalysis(body: AnalysisRequestBody, options: SubmitOptions) {
