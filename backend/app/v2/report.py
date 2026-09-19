@@ -33,6 +33,7 @@ UNAVAILABLE_REASON_TEXT = {
 }
 CLAIM_TEXT = {
     "NOT_PROVIDED": "заявление не вводилось",
+    "NOT_APPLICABLE": "заявлен нулевой объём, подтверждать нечего",
     "NOT_COMPARABLE": "заявление несопоставимо с расчётом",
     "UNASSESSABLE": "расчёт единиц недоступен, сравнивать не с чем",
     "SUPPORTED_BY_CASE": "расчёт по условиям кейса покрывает заявление",
@@ -103,6 +104,7 @@ class ReportBuilder:
             ("Площадь запроса, га", _number(areas["requested_ha"], 4)),
             ("Расчётная площадь, га", _number(areas["calculated_ha"], 4)),
             ("Площадь без данных, га", _number(areas["missing_ha"], 4)),
+            ("Расхождение площадей, га", _number(areas["area_difference_ha"], 6)),
             ("Статус расчёта", _e(result["calculation_status"])),
             ("Статус свидетельств", _e(result["evidence_status"])),
         ])
@@ -112,7 +114,7 @@ class ReportBuilder:
             ("Суммарный запас на начало, т C", _number(change["total_carbon_start_tc"])),
             ("Суммарный запас на конец, т C", _number(change["total_carbon_end_tc"])),
             ("Изменение запаса ΔC, т C", _number(change["delta_carbon_tc"])),
-            ("E проекта, т CO₂-экв.", _number(change["eproj_tco2e"])),
+            ("E проекта, т CO₂-экв.", _number(units["eproj_tco2e"])),
             ("e, т CO₂-экв./га/год", _number(change["eproj_tco2e_ha_year"], 4)),
             ("Пул", _e(change["pool"])),
             ("Знак", _e(change["sign_convention"])),
@@ -149,7 +151,7 @@ class ReportBuilder:
             ("Статус", _e(CLAIM_TEXT.get(claim["status"], claim["status"]))),
             ("Заявлено единиц", _number(claim["claimed_units"], 0)),
             ("Сопоставимо", "да" if claim["comparable"] else "нет"),
-            ("Разрыв, единиц", _number(claim["gap_units"], 0)),
+            ("Неподтверждённый разрыв, единиц", _number(claim["unsupported_gap"], 0)),
             ("Доля подтверждённого", _number(claim["supported_share"], 4)),
             ("Причины несопоставимости", _e(", ".join(claim["mismatch_reasons"]) or "—")),
         ]) if claim["status"] != "NOT_PROVIDED" else ""
@@ -162,7 +164,11 @@ class ReportBuilder:
         sources = "".join(
             f"<li>{_e(item['product'])} ({_e(item['version'])}) — {_e(item['attribution'])}</li>"
             for item in result["sources"])
-        limitations = "".join(f"<li>{_e(item)}</li>" for item in result["limitations"])
+        limitations = "".join(f"<li>{_e(item['message'])}</li>"
+                              for item in result["limitations"])
+        warnings = "".join(
+            f"<li>{_e(item['severity'])}: {_e(item['message'])}</li>"
+            for item in result["evidence"]["warnings"])
         notes = "".join(f"<li>{_e(item)}</li>" for item in result["notes"])
 
         return f"""<!DOCTYPE html>
@@ -200,6 +206,7 @@ class ReportBuilder:
 {('<h2>Зоны изменения</h2><table><tr><th>Зона</th><th>Факт</th><th>Причина</th>'
   '<th>Площадь, га</th><th>Вклад, т CO₂-экв.</th></tr>' + zones + '</table>') if zones else ''}
 <h2>Источники</h2><ul>{sources}</ul>
+{('<h2>Замечания к свидетельствам</h2><ul>' + warnings + '</ul>') if warnings else ''}
 <h2>Ограничения</h2><ul>{limitations}</ul>
 {('<h2>Примечания метода</h2><ul>' + notes + '</ul>') if notes else ''}
 <h2>Идентичность</h2><table>{_rows([

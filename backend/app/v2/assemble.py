@@ -31,29 +31,42 @@ COMPARISON_SCOPE = "geometry_hash+year_start+year_end+pool+method_version"
 PRICE_KEYS = ("low", "base", "high")
 PRICE_REF = "data/methodology/parameters.csv#price_low,price_base,price_high"
 
+# The keys are the role names the raster owner writes into its manifest. A role that is
+# not mapped here means a product was used and not credited, so an unmapped role is a
+# blocking warning rather than a silently shorter source list.
 ROLE_TO_SOURCE = {
     "biomass": "CCI_V7",
+    "cci_biomass": "CCI_V7",
+    "cci_cell_layer": "CCI_V7",
     "sentinel2:reflectance_path": "S2_L2A",
     "sentinel2:scl_path": "S2_L2A",
     "gfc": "GFC_2025_V113",
     "modis_burn": "MODIS_MCD64A1_061",
+    "table": "CASE_RULES_V1",
 }
 ALWAYS_CITED = ("IPCC_FOREST_2006", "IPCC_GENERIC_2006", "CASE_RULES_V1")
 
 BASE_LIMITATIONS = (
-    "Учитывается только живая надземная древесная биомасса; это не полный баланс экосистемы.",
-    "Положительное E — потеря учитываемого пула за период, а не мгновенный выброс всего "
-    "углерода в атмосферу.",
-    "Базовая линия задана сценарными правилами кейса по истории 2015–2019; она не "
-    "доказывает дополнительность и не описывает действия владельца участка.",
-    "Сценарная стоимость использует заданные кейсом цены. Это не рыночная котировка, не "
-    "установленный ущерб и не гарантированная выручка.",
+    ("POOL_SCOPE",
+     "Учитывается только живая надземная древесная биомасса; это не полный баланс "
+     "экосистемы."),
+    ("SIGN_CONVENTION",
+     "Положительное E — потеря учитываемого пула за период, а не мгновенный выброс всего "
+     "углерода в атмосферу."),
+    ("BASELINE_IS_A_SCENARIO",
+     "Базовая линия задана сценарными правилами кейса по истории 2015–2019; она не "
+     "доказывает дополнительность и не описывает действия владельца участка."),
+    ("SCENARIO_VALUE_ONLY",
+     "Сценарная стоимость использует заданные кейсом цены. Это не рыночная котировка, не "
+     "установленный ущерб и не гарантированная выручка."),
 )
 STUB_LIMITATION = (
+    "STUB_FIXTURE",
     "Растровые значения получены из размеченного вектора-заглушки, а не измерены по "
     "предоставленным растрам. Результат демонстрирует формат и правила, а не состояние "
-    "участка."
+    "участка.",
 )
+RASTER_LIMITATION = "RASTER_LIMITATION"
 
 CLAIM_SCOPE_NOTE = (
     "Сравнение возможно только при совпадении контура, периода, пула и единиц. "
@@ -61,12 +74,27 @@ CLAIM_SCOPE_NOTE = (
 )
 
 
-def _fraction(value: Any) -> float:
+def _number(value: Any) -> float:
+    """The unclamped value as the owning component reported it."""
     try:
         number = float(value)
     except (TypeError, ValueError):
         return 0.0
-    return min(1.0, max(0.0, number))
+    return number if number == number and abs(number) != float("inf") else 0.0
+
+
+def _fraction(value: Any) -> float:
+    """The public share. Geodesic arithmetic can land a hair outside [0, 1]; the raw
+    value is published beside this one rather than being lost to the clamp."""
+    return min(1.0, max(0.0, _number(value)))
+
+
+def warning(code: str, message: str, severity: str = "WARNING", **details: Any) -> dict:
+    return {"code": code, "severity": severity, "message": message, "details": details}
+
+
+def limitation(code: str, message: str) -> dict:
+    return {"code": code, "message": message}
 
 
 def identity(*, analysis_id: str, input_hash: str, geometry_hash: str, raster: dict,
@@ -94,10 +122,15 @@ def areas_block(raster: dict, cells: dict) -> dict:
     coverage = raster["coverage"]
     parts = carbon_adapter.baseline_parts(cells, list(raster["request"]["parents"]),
                                           coverage["calculated_ha"])
+    requested = _number(coverage["requested_ha"])
+    calculated = _number(coverage["calculated_ha"])
     return {
         "requested_ha": coverage["requested_ha"],
         "calculated_ha": coverage["calculated_ha"],
-        "missing_ha": coverage["missing_ha"],
+        # Two different questions: how much was not covered, and how far the two geodesic
+        # sums are apart. The first is never negative; the second keeps its sign.
+        "missing_ha": max(0.0, requested - calculated),
+        "area_difference_ha": calculated - requested,
         "complete": bool(coverage["complete"]),
         "parent_parts": [{"aoi_id": aoi_id, "area_ha": area_ha} for aoi_id, area_ha in parts],
     }
@@ -107,11 +140,18 @@ def coverage_block(raster: dict, baseline: dict) -> dict:
     coverage = raster["coverage"]
     requested = coverage["requested_ha"] or 0.0
     baseline_area = baseline.get("area_ha") or 0.0
+    raw = {
+        "biomass": _number(coverage["biomass"]["fraction"]),
+        "uncertainty": _number(coverage["biomass_sd"]["fraction"]),
+        "baseline": _number(baseline_area / requested) if requested else 0.0,
+        "optical_paired_valid": _number(coverage["optical_paired"]["fraction"]),
+    }
     return {
-        "biomass_fraction": _fraction(coverage["biomass"]["fraction"]),
-        "uncertainty_fraction": _fraction(coverage["biomass_sd"]["fraction"]),
-        "baseline_fraction": _fraction(baseline_area / requested) if requested else 0.0,
-        "optical_paired_valid_fraction": _fraction(coverage["optical_paired"]["fraction"]),
+        "biomass_fraction": _fraction(raw["biomass"]),
+        "uncertainty_fraction": _fraction(raw["uncertainty"]),
+        "baseline_fraction": _fraction(raw["baseline"]),
+        "optical_paired_valid_fraction": _fraction(raw["optical_paired_valid"]),
+        "coverage_fraction_raw": raw,
     }
 
 
@@ -172,10 +212,21 @@ def timeline_block(raster: dict, parts: list[dict]) -> list[dict]:
     return out
 
 
-def change_block(raster: dict) -> dict:
+def change_block(raster: dict, eproj_tco2e: float | None) -> dict:
+    """Stocks and their difference. The emission figure itself lives in `units` only.
+
+    The raster owner also computes an emission from the same stocks; publishing both
+    would give a reader two numbers for one quantity. The canonical one is the carbon
+    engine's, this block points at it, and `eproj_disagreement` below checks that the two
+    derivations still agree.
+    """
     change = raster["stock_change"]
     request = raster["request"]
     area = change["normalisation_area_ha"]
+    span = request["year_end"] - request["year_start"]
+    intensity = None
+    if eproj_tco2e is not None and area and span > 0:
+        intensity = eproj_tco2e / (area * span)
     return {
         "year_start": request["year_start"],
         "year_end": request["year_end"],
@@ -184,12 +235,33 @@ def change_block(raster: dict) -> dict:
         "total_carbon_start_tc": change["stock_start_tc"],
         "total_carbon_end_tc": change["stock_end_tc"],
         "delta_carbon_tc": change["delta_tc"],
-        "eproj_tco2e": change["e_tco2e"],
-        "eproj_tco2e_ha_year": change["e_per_ha_per_year"],
+        "eproj_ref": "units.eproj_tco2e",
+        "eproj_tco2e_ha_year": intensity,
         "normalisation_area_ha": area,
         "sign_convention": SIGN_CONVENTION,
         "pool": POOL,
     }
+
+
+def eproj_disagreement(raster: dict, eproj_tco2e: float | None) -> dict | None:
+    """Do the two independent derivations of Eproj still describe the same quantity?
+
+    They are computed by different owners from the same stocks, so they should agree to
+    floating-point noise. A real disagreement is reported, never averaged away.
+    """
+    other = raster.get("stock_change", {}).get("e_tco2e")
+    if eproj_tco2e is None or other is None:
+        return None
+    scale = max(abs(float(other)), abs(float(eproj_tco2e)), 1.0)
+    difference = abs(float(other) - float(eproj_tco2e))
+    if difference / scale <= 1e-9:
+        return None
+    return warning(
+        "EPROJ_DISAGREEMENT",
+        "Растровое ядро и углеродный движок дали разные значения Eproj из одних и тех же "
+        "запасов; опубликовано значение движка, расхождение показано как есть.",
+        "BLOCKING", raster_tco2e=float(other), carbon_tco2e=float(eproj_tco2e),
+        difference_tco2e=difference)
 
 
 def uncertainty_block(interval: dict) -> dict:
@@ -269,6 +341,8 @@ def scenario_values_block(units: dict) -> dict:
 
 def claim_block(claim: dict, *, geometry_hash: str, year_start: int, year_end: int,
                 scope: dict | None) -> dict:
+    # A claim of zero is NOT_APPLICABLE and deliberately not in this list: nothing
+    # positive was stated, so nothing was compared.
     comparable = claim["status"] in (
         "SUPPORTED_BY_CASE", "PARTIALLY_SUPPORTED_BY_CASE", "NOT_SUPPORTED_BY_CASE",
         "UNASSESSABLE")
@@ -281,7 +355,7 @@ def claim_block(claim: dict, *, geometry_hash: str, year_start: int, year_end: i
         "comparable": comparable,
         "claimed_units": claim["claimed_units"],
         "q": claim["units"],
-        "gap_units": claim["gap_units"],
+        "unsupported_gap": claim["gap_units"],
         "supported_share": claim["supported_share"],
         "mismatch_reasons": list(claim["mismatch_reasons"]),
         "scope": scope or {"geometry_hash": geometry_hash, "year_start": year_start,
@@ -347,18 +421,30 @@ def evidence_block(raster: dict, coverage: dict) -> dict:
         "note": "доля пригодных пикселей по SCL в пределах запроса",
     } for scene in optical.get("scenes", ())]
 
-    warnings: list[str] = []
+    warnings: list[dict] = []
     if not change.get("available"):
-        warnings.append("Объяснение изменения недоступно: "
-                        f"{change.get('reason') or 'подходящая пара сцен не найдена'}.")
+        warnings.append(warning(
+            "CHANGE_EXPLANATION_UNAVAILABLE",
+            "Объяснение изменения недоступно: "
+            f"{change.get('reason') or 'подходящая пара сцен не найдена'}.",
+            reason=str(change.get("reason") or "")))
     if paired <= 0.0:
-        warnings.append("Нет парных валидных оптических пикселей за период; причина "
-                        "изменения по оптике не устанавливалась.")
+        warnings.append(warning(
+            "NO_PAIRED_OPTICAL_COVERAGE",
+            "Нет парных валидных оптических пикселей за период; причина изменения по "
+            "оптике не устанавливалась.", fraction=paired))
     elif paired < 0.8:
-        warnings.append(f"Парное валидное оптическое покрытие {paired:.2f}; объяснение "
-                        "изменения ограничено.")
-    if any(zone.get("cause") == "UNKNOWN" for zone in (change.get("zones") or ())):
-        warnings.append("Для части зон причина изменения не установлена и остаётся UNKNOWN.")
+        warnings.append(warning(
+            "LOW_PAIRED_OPTICAL_COVERAGE",
+            f"Парное валидное оптическое покрытие {paired:.2f}; объяснение изменения "
+            "ограничено.", fraction=paired, threshold=0.8))
+    unknown = sum(1 for zone in (change.get("zones") or ())
+                  if zone.get("cause") == "UNKNOWN")
+    if unknown:
+        warnings.append(warning(
+            "ZONE_CAUSE_UNKNOWN",
+            "Для части зон причина изменения не установлена и остаётся UNKNOWN.",
+            "INFO", zones=unknown))
 
     if not change.get("available") or paired <= 0.0:
         status = "INSUFFICIENT"
@@ -374,6 +460,22 @@ def evidence_block(raster: dict, coverage: dict) -> dict:
         "reconciliation": change.get("reconciliation"),
         "warnings": warnings,
     }
+
+
+def uncredited_roles(manifest: dict) -> list[str]:
+    """Product roles used by the calculation for which no source entry was found.
+
+    A licence obligation cannot be met by a shorter list, so this is surfaced rather than
+    swallowed by the `.get` that builds the citation list.
+    """
+    registry = catalog.sources_by_id()
+    missing: list[str] = []
+    for entry in manifest["dataset"]["files"]:
+        role = str(entry.get("role", ""))
+        source_id = ROLE_TO_SOURCE.get(role)
+        if (source_id is None or source_id not in registry) and role not in missing:
+            missing.append(role)
+    return missing
 
 
 def sources_block(manifest: dict) -> list[dict]:
@@ -425,29 +527,58 @@ def content_view(result: dict) -> dict:
     }
 
 
-def compare(previous: dict | None, content_hash: str, units: dict) -> tuple[str, str | None, str]:
-    """Only comparable observations of the same scope may be called better or worse."""
+def compare(previous: dict | None, content_hash: str,
+            units: dict) -> tuple[str, str, str | None, str]:
+    """The version link of this passport, and separately how q moved.
+
+    The link vocabulary is the carbon engine's, because passports are its model. Whether
+    q rose or fell is a presentational summary and is published as its own field, so that
+    "a later observation" is never read as "the earlier passport was wrong".
+    """
     if previous is None:
-        return "FIRST_OBSERVATION", None, (
+        return "INITIAL", "NOT_COMPARED", None, (
             "Первое наблюдение в этой области сравнения.")
     previous_hash = previous["content_hash"]
-    if previous_hash == content_hash:
-        return "UNCHANGED", previous_hash, (
-            "Содержание расчёта совпадает с предыдущим наблюдением той же области.")
     before, after = previous.get("q"), units["q"]
+    if previous_hash == content_hash:
+        return "REVISION_OF_SAME_SCOPE", "UNCHANGED", previous_hash, (
+            "Содержание расчёта совпадает с предыдущим наблюдением той же области.")
     if before is None or after is None:
-        return "NEW_OBSERVATION", previous_hash, (
+        return "NEW_OBSERVATION", "NOT_COMPARED", previous_hash, (
             "Одно из наблюдений не даёт числа единиц, поэтому сравнение по величине "
             "не проводится.")
     if after > before:
-        return "UPGRADED", previous_hash, (
-            f"Потенциальные единицы выросли с {before} до {after} при той же области сравнения.")
+        return "REVISION_OF_SAME_SCOPE", "INCREASED", previous_hash, (
+            f"Потенциальные единицы выросли с {before} до {after} при той же области "
+            "сравнения.")
     if after < before:
-        return "DOWNGRADED", previous_hash, (
+        return "REVISION_OF_SAME_SCOPE", "DECREASED", previous_hash, (
             f"Потенциальные единицы снизились с {before} до {after} при той же области "
             "сравнения. Это не аннулирование ранее выпущенных единиц.")
-    return "UNCHANGED", previous_hash, (
+    return "REVISION_OF_SAME_SCOPE", "UNCHANGED", previous_hash, (
         "Число единиц не изменилось, изменились сопутствующие величины.")
+
+
+def passport_block(*, content_hash: str, report_hash: str, previous: dict | None,
+                   units: dict, created_at: str) -> dict:
+    """The passport of a freshly computed result is always a draft.
+
+    Its status is about this document and says nothing about a blockchain record: an
+    anchor lives in `Proof.anchor` and has a status of its own.
+    """
+    comparison_result, direction, previous_hash, note = compare(previous, content_hash, units)
+    return {
+        "status": "DRAFT",
+        "finalized_at": None,
+        "content_hash": content_hash,
+        "report_hash": report_hash,
+        "previous_hash": previous_hash,
+        "comparison_scope": COMPARISON_SCOPE,
+        "comparison_result": comparison_result,
+        "comparison_direction": direction,
+        "comparison_note": note,
+        "created_at": created_at,
+    }
 
 
 def build_result(*, analysis_id: str, run_id: str, created_at: str, request_snapshot: dict,
@@ -455,18 +586,19 @@ def build_result(*, analysis_id: str, run_id: str, created_at: str, request_snap
                  artifacts: list[dict], previous: dict | None, dataset_origin: str,
                  raster_adapter: str, carbon_adapter_name: str,
                  claim_scope: dict | None = None,
-                 extra_limitations: tuple[str, ...] = ()) -> dict:
+                 extra_limitations: tuple[tuple[str, str], ...] = ()) -> dict:
     payload, cells, manifest = raster.analysis, raster.cells, raster.manifest
     interval, baseline, units, claim = (carbon["interval"], carbon["baseline"],
                                         carbon["units"], carbon["claim"])
 
     areas = areas_block(payload, cells)
     coverage = coverage_block(payload, baseline)
-    limitations = list(BASE_LIMITATIONS)
-    limitations.extend(payload.get("limitations") or ())
+    limitations = [limitation(code, message) for code, message in BASE_LIMITATIONS]
+    limitations.extend(limitation(RASTER_LIMITATION, message)
+                       for message in (payload.get("limitations") or ()))
     if dataset_origin == "STUB_FIXTURE":
-        limitations.insert(0, STUB_LIMITATION)
-    limitations.extend(extra_limitations)
+        limitations.insert(0, limitation(*STUB_LIMITATION))
+    limitations.extend(limitation(code, message) for code, message in extra_limitations)
 
     result = {
         "fixture": raster.fixture,
@@ -482,7 +614,7 @@ def build_result(*, analysis_id: str, run_id: str, created_at: str, request_snap
         "areas": areas,
         "coverage": coverage,
         "timeline": timeline_block(payload, areas["parent_parts"]),
-        "change": change_block(payload),
+        "change": change_block(payload, units["e_proj_tco2e"]),
         "uncertainty": uncertainty_block(interval),
         "baseline": baseline_block(baseline),
         "units": units_block(units),
@@ -499,20 +631,28 @@ def build_result(*, analysis_id: str, run_id: str, created_at: str, request_snap
         "limitations": _unique(limitations),
         "notes": list(carbon.get("notes") or ()),
     }
+    disagreement = eproj_disagreement(payload, units["e_proj_tco2e"])
+    if disagreement is not None:
+        result["evidence"]["warnings"].append(disagreement)
+    uncredited = uncredited_roles(manifest)
+    if uncredited:
+        result["evidence"]["warnings"].append(warning(
+            "SOURCE_ATTRIBUTION_INCOMPLETE",
+            "Использован продукт, для которого не найдена запись об источнике; "
+            "атрибуция неполная.", "BLOCKING", roles=uncredited))
+    if result["zones"] and any(zone["artifact_ref"] is None for zone in result["zones"]):
+        result["evidence"]["warnings"].append(warning(
+            "ZONE_GEOMETRY_UNAVAILABLE",
+            "Зоны изменения опубликованы без файла с их геометрией; на карте они "
+            "не отображаются.", "BLOCKING",
+            zones=sum(1 for zone in result["zones"] if zone["artifact_ref"] is None)))
     result["evidence_status"] = result["evidence"]["status"]
 
     content_hash = digest(content_view(result))
     report_hash = digest({"report": REPORT_SCHEMA_VERSION, "content": content_view(result)})
-    comparison_result, previous_hash, note = compare(previous, content_hash, result["units"])
-    result["passport"] = {
-        "content_hash": content_hash,
-        "report_hash": report_hash,
-        "previous_hash": previous_hash,
-        "comparison_scope": COMPARISON_SCOPE,
-        "comparison_result": comparison_result,
-        "comparison_note": note,
-        "created_at": created_at,
-    }
+    result["passport"] = passport_block(content_hash=content_hash, report_hash=report_hash,
+                                        previous=previous, units=result["units"],
+                                        created_at=created_at)
     return result
 
 
@@ -533,11 +673,12 @@ def unavailable_result(*, analysis_id: str, run_id: str, created_at: str,
                    "uncertainty_deduction_tco2e": None, "r_adj_tco2e": None,
                    "buffer_tco2e": None, "units": None, "rounding_residual_tco2e": None,
                    "scenario_values": [], "method_version": carbon_adapter_name}
-    claim = {"status": "NOT_PROVIDED" if request_snapshot["claimed_units"] is None
-             else "UNASSESSABLE",
-             "mismatch_reasons": [], "claimed_units": request_snapshot["claimed_units"],
-             "source": request_snapshot["claim_origin"], "units": None, "gap_units": None,
-             "supported_share": None, "gap_values": []}
+    claim = carbon_adapter.no_positive_claim({
+        "status": "NOT_PROVIDED" if request_snapshot["claimed_units"] is None
+        else "UNASSESSABLE",
+        "mismatch_reasons": [], "claimed_units": request_snapshot["claimed_units"],
+        "source": request_snapshot["claim_origin"], "units": None, "gap_units": None,
+        "supported_share": None, "gap_values": []})
     year_start, year_end = request_snapshot["year_start"], request_snapshot["year_end"]
     result = {
         "fixture": None,
@@ -557,20 +698,23 @@ def unavailable_result(*, analysis_id: str, run_id: str, created_at: str,
         "calculation_status": "UNAVAILABLE",
         "evidence_status": "INSUFFICIENT",
         "areas": {"requested_ha": area_ha, "calculated_ha": 0.0, "missing_ha": area_ha,
-                  "complete": False, "parent_parts": []},
+                  "area_difference_ha": -area_ha, "complete": False, "parent_parts": []},
         "coverage": {"biomass_fraction": 0.0, "uncertainty_fraction": 0.0,
-                     "baseline_fraction": 0.0, "optical_paired_valid_fraction": 0.0},
+                     "baseline_fraction": 0.0, "optical_paired_valid_fraction": 0.0,
+                     "coverage_fraction_raw": {"biomass": 0.0, "uncertainty": 0.0,
+                                               "baseline": 0.0,
+                                               "optical_paired_valid": 0.0}},
         "timeline": [],
         "change": {"year_start": year_start, "year_end": year_end,
                    "mean_carbon_start_tc_ha": None, "mean_carbon_end_tc_ha": None,
                    "total_carbon_start_tc": None, "total_carbon_end_tc": None,
-                   "delta_carbon_tc": None, "eproj_tco2e": None,
+                   "delta_carbon_tc": None, "eproj_ref": "units.eproj_tco2e",
                    "eproj_tco2e_ha_year": None, "normalisation_area_ha": None,
                    "sign_convention": SIGN_CONVENTION, "pool": POOL},
         "uncertainty": {"status": "UNAVAILABLE", "unavailable_reason": reason,
                         "lower_tco2e": None, "upper_tco2e": None, "sd_tco2e": None,
                         "method": "UNSPECIFIED", "interval_kind": "SCENARIO",
-                        "assumptions": {}, "sensitivity": []},
+                        "assumptions": None, "sensitivity": []},
         "baseline": {"status": "UNAVAILABLE", "unavailable_reason": reason,
                      "baseline_id": None, "kind": "сценарное допущение кейса",
                      "area_ha": None, "delta_tc": None, "delta_tc_ha": None,
@@ -582,27 +726,25 @@ def unavailable_result(*, analysis_id: str, run_id: str, created_at: str,
         "zones": [],
         "evidence": {"status": "INSUFFICIENT", "optical_paired_valid_fraction": 0.0,
                      "analysed_parent": None, "scenes": [], "reconciliation": None,
-                     "warnings": [message]},
+                     "warnings": [warning(reason, message, "BLOCKING")]},
         "passport": {},
         "sources": [catalog.sources_by_id()[source_id] for source_id in ALWAYS_CITED
                     if source_id in catalog.sources_by_id()],
         "artifacts": [],
-        "limitations": _unique([*BASE_LIMITATIONS, message]),
+        "limitations": _unique([*(limitation(code, text) for code, text in BASE_LIMITATIONS),
+                                limitation(reason, message)]),
         "notes": [],
     }
     content_hash = digest(content_view(result))
     report_hash = digest({"report": REPORT_SCHEMA_VERSION, "content": content_view(result)})
-    comparison_result, previous_hash, note = compare(previous, content_hash, result["units"])
-    result["passport"] = {"content_hash": content_hash, "report_hash": report_hash,
-                          "previous_hash": previous_hash,
-                          "comparison_scope": COMPARISON_SCOPE,
-                          "comparison_result": comparison_result, "comparison_note": note,
-                          "created_at": created_at}
+    result["passport"] = passport_block(content_hash=content_hash, report_hash=report_hash,
+                                        previous=previous, units=result["units"],
+                                        created_at=created_at)
     return result
 
 
-def _unique(values: list[str]) -> list[str]:
-    seen: list[str] = []
+def _unique(values: list[dict]) -> list[dict]:
+    seen: list[dict] = []
     for value in values:
         if value not in seen:
             seen.append(value)

@@ -198,21 +198,34 @@ def test_a_proof_for_an_unfinished_analysis_is_404(harness):
 def test_the_first_analysis_of_a_scope_has_no_predecessor(harness):
     result = analysed(harness, POSITIVE, "first-key-0000001")["result"]
     assert result["passport"]["previous_hash"] is None
-    assert result["passport"]["comparison_result"] == "FIRST_OBSERVATION"
+    assert result["passport"]["comparison_result"] == "INITIAL"
+    assert result["passport"]["comparison_direction"] == "NOT_COMPARED"
+
+
+def test_a_fresh_passport_is_a_draft_and_carries_no_anchor_status(harness):
+    """Two axes, two fields: a document state is not a record on a chain."""
+    job = analysed(harness, POSITIVE, "draft-key-00000001")
+    passport = job["result"]["passport"]
+    assert passport["status"] == "DRAFT" and passport["finalized_at"] is None
+    assert "anchor" not in passport and "anchor_status" not in passport
+    proof = harness.api.get(f"/analyses/{job['analysis_id']}/proof", "Proof")
+    assert proof["anchor"]["status"] == "NOT_REQUESTED"
+    assert proof["passport"]["status"] == "DRAFT"
 
 
 def test_an_identical_repeat_is_unchanged_not_a_downgrade(harness):
     analysed(harness, POSITIVE, "repeat-key-000001")
     again = analysed(harness, POSITIVE, "repeat-key-000002")["result"]
     assert again["passport"]["previous_hash"] is not None
-    assert again["passport"]["comparison_result"] == "UNCHANGED"
+    assert again["passport"]["comparison_result"] == "REVISION_OF_SAME_SCOPE"
+    assert again["passport"]["comparison_direction"] == "UNCHANGED"
 
 
 def test_a_different_period_is_not_compared_at_all(harness):
     analysed(harness, POSITIVE, "nocmp-key-0000001")
     other = analysed(harness, SHORTER, "nocmp-key-0000002")["result"]
     assert other["passport"]["previous_hash"] is None
-    assert other["passport"]["comparison_result"] == "FIRST_OBSERVATION"
+    assert other["passport"]["comparison_result"] == "INITIAL"
 
 
 def test_the_comparison_scope_is_stated_on_every_passport(harness):
@@ -225,8 +238,8 @@ def test_a_downgrade_says_it_is_not_an_annulment(harness):
     from backend.app.v2.assemble import compare
 
     previous = {"content_hash": "0x" + "a" * 64, "q": 500}
-    result, previous_hash, note = compare(previous, "0x" + "b" * 64, {"q": 100})
-    assert result == "DOWNGRADED"
+    result, direction, previous_hash, note = compare(previous, "0x" + "b" * 64, {"q": 100})
+    assert result == "REVISION_OF_SAME_SCOPE" and direction == "DECREASED"
     assert previous_hash == previous["content_hash"]
     assert "не аннулирование" in note
 
@@ -234,9 +247,9 @@ def test_a_downgrade_says_it_is_not_an_annulment(harness):
 def test_an_absent_number_is_a_new_observation_not_a_downgrade(harness):
     from backend.app.v2.assemble import compare
 
-    result, _hash, note = compare({"content_hash": "0x" + "a" * 64, "q": 500},
-                                  "0x" + "b" * 64, {"q": None})
-    assert result == "NEW_OBSERVATION"
+    result, direction, _hash, note = compare({"content_hash": "0x" + "a" * 64, "q": 500},
+                                             "0x" + "b" * 64, {"q": None})
+    assert result == "NEW_OBSERVATION" and direction == "NOT_COMPARED"
     assert "не проводится" in note
 
 

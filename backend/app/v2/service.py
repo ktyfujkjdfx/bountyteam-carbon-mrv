@@ -117,6 +117,47 @@ def resolve(body: dict) -> ResolvedRequest:
                            claim_scope=body.get("claim_scope"), input_hash=input_hash)
 
 
+def measure_area(lens: LensContext, body: dict) -> dict:
+    """Measure a contour without queueing anything.
+
+    The same normalisation and the same geodesic area as the analysis path, so a figure
+    shown before submitting cannot disagree with the figure the analysis reports. A
+    contour that may not be used is a measurement with `valid: false` and named errors,
+    not an exception: the caller is asking whether it may submit, and that deserves an
+    answer rather than a stack trace.
+    """
+    errors: list[dict] = []
+    area_ha: float | None = None
+    geometry_hash: str | None = None
+    canonical: dict | None = None
+    try:
+        # The limit is applied here rather than inside the validator: the caller is
+        # asking how big the contour is, and "too big" is an answer that needs a number.
+        geom, area_ha = geometry.validate(body["geometry"], max_area_ha=float("inf"))
+        canonical = geometry.canonical_geometry(geom)
+        geometry_hash = geometry.geometry_hash(geom)
+    except ApiError as exc:
+        errors.append(assemble.warning(exc.code, exc.message, "BLOCKING", **exc.details))
+
+    within = area_ha is not None and area_ha <= geometry.MAX_AREA_HA
+    if area_ha is not None and not within:
+        errors.append(assemble.warning(
+            "AREA_LIMIT_EXCEEDED",
+            f"Площадь {area_ha:.2f} га превышает предел {geometry.MAX_AREA_HA:.0f} га "
+            "для одного запроса.", "BLOCKING",
+            area_ha=area_ha, max_area_ha=geometry.MAX_AREA_HA))
+    measurement = {
+        "valid": not errors,
+        "area_ha": area_ha,
+        "max_area_ha": geometry.MAX_AREA_HA,
+        "within_limit": bool(within),
+        "geometry_hash": geometry_hash,
+        "geometry": canonical,
+        "errors": errors,
+    }
+    return validate(api_validator("AreaMeasurement"), measurement, "AreaMeasurement")
+
+
 def submit(lens: LensContext, *, actor: str, key: str, body: dict) -> dict:
     """Queue an analysis. The same key with the same request replays the stored 202."""
     resolved = resolve(body)

@@ -65,6 +65,7 @@ def test_openapi_v2_describes_exactly_the_agreed_routes():
     assert document["openapi"].startswith("3.1")
     assert {(path, method) for path, item in document["paths"].items() for method in item} == {
         ("/catalog", "get"),
+        ("/areas/measure", "post"),
         ("/analyses", "post"),
         ("/analyses/{analysis_id}", "get"),
         ("/analyses/{analysis_id}/artifacts/{artifact_id}", "get"),
@@ -165,14 +166,18 @@ def _enum(model: str) -> set[str]:
     return set(v2._document(v2.API_MODELS)["components"]["schemas"][model]["enum"])
 
 
-def test_the_five_status_axes_are_separate_enumerations():
+def test_the_six_status_axes_are_separate_enumerations():
     assert _enum("JobState") == {"QUEUED", "RUNNING", "SUCCEEDED", "FAILED"}
     assert _enum("CalculationStatus") == {"AVAILABLE", "UNAVAILABLE"}
     assert _enum("EvidenceStatus") == {"SUFFICIENT", "REVIEW_REQUIRED", "INSUFFICIENT"}
     assert _enum("AnchorStatus") == {"NOT_REQUESTED", "PENDING", "CONFIRMED", "FAILED"}
+    assert _enum("PassportStatus") == {"DRAFT", "FINALIZED"}
     assert _enum("ClaimStatus") == {
-        "NOT_PROVIDED", "NOT_COMPARABLE", "UNASSESSABLE",
+        "NOT_PROVIDED", "NOT_APPLICABLE", "NOT_COMPARABLE", "UNASSESSABLE",
         "SUPPORTED_BY_CASE", "PARTIALLY_SUPPORTED_BY_CASE", "NOT_SUPPORTED_BY_CASE"}
+    # The document status of a passport and the existence of a chain record are two
+    # different questions, so the two vocabularies must not share a single word.
+    assert not _enum("PassportStatus") & _enum("AnchorStatus")
 
 
 def test_zero_reasons_and_unavailable_reasons_are_different_vocabularies():
@@ -236,7 +241,10 @@ def test_unavailable_fixture_is_null_with_an_unavailable_reason():
     assert units["zero_reason"] is None
     assert result["calculation_status"] == "UNAVAILABLE"
     # Partial coverage is still a scientific outcome: the stock change survives.
-    assert result["change"]["eproj_tco2e"] is not None
+    assert result["change"]["delta_carbon_tc"] is not None
+    # And there is exactly one place the emission is published.
+    assert result["change"]["eproj_ref"] == "units.eproj_tco2e"
+    assert "eproj_tco2e" not in result["change"]
 
 
 def test_unavailable_units_carry_no_scenario_money():
@@ -247,13 +255,13 @@ def test_unavailable_units_carry_no_scenario_money():
 def test_a_claim_against_a_null_q_is_unassessable_not_unsupported():
     claim = v2.fixture("analysis_result_unavailable.json")["claim"]
     assert claim["status"] == "UNASSESSABLE"
-    assert claim["gap_units"] is None and claim["scenario_gap_values"] is None
+    assert claim["unsupported_gap"] is None and claim["scenario_gap_values"] is None
 
 
 def test_a_claim_above_a_positive_q_is_partially_supported():
     claim = v2.fixture("analysis_result_available.json")["claim"]
     assert claim["status"] == "PARTIALLY_SUPPORTED_BY_CASE"
-    assert claim["gap_units"] == pytest.approx(600.0 - 395)
+    assert claim["unsupported_gap"] == pytest.approx(600.0 - 395)
     assert claim["supported_share"] == pytest.approx(395 / 600)
     assert claim["scenario_gap_values"]["base"]["value_rub"] == pytest.approx(205 * 1500.0)
 
@@ -316,3 +324,40 @@ def test_v2_documents_live_beside_v1_and_do_not_replace_it():
     assert (v2.CONTRACTS_V2.parent / "openapi.yaml").is_file()
     assert (v2.CONTRACTS_V2.parent / "api-models.schema.json").is_file()
     assert v2.CONTRACTS_V2.name == "v2"
+
+
+# -- forward compatibility of the enumerations --------------------------------------------
+def test_every_public_enumeration_is_closed():
+    """A value that is not in the contract never reaches a consumer.
+
+    The other half of this bargain lives in `docs/case2/G0_CONTRACT.md`: consumers must
+    treat an unrecognised value as unknown rather than crash, so that adding one is a
+    contract change and not an outage.
+    """
+    schemas = v2._document(v2.API_MODELS)["components"]["schemas"]
+    enums = {name: body for name, body in schemas.items() if "enum" in body}
+    assert len(enums) >= 15
+    for name, body in enums.items():
+        assert body["type"] == "string", name
+        assert len(set(body["enum"])) == len(body["enum"]), name
+        assert all(value == value.upper() for value in body["enum"]), name
+
+
+def test_an_undeclared_enum_value_is_refused_rather_than_served():
+    result = v2.fixture("analysis_result_available.json")
+    result["units"]["zero_reason"] = "SOME_FUTURE_REASON"
+    with pytest.raises(v2.ContractViolation):
+        v2.validate(v2.api_validator("AnalysisResult"), result, "AnalysisResult")
+
+
+def test_a_zero_claim_has_its_own_status_and_its_own_reason():
+    statuses, reasons = _enum("ClaimStatus"), _enum("ClaimMismatchReason")
+    assert "NOT_APPLICABLE" in statuses
+    assert "NO_POSITIVE_CLAIM" in reasons
+    # It is a reason for not comparing, not a reason the claim disagreed.
+    assert "NO_POSITIVE_CLAIM" not in statuses
+
+
+def test_the_spatial_scenarios_are_named_as_the_method_freeze_names_them():
+    assert _enum("SpatialDependence") == {"INDEPENDENT_NATIVE_CELLS",
+                                          "FULL_SPATIAL_CORRELATION"}

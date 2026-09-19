@@ -33,7 +33,6 @@ from .service import LensContext
 
 log = logging.getLogger("backend.lens.api")
 
-ACTORS = ("issuer", "buyer", "recipient")
 ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:+-]{0,127}$"
 UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
                      r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
@@ -52,6 +51,10 @@ class ClaimScopeBody(_Strict):
     year_end: int
     pool: str
     unit: str
+
+
+class AreaMeasureBody(_Strict):
+    geometry: dict[str, Any]
 
 
 class AnalysisRequestBody(_Strict):
@@ -75,10 +78,19 @@ def require_session(request: Request, x_demo_session: Annotated[str | None, Head
         raise unauthorized()
 
 
-def require_actor(x_demo_actor: Annotated[str | None, Header()] = None) -> str:
-    if x_demo_actor not in ACTORS:
-        raise invalid("VALIDATION_ERROR", "X-Demo-Actor header must be issuer, buyer or recipient")
-    return x_demo_actor
+def caller(request: Request, x_demo_session: Annotated[str | None, Header()] = None) -> str:
+    """Who is acting, derived from the session rather than announced by the client.
+
+    A role in a header the caller can set is not an authorization, so there is none. The
+    identity is a stable digest of the session token: it survives restarts, it scopes
+    idempotency and the audit log, and it never puts the token itself into either.
+    """
+    from ..contracts import sha256_hex
+
+    token = (x_demo_session or "").encode()
+    if not token:
+        raise unauthorized()
+    return "session:" + sha256_hex(token)[2:18]
 
 
 def require_idempotency_key(idempotency_key: Annotated[str | None, Header()] = None) -> str:
@@ -94,7 +106,7 @@ def _uuid(value: str) -> str:
 
 
 Lens = Annotated[LensContext, Depends(_lens)]
-ActorHeader = Annotated[str, Depends(require_actor)]
+Caller = Annotated[str, Depends(caller)]
 KeyHeader = Annotated[str, Depends(require_idempotency_key)]
 
 router = APIRouter(dependencies=[Depends(require_session)])
@@ -105,8 +117,13 @@ def get_catalog(lens: Lens):
     return service.catalog_view(lens)
 
 
+@router.post("/areas/measure")
+def measure_area(lens: Lens, body: AreaMeasureBody):
+    return service.measure_area(lens, body.model_dump())
+
+
 @router.post("/analyses", status_code=202)
-def create_analysis(lens: Lens, body: AnalysisRequestBody, actor: ActorHeader, key: KeyHeader):
+def create_analysis(lens: Lens, body: AnalysisRequestBody, actor: Caller, key: KeyHeader):
     return service.submit(lens, actor=actor, key=key,
                           body=body.model_dump(exclude_unset=False))
 
@@ -215,8 +232,7 @@ def create_lens_app(lens: LensContext) -> FastAPI:
     if origins:
         app.add_middleware(CORSMiddleware, allow_origins=list(origins), allow_credentials=False,
                            allow_methods=["GET", "POST"],
-                           allow_headers=["Content-Type", "Idempotency-Key", "X-Demo-Session",
-                                          "X-Demo-Actor"],
+                           allow_headers=["Content-Type", "Idempotency-Key", "X-Demo-Session"],
                            expose_headers=["X-Request-ID"])
     app.include_router(router)
     return app

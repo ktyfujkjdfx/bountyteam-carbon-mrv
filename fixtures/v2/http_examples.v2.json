@@ -1,12 +1,175 @@
 {
   "note": "Примеры запросов и ответов /api/v2. Тела помечены как CONTRACT_FIXTURE: они показывают формат, а не научный результат.",
+  "measureArea": {
+    "request": {
+      "method": "POST",
+      "path": "/api/v2/areas/measure",
+      "headers": {
+        "X-Demo-Session": "<session>",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                35.0,
+                57.0
+              ],
+              [
+                35.01,
+                57.0
+              ],
+              [
+                35.01,
+                57.01
+              ],
+              [
+                35.0,
+                57.01
+              ],
+              [
+                35.0,
+                57.0
+              ]
+            ]
+          ]
+        }
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "valid": true,
+        "area_ha": 67.6321,
+        "max_area_ha": 2000.0,
+        "within_limit": true,
+        "geometry_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                35.0,
+                57.0
+              ],
+              [
+                35.01,
+                57.0
+              ],
+              [
+                35.01,
+                57.01
+              ],
+              [
+                35.0,
+                57.01
+              ],
+              [
+                35.0,
+                57.0
+              ]
+            ]
+          ]
+        },
+        "errors": []
+      }
+    }
+  },
+  "measureArea_over_the_limit": {
+    "request": {
+      "method": "POST",
+      "path": "/api/v2/areas/measure",
+      "headers": {
+        "X-Demo-Session": "<session>",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                35.0,
+                57.0
+              ],
+              [
+                35.5,
+                57.0
+              ],
+              [
+                35.5,
+                57.5
+              ],
+              [
+                35.0,
+                57.5
+              ],
+              [
+                35.0,
+                57.0
+              ]
+            ]
+          ]
+        }
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "valid": false,
+        "area_ha": 168742.1,
+        "max_area_ha": 2000.0,
+        "within_limit": false,
+        "geometry_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                35.0,
+                57.0
+              ],
+              [
+                35.5,
+                57.0
+              ],
+              [
+                35.5,
+                57.5
+              ],
+              [
+                35.0,
+                57.5
+              ],
+              [
+                35.0,
+                57.0
+              ]
+            ]
+          ]
+        },
+        "errors": [
+          {
+            "code": "AREA_LIMIT_EXCEEDED",
+            "severity": "BLOCKING",
+            "message": "Площадь 168742.10 га превышает предел 2000 га для одного запроса.",
+            "details": {
+              "area_ha": 168742.1,
+              "max_area_ha": 2000.0
+            }
+          }
+        ]
+      }
+    }
+  },
   "createAnalysis": {
     "request": {
       "method": "POST",
       "path": "/api/v2/analyses",
       "headers": {
         "X-Demo-Session": "<session>",
-        "X-Demo-Actor": "issuer",
         "Idempotency-Key": "lens-tver-2019-2024-0001",
         "Content-Type": "application/json"
       },

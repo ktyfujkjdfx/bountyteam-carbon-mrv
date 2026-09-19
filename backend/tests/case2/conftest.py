@@ -23,6 +23,8 @@ from backend.app.v2.service import create_lens_context
 from backend.app.v2.worker import LensWorker
 
 SESSION = "test-demo-session-000000"
+# There is no client-supplied role header any more: the caller is derived from the
+# session. This value is only used to prove that such a header changes nothing.
 ACTOR = "issuer"
 TVER = "RU_TVER_01"
 MORDOVIA = "RU_MORDOVIA_03"
@@ -57,6 +59,7 @@ class LensApi:
         if session is not None:
             headers["X-Demo-Session"] = session
         if actor:
+            # Deliberately still sent by some tests: an ignored header must stay ignored.
             headers["X-Demo-Actor"] = actor
         if key:
             headers["Idempotency-Key"] = key
@@ -73,7 +76,7 @@ class LensApi:
         assert_model(body, model if status == 200 else "Error")
         return body
 
-    def post(self, path: str, body: dict, *, actor: str = ACTOR, key: str,
+    def post(self, path: str, body: dict, *, actor: str | None = None, key: str,
              status: int = 202, session: str | None = SESSION, model: str = "AnalysisAccepted"):
         response = self.client.post("/api/v2" + path, json=body,
                                     headers=self.headers(actor=actor, key=key, session=session))
@@ -109,7 +112,7 @@ class Harness:
         for _ in range(passes):
             assert self.worker.tick()
 
-    def submit(self, body: dict, *, key: str, actor: str = ACTOR) -> str:
+    def submit(self, body: dict, *, key: str, actor: str | None = None) -> str:
         return self.api.post("/analyses", body, key=key, actor=actor)["analysis_id"]
 
     def analyse(self, body: dict, *, key: str) -> dict:

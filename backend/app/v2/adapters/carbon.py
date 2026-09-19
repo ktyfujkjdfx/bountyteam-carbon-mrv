@@ -17,13 +17,27 @@ from ..ports import CarbonRequest, CarbonResult
 
 log = logging.getLogger("backend.lens.carbon")
 
-POOL = "AGB_LIVE_WOODY"
-UNIT = "POTENTIAL_UNIT_OF_THE_CASE"
+# The pool and unit strings are the ones the carbon engine emits. They are compared for
+# string equality when a claim is checked for comparability, so a second spelling on this
+# side would manufacture a POOL_MISMATCH out of nothing.
+POOL = "AGB"
+UNIT = "tCO2e"
 SCHEMA = "carbon.case2.assessment/1"
 # RS treats a request as fully covered below this many hectares of gap, because geodesic
 # area is not additive over a partition. Passing the raw fraction to an engine that wants
 # an exact 1.0 would turn seventh-digit arithmetic into "incomplete coverage".
 COMPLETE = 1.0
+
+# The method freeze names the two spatial scenarios; an engine may spell them its own way.
+# Translating names is the adapter's job and changes no number.
+SPATIAL_NAMES = {
+    "INDEPENDENT_CELLS": "INDEPENDENT_NATIVE_CELLS",
+    "INDEPENDENT_NATIVE_CELLS": "INDEPENDENT_NATIVE_CELLS",
+    "FULLY_DEPENDENT_CELLS": "FULL_SPATIAL_CORRELATION",
+    "FULL_SPATIAL_CORRELATION": "FULL_SPATIAL_CORRELATION",
+}
+CLAIM_NOT_APPLICABLE = "NOT_APPLICABLE"
+NO_POSITIVE_CLAIM = "NO_POSITIVE_CLAIM"
 
 try:  # pragma: no cover - which branch runs depends on what is merged into the branch
     import carbon as _engine
@@ -204,7 +218,26 @@ class CarbonAdapter:
             unit=scope.get("unit", UNIT))
 
 
+def spatial_name(value: Any) -> str:
+    """The freeze name of a spatial scenario. An unknown spelling is not invented over."""
+    key = str(value or "").upper()
+    if key not in SPATIAL_NAMES:
+        raise ValueError(f"unknown spatial dependence {value!r}")
+    return SPATIAL_NAMES[key]
+
+
 def _interval_payload(api: Any, interval: Any) -> dict:
+    assumptions = _plain(interval.assumptions) or {}
+    if assumptions.get("spatial_dependence"):
+        assumptions["spatial_dependence"] = spatial_name(assumptions["spatial_dependence"])
+    variants = []
+    for variant in interval.sensitivity:
+        plain = _plain(variant)
+        engine_name = str(plain["spatial_dependence"])
+        plain["spatial_dependence"] = spatial_name(engine_name)
+        plain["label"] = str(plain["label"]).replace(
+            engine_name, plain["spatial_dependence"], 1)
+        variants.append(plain)
     return {
         "status": interval.status,
         "unavailable_reason": interval.unavailable_reason,
@@ -213,8 +246,8 @@ def _interval_payload(api: Any, interval: Any) -> dict:
         "sd_tco2e": interval.sd_tco2e,
         "interval_kind": _interval_kind(api, interval),
         "method_version": interval.method_version,
-        "assumptions": _plain(interval.assumptions),
-        "sensitivity": [_plain(variant) for variant in interval.sensitivity],
+        "assumptions": assumptions,
+        "sensitivity": variants,
     }
 
 
@@ -262,7 +295,7 @@ def _units_payload(units: Any) -> dict:
 
 
 def _claim_payload(claim: Any) -> dict:
-    return {
+    payload = {
         "status": claim.status,
         "mismatch_reasons": list(claim.mismatch_reasons),
         "claimed_units": claim.claimed_units,
@@ -272,3 +305,26 @@ def _claim_payload(claim: Any) -> dict:
         "supported_share": claim.supported_share,
         "gap_values": [_plain(value) for value in claim.gap_values],
     }
+    return no_positive_claim(payload)
+
+
+def no_positive_claim(payload: dict) -> dict:
+    """A claim of zero is not a supported claim.
+
+    Nothing positive was stated, so nothing was supported and there is no share to report.
+    This is a vocabulary rule of the contract rather than a calculation, and it is applied
+    here so that an engine which has not yet adopted `NOT_APPLICABLE` cannot publish a
+    zero claim as `SUPPORTED_BY_CASE`.
+    """
+    claimed = payload.get("claimed_units")
+    if claimed is None or float(claimed) != 0.0:
+        return payload
+    reasons = [code for code in payload["mismatch_reasons"] if code != NO_POSITIVE_CLAIM]
+    payload.update({
+        "status": CLAIM_NOT_APPLICABLE,
+        "mismatch_reasons": [NO_POSITIVE_CLAIM, *reasons],
+        "supported_share": None,
+        "gap_units": 0.0,
+        "gap_values": [],
+    })
+    return payload

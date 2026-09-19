@@ -11,11 +11,13 @@ info:
     (contracts/openapi.yaml). This document is the single source of truth for
     the HTTP shape of /api/v2 exactly as contracts/openapi.yaml is for v1.
 
-    Five status axes are independent and are never merged:
+    Six status axes are independent and are never merged:
     job_state (worker progress), calculation_status (were the numbers
     computable), evidence_status (how well the change is explained),
-    claim.status (how a stated volume compares with the calculation), and the
-    anchor status of the passport.
+    claim.status (how a stated volume compares with the calculation),
+    passport.status (DRAFT until a verifier finalizes it) and anchor.status
+    (whether a chain record exists). A passport status is never read as an
+    anchor status.
 
     Partial coverage is a valid scientific outcome: the analysis succeeds, the
     result is returned and units.q is null with an unavailable_reason. It is
@@ -26,6 +28,7 @@ servers:
     description: Local demo backend
 tags:
   - name: catalog
+  - name: areas
   - name: analyses
 
 paths:
@@ -46,6 +49,40 @@ paths:
         '401': {$ref: '#/components/responses/Failure'}
         '503': {$ref: '#/components/responses/Failure'}
 
+  /areas/measure:
+    post:
+      tags: [areas]
+      operationId: measureArea
+      summary: Geodesic area of a contour, before anything is queued
+      description: |
+        Answers "how big is this, and may I submit it" without creating an
+        analysis. It normalizes the contour and measures it with the same
+        geodesic algorithm the analysis path uses, so a measurement can never
+        disagree with the run that follows.
+
+        A contour that cannot be used is a 200 with valid=false and named
+        errors; 422 is reserved for a body that is not a GeoJSON geometry at
+        all. Exceeding max_area_ha sets within_limit=false and is reported, not
+        thrown.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: 'api-models.v2.schema.json#/components/schemas/AreaMeasureRequest'
+      responses:
+        '200':
+          description: Measurement of the normalized contour
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/AreaMeasurement'
+        '401': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
   /analyses:
     post:
       tags: [analyses]
@@ -56,16 +93,16 @@ paths:
         supplied area is a shortcut for pasting its polygon and changes nothing
         else about the analysis.
 
-        The request is bound to (actor, operation, Idempotency-Key) together
+        The request is bound to (caller, operation, Idempotency-Key) together
         with the canonical hash of the normalized request. The same key with the
         same request replays the stored 202; the same key with a different
-        request is 409 IDEMPOTENCY_CONFLICT.
+        request is 409 IDEMPOTENCY_CONFLICT. The caller is taken from the
+        authenticated session, never from a client-supplied role header.
 
         An optional claimed_units is an input label. It enters the request
         identity, and it never changes the calculated numbers.
       parameters:
         - $ref: '#/components/parameters/Session'
-        - $ref: '#/components/parameters/Actor'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -199,14 +236,11 @@ components:
       required: true
       schema:
         type: string
-      description: Demo session token. Never baked into a browser bundle.
-    Actor:
-      name: X-Demo-Actor
-      in: header
-      required: true
-      schema:
-        type: string
-        enum: [issuer, buyer, recipient]
+      description: |
+        Demo session token. Never baked into a browser bundle. The caller
+        identity used for idempotency and for the audit log is derived from
+        this session; there is no client-supplied role header, because a header
+        a client can set is not an authorization.
     IdempotencyKey:
       name: Idempotency-Key
       in: header

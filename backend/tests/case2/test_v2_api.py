@@ -87,17 +87,17 @@ def test_a_wrong_session_is_not_a_hint(harness):
     assert "wrong-token" not in response.text
 
 
-def test_the_mutation_requires_an_actor_and_a_key(harness):
-    without_actor = harness.client.post("/api/v2/analyses", json=GOOD,
-                                        headers={"X-Demo-Session": SESSION,
-                                                 "Idempotency-Key": "no-actor-key-1"})
-    assert without_actor.status_code == 422
-    assert without_actor.json()["error"]["code"] == "VALIDATION_ERROR"
+def test_the_mutation_needs_a_key_and_takes_its_caller_from_the_session(harness):
+    """A role a client can set is not an authorization, so no such header is read."""
+    accepted = harness.client.post("/api/v2/analyses", json=GOOD,
+                                   headers={"X-Demo-Session": SESSION,
+                                            "Idempotency-Key": "no-actor-key-1"})
+    assert accepted.status_code == 202
 
     without_key = harness.client.post("/api/v2/analyses", json=GOOD,
-                                      headers={"X-Demo-Session": SESSION,
-                                               "X-Demo-Actor": ACTOR})
+                                      headers={"X-Demo-Session": SESSION})
     assert without_key.status_code == 422
+    assert without_key.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
 def test_a_short_key_is_refused(harness):
@@ -257,3 +257,79 @@ def test_cors_allows_only_the_configured_origin(tmp_path):
                                  headers={"X-Demo-Session": SESSION,
                                           "Origin": "https://evil.example"})
     assert "access-control-allow-origin" not in {k.lower() for k in refused.headers}
+
+
+# -- measuring a contour before anything is queued ----------------------------------------
+def _measure(harness, geometry, *, status: int = 200):
+    response = harness.client.post("/api/v2/areas/measure", json={"geometry": geometry},
+                                   headers={"X-Demo-Session": SESSION})
+    assert response.status_code == status, response.text
+    body = response.json()
+    assert_model(body, "AreaMeasurement" if status == 200 else "Error")
+    return body
+
+
+def _square(side_degrees: float) -> dict:
+    return {"type": "Polygon", "coordinates": [[[35.0, 57.0], [35.0 + side_degrees, 57.0],
+                                                [35.0 + side_degrees, 57.0 + side_degrees],
+                                                [35.0, 57.0 + side_degrees], [35.0, 57.0]]]}
+
+
+def test_measuring_a_contour_creates_no_analysis(harness):
+    body = _measure(harness, _square(0.01))
+    assert body["valid"] is True and body["within_limit"] is True
+    assert body["area_ha"] > 0.0
+    assert body["geometry_hash"].startswith("0x")
+    assert harness.counted("lens_analyses") == 0
+
+
+def test_the_measured_area_is_the_area_the_analysis_reports(harness):
+    """One algorithm, so a number shown before submitting cannot change afterwards."""
+    from backend.app.v2 import catalog
+
+    geometry = catalog.area("RU_TVER_01").geometry
+    measured = _measure(harness, geometry)
+    job = harness.analyse({"geometry": geometry, "year_start": 2019, "year_end": 2024},
+                          key="measure-key-00001")
+    assert job["result"]["areas"]["requested_ha"] == pytest.approx(measured["area_ha"])
+    assert job["result"]["identity"]["geometry_hash"] == measured["geometry_hash"]
+
+
+def test_a_contour_over_the_limit_is_reported_with_its_size_not_thrown(harness):
+    from backend.app.v2.geometry import MAX_AREA_HA
+
+    body = _measure(harness, _square(0.5))
+    assert body["area_ha"] > MAX_AREA_HA
+    assert body["within_limit"] is False and body["valid"] is False
+    assert [item["code"] for item in body["errors"]] == ["AREA_LIMIT_EXCEEDED"]
+    assert body["errors"][0]["details"]["max_area_ha"] == MAX_AREA_HA
+
+
+def test_the_limit_the_measurement_states_is_the_limit_the_analysis_enforces(harness):
+    from backend.app.v2.geometry import MAX_AREA_HA
+
+    too_big = _square(0.5)
+    assert _measure(harness, too_big)["max_area_ha"] == MAX_AREA_HA
+    refused = harness.client.post(
+        "/api/v2/analyses", json={"geometry": too_big, "year_start": 2019, "year_end": 2024},
+        headers=harness.api.headers(key="toobig-key-000001"))
+    assert refused.status_code == 422
+    assert refused.json()["error"]["code"] == "AREA_TOO_LARGE"
+
+
+def test_an_unusable_contour_is_a_measurement_with_named_errors(harness):
+    # A bow tie: never repaired silently, because a repaired ring is a different contour
+    # with a different area and a different hash.
+    body = _measure(harness, {"type": "Polygon",
+                              "coordinates": [[[35.0, 57.0], [35.1, 57.1], [35.1, 57.0],
+                                               [35.0, 57.1], [35.0, 57.0]]]})
+    assert body["valid"] is False
+    assert body["area_ha"] is None and body["geometry_hash"] is None
+    assert [item["code"] for item in body["errors"]] == ["INVALID_GEOMETRY"]
+    assert body["errors"][0]["severity"] == "BLOCKING"
+
+
+def test_measuring_still_needs_a_session(harness):
+    response = harness.client.post("/api/v2/areas/measure",
+                                   json={"geometry": _square(0.01)})
+    assert response.status_code == 401

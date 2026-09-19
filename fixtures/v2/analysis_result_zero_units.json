@@ -64,6 +64,7 @@
     "requested_ha": 100.0,
     "calculated_ha": 100.0,
     "missing_ha": 0.0,
+    "area_difference_ha": 0.0,
     "complete": true,
     "parent_parts": [
       {
@@ -76,7 +77,13 @@
     "biomass_fraction": 1.0,
     "uncertainty_fraction": 1.0,
     "baseline_fraction": 1.0,
-    "optical_paired_valid_fraction": 0.0
+    "optical_paired_valid_fraction": 0.0,
+    "coverage_fraction_raw": {
+      "biomass": 1.0,
+      "uncertainty": 1.0,
+      "baseline": 1.0,
+      "optical_paired_valid": 0.0
+    }
   },
   "timeline": [
     {
@@ -110,11 +117,11 @@
     "total_carbon_start_tc": 4700.0,
     "total_carbon_end_tc": 4723.5,
     "delta_carbon_tc": 23.5,
-    "eproj_tco2e": -86.16666666666666,
+    "eproj_ref": "units.eproj_tco2e",
     "eproj_tco2e_ha_year": -0.8616666666666666,
     "normalisation_area_ha": 100.0,
     "sign_convention": "POSITIVE_E_MEANS_POOL_LOSS",
-    "pool": "AGB_LIVE_WOODY"
+    "pool": "AGB"
   },
   "uncertainty": {
     "status": "AVAILABLE",
@@ -122,12 +129,17 @@
     "lower_tco2e": -189.56666666666666,
     "upper_tco2e": 17.23333333333335,
     "sd_tco2e": 103.4,
-    "method": "INDEPENDENT_CELLS",
+    "method": "INDEPENDENT_NATIVE_CELLS",
     "interval_kind": "SCENARIO",
     "assumptions": {
-      "spatial_dependence": "INDEPENDENT_CELLS",
+      "spatial_dependence": "INDEPENDENT_NATIVE_CELLS",
       "temporal_correlation": 0.0,
       "coverage_factor": 1.0,
+      "cells": 1,
+      "grid": "native CCI cells",
+      "pool": "AGB",
+      "cf_agb": 0.47,
+      "co2_per_c": 3.6666666666666665,
       "empirically_calibrated": false,
       "note": "половина ширины интервала задана примером doc"
     },
@@ -196,15 +208,15 @@
     "comparable": true,
     "claimed_units": 600.0,
     "q": 0,
-    "gap_units": 600.0,
+    "unsupported_gap": 600.0,
     "supported_share": 0.0,
     "mismatch_reasons": [],
     "scope": {
       "geometry_hash": "0xd14fa39d5a21892ab2ac6b967ac0057ba980ee6eb9b30221779d75ffdd6f1f2c",
       "year_start": 2019,
       "year_end": 2020,
-      "pool": "AGB_LIVE_WOODY",
-      "unit": "POTENTIAL_UNIT_OF_THE_CASE"
+      "pool": "AGB",
+      "unit": "tCO2e"
     },
     "scenario_gap_values": {
       "price_parameters_ref": "data/methodology/parameters.csv#price_low,price_base,price_high",
@@ -232,15 +244,23 @@
     "scenes": [],
     "reconciliation": null,
     "warnings": [
-      "Оптические сцены к этому примеру не приложены, поэтому причина изменения не устанавливалась."
+      {
+        "code": "CONTRACT_FIXTURE_NOTE",
+        "severity": "INFO",
+        "message": "Оптические сцены к этому примеру не приложены, поэтому причина изменения не устанавливалась.",
+        "details": {}
+      }
     ]
   },
   "passport": {
+    "status": "DRAFT",
+    "finalized_at": null,
     "content_hash": "0xe1a32ac5b5cbafda3fef829067759ce7aff75afdf02f45e48207aa45d7b324a1",
     "report_hash": "0xbc6ce80092c5d89183ec04ec23c2e1a0a518f07fc1eab3e0109dc73db6a6f481",
     "previous_hash": null,
     "comparison_scope": "geometry_hash+year_start+year_end+pool+method_version",
-    "comparison_result": "FIRST_OBSERVATION",
+    "comparison_result": "INITIAL",
+    "comparison_direction": "NOT_COMPARED",
     "comparison_note": "Сравнение допускается только между сопоставимыми наблюдениями одного контура, периода и пула.",
     "created_at": "2026-09-18T12:00:00Z"
   },
@@ -275,11 +295,26 @@
   ],
   "artifacts": [],
   "limitations": [
-    "Учитывается только живая надземная древесная биомасса; это не полный баланс экосистемы.",
-    "Положительное E — потеря учитываемого пула за период, а не мгновенный выброс всего углерода.",
-    "Базовая линия — условие кейса по истории 2015–2019; она не доказывает дополнительность и не описывает действия владельца.",
-    "Интервал сценарный при заявленных допущениях; это не эмпирически откалиброванный доверительный интервал.",
-    "Вектор границы правила: относительный результат равен нулю."
+    {
+      "code": "POOL_SCOPE",
+      "message": "Учитывается только живая надземная древесная биомасса; это не полный баланс экосистемы."
+    },
+    {
+      "code": "SIGN_CONVENTION",
+      "message": "Положительное E — потеря учитываемого пула за период, а не мгновенный выброс всего углерода."
+    },
+    {
+      "code": "CONTRACT_FIXTURE_NOTE",
+      "message": "Базовая линия — условие кейса по истории 2015–2019; она не доказывает дополнительность и не описывает действия владельца."
+    },
+    {
+      "code": "CONTRACT_FIXTURE_NOTE",
+      "message": "Интервал сценарный при заявленных допущениях; это не эмпирически откалиброванный доверительный интервал."
+    },
+    {
+      "code": "CONTRACT_FIXTURE_NOTE",
+      "message": "Вектор границы правила: относительный результат равен нулю."
+    }
   ],
   "notes": []
 }

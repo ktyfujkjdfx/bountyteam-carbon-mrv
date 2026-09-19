@@ -69,11 +69,16 @@ def test_the_same_key_with_a_different_claim_is_a_conflict(harness):
     assert response.status_code == 409
 
 
-def test_the_same_key_from_a_different_actor_is_a_different_request(harness):
+def test_a_role_header_from_the_client_changes_nothing(harness):
+    """The caller is derived from the session; a header the client sets is not read.
+
+    If the role header still scoped idempotency, the same key sent twice with two
+    different roles would create two analyses. It creates one.
+    """
     first = harness.api.post("/analyses", TVER, key="actor-key-000001", actor="issuer")
     second = harness.api.post("/analyses", TVER, key="actor-key-000001", actor="buyer")
-    assert first["analysis_id"] != second["analysis_id"]
-    assert harness.counted("lens_analyses") == 2
+    assert first["analysis_id"] == second["analysis_id"]
+    assert harness.counted("lens_analyses") == 1
 
 
 def test_the_same_contour_by_name_and_by_polygon_hashes_the_same(harness):
