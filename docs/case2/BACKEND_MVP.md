@@ -13,8 +13,11 @@ running service.
 contracts/v2/   api-models.v2.schema.json, internal-models.v2.schema.json, openapi.v2.yaml
 fixtures/v2/    labelled contract examples, and replay/ for the raster stand-in
 backend/app/v2/ geometry, catalog, ports, adapters/, assemble, store, service, worker,
-                report, api
-backend/tests/case2/  contract, API, job, decision, passport and adapter suites
+                report, api, auth, verification, demo
+backend/tests/case2/  contract, API, job, decision, passport, adapter, auth, request,
+                risk/value, demo, report and acceptance suites
+backend/tools/live_composition.py  one real end-to-end run, refusing to use fixtures
+.github/workflows/case2.yml        the pipeline, not each owner's corner of it
 ```
 
 Nothing under `contracts/`, `fixtures/`, `backend/app/` or `backend/tests/` that belonged to
@@ -27,7 +30,7 @@ services are composed only in `backend/serve.py`.
 ```bash
 python -m pip install -r requirements-contracts.txt -r backend/requirements-backend.txt
 export BACKEND_DEMO_SESSION="<at least 16 characters>"
-python -m backend.migrate            # applies migration 2 alongside the P0 schema
+python -m backend.migrate            # applies migrations 2-5 alongside the P0 schema
 python -m backend.serve              # /api/v1 and /api/v2 with both embedded workers
 ```
 
@@ -42,6 +45,16 @@ python -m backend.lens_worker        # Carbon Lens analyses
 `--no-lens` serves only the frozen v1 contract. On Windows PowerShell, set
 `$env:PYTHONUTF8='1'` and use `.\.venv\Scripts\python.exe`.
 
+Demo sign-ins exist only where a deployment asked for them. Both the switch and a
+password of its own are required, and there are no defaults:
+
+```bash
+export BACKEND_LENS_DEMO_ACCOUNTS=1
+export BACKEND_LENS_DEMO_PASSWORD_OWNER="..."      # at least 12 characters
+export BACKEND_LENS_DEMO_PASSWORD_VERIFIER="..."
+export BACKEND_LENS_DEMO_PASSWORD_INVESTOR="..."
+```
+
 The Lens needs no chain, no deployment and no private key. `/lens` opens without any of
 them.
 
@@ -49,15 +62,29 @@ them.
 
 | Route | Notes |
 |---|---|
-| `GET /api/v2/catalog` | Areas, polygons, available years, the sample sub-request, the three scenario prices, the source register and which adapters are running |
-| `POST /api/v2/analyses` | `X-Demo-Actor` and `Idempotency-Key` required; 202 with `analysis_id` and `status_url` |
+| `POST /api/v2/auth/login` | Username and password for an opaque token; wrong user and wrong password are the same 401, repeats are 429 |
+| `GET /api/v2/auth/me` | The signed-in person and the role the server holds |
+| `POST /api/v2/auth/logout` | Revokes the session immediately |
+| `GET /api/v2/catalog` | Areas, polygons, available years, the sample sub-request, the three scenario prices, the source register, the adapters and the engine mode |
+| `POST /api/v2/areas/measure` | Geodesic area before anything is queued; over the limit is a reported measurement, not an exception |
+| `POST /api/v2/requests` · `GET` | Verification requests: create a draft, list the ones this role may see |
+| `GET/PATCH /api/v2/requests/{id}` | Read one; an owner may change the stated volume while it is a draft |
+| `POST /api/v2/requests/{id}/submit` | Hand a draft over for verification |
+| `POST /api/v2/requests/{id}/analysis` | Queue the calculation; `Idempotency-Key` required |
+| `POST /api/v2/requests/{id}/finalize` | A verifier pins a passport version. No number moves |
+| `GET /api/v2/requests/{id}/demo` + `/issue`, `/transfer`, `/retire` | The demonstration lifecycle. `q = 0` and `q = null` refuse |
+| `POST /api/v2/analyses` | `Idempotency-Key` required; 202 with `analysis_id` and `status_url` |
 | `GET /api/v2/analyses/{id}` | `job_state` and, once finished, `result`; `report_url` and `proof_url` appear only when there is something to link to |
 | `GET /api/v2/analyses/{id}/artifacts/{artifact_id}` | Manifest-listed files only, re-hashed on the way out |
 | `GET /api/v2/analyses/{id}/report?format=json\|html` | The passport; the HTML is self-contained |
+| `GET /api/v2/analyses/{id}/value?price_rub=` | q times each price, with an optional price of the caller's own labelled `USER_SCENARIO` |
 | `GET /api/v2/analyses/{id}/proof` | Hashes, versions and the anchor status |
 
-`X-Demo-Session` on every route. `/api/v2/openapi.json` serves `contracts/v2/openapi.v2.yaml`
-unchanged, and a test compares the served document with the file.
+`Authorization: Bearer <token>` on every route except `/auth/login`. There is no
+`X-Demo-Actor` and no `X-Demo-Session` on `/api/v2`: a role a client can set is not an
+authorization, so the caller and the role come from the session row.
+`/api/v2/openapi.json` serves `contracts/v2/openapi.v2.yaml` unchanged, and a test
+compares the served document with the file.
 
 Failures: 401 unauthenticated, 404 unknown analysis or artifact, 409 idempotency conflict,
 422 invalid geometry, period or claim, 503 source unavailable or artifact integrity
@@ -197,3 +224,66 @@ downgrade, and a downgrade says in its own note that it is not an annulment of a
   Frontend workspace is on its own branch and is not merged.
 - `openapi-spec-validator` validates the v2 document, but no consumer has generated types
   from it yet.
+
+## Authorization is a working feature, not a theme switch
+
+Three roles — `PROJECT_OWNER`, `VERIFIER`, `INVESTOR` — held on the server and read from
+the session row on every request. Passwords are scrypt with a per-password salt and the
+cost recorded next to each digest; only the hash of a session token is stored, so a copy
+of the database hands nobody a working session. Sessions survive a restart because they
+live in the database. There is no refresh token and no silent restoration: keep the token
+in memory, and a reload signs the person in again rather than relying on a secret that
+survives the page.
+
+Every permission is checked by the server and the suite asserts each cell of the matrix
+over HTTP. An analysis the caller may not read answers **404, not 403**, so probing
+identifiers cannot reveal which ones exist.
+
+The audit trail records sign-ins and failures, requests created and submitted, analyses
+started, passports finalized, reports and artifacts downloaded, and every demonstration
+step. It lives beside the passports and never inside them: who read a report cannot
+change what the report says.
+
+## Two engine modes, and nothing between them
+
+`BACKEND_LENS_ENGINE_MODE=REAL` is the default. `rs.case2` and `carbon` answer, or
+nothing does. A missing package raises at build time, so the process either refuses to
+start under `BACKEND_LENS_REQUIRE_REAL=1` or serves `/api/v1` with the Lens unmounted. An
+engine that vanishes mid-flight fails the job with `DEPENDENCY_UNAVAILABLE`.
+
+`FIXTURE` has to be asked for by name, is refused outright under `BACKEND_MODE=LOCAL_DEMO`,
+and still needs the real carbon engine: the vectors replay a raster payload, never a
+recorded Q. The catalog publishes which mode answered.
+
+`backend/app/v2/` contains no second implementation of the method. A test walks every
+module there with docstrings stripped and fails on `0.85`, `44/12`, `0.47` or
+`math.floor`. The test double that lets the suite run before `carbon/` is merged lives at
+`backend/tests/case2/reference_engine.py`, inside the test tree, and is deleted when that
+package lands.
+
+## How the pipeline is proved
+
+The unit suite is pinned to fixture mode and says why: it asserts outcomes only a
+controlled vector can guarantee — a q above zero, a q of exactly zero, a q that is null —
+and running it against whatever the rasters happen to say would make it a test of the
+data instead.
+
+The real pipeline is proved once, separately, by `backend/tools/live_composition.py`. It
+refuses to start unless both owning packages import, substitutes nothing when they are
+missing, and on `main` a missing package fails the job rather than skipping it. It walks
+sign-in, a request, the calculation over the supplied rasters, the artifacts, passport
+determinism, finalization, the role checks, the report and the demonstration refusal.
+
+Verified in an isolated tree holding all three components:
+
+| Suite | Without the engines | With them |
+|---|---|---|
+| `backend/tests/case2` | 321 passed, 3 skipped | 318 passed, 6 skipped |
+| `rs/tests/case2` | — | 133 passed, 2 skipped |
+| `carbon/tests` | — | 306 passed |
+| `live_composition.py` | `NOT RUN`, nothing substituted | `LIVE COMPOSITION OK` |
+
+The live run over `RU_TVER_01` 2019–2024 produced `q = 0` with
+`NON_POSITIVE_RELATIVE_RESULT`, `COMPUTED_FROM_SUPPLIED_DATA`, 20 change zones, 7
+artifacts all served, `CCI_V7` credited, the two engines agreeing on Eproj, a stable
+content hash across two runs, and a demonstration issue correctly refused.
