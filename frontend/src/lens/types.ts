@@ -27,6 +27,10 @@ export type ComparisonDirection = Unknowable<ApiSchemas['ComparisonDirection']>;
 export type IntervalKind = Unknowable<ApiSchemas['IntervalKind']>;
 export type WarningSeverity = Unknowable<ApiSchemas['WarningSeverity']>;
 
+/** Taken straight from the generated contract: nothing on screen reshapes either of them. */
+export type Risk = ApiSchemas['Risk'];
+export type Projection = ApiSchemas['Projection'];
+
 /**
  * Discriminated on `type`, so `coordinates` narrows with it. A single interface carrying the union
  * of both shapes would force a cast at every use, and a cast is exactly the place where a
@@ -424,6 +428,12 @@ export interface AnalysisResult {
   scenario_values: ScenarioValues;
   claim: Claim;
   zones: Zone[];
+  // The service computes these and hashes them into the passport. The screens derive their own
+  // risk cards and projection from the official `data/` archive instead, but the fields must be
+  // declared and carried: leaving them off the type does not remove them from what was hashed, it
+  // only hides that the content view has to include them.
+  risks: Risk[];
+  projection: Projection;
   evidence: Evidence;
   passport: Passport;
   sources: Source[];

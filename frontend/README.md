@@ -33,9 +33,14 @@ The first screen answers in four numbers — Q, Eproj, R and the scenario value 
 | Live service (default) | `VITE_LENS_API_BASE_URL=<origin>/api/v2` | Backend `/api/v2`; the token is a runtime value, never baked into `dist` |
 | Offline set | `?lens=fixture` or `VITE_LENS_API_MODE=fixture` | official `data/` plus labelled result sets — the conditional example of the statement (Q = 395) and logic vectors |
 
-`?auth=demo` sends the session token as `X-Demo-Session` instead of `Authorization: Bearer`, which the
-service deployed today requires (see finding L1 in the integration notes). A failing service is always
-reported as a failure — the offline set is never substituted automatically.
+Sign-in in live mode goes to `POST /auth/login` with a **username** and a password; the role comes
+back from the service and the token lives in memory (and, for a reload, in this tab's
+`sessionStorage`). It never reaches the URL, the build, a report or a content hash. The `?auth=demo`
+header workaround is gone: the service allows `Authorization` through CORS.
+
+In live mode the request lifecycle belongs to the service. `sessionStorage` holds no request state
+there — only the offline set keeps a local lifecycle, and it says so on screen. A failing service is
+always reported as a failure; the offline set is never substituted automatically.
 
 ## Carbon Lens data boundary
 
@@ -104,9 +109,28 @@ npm run preview        # serve dist at http://127.0.0.1:4173
 | `gen:api` / `check:api` | `src/api/generated/openapi.ts` is regenerated from `contracts/openapi.yaml`, check fails on drift |
 | `lint` | ESLint strict TS + React hooks rules; literal `SIGNING` forbidden in `src/` |
 | `typecheck` | `strict`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess` |
-| `test` | 144 tests: status mapping vs schema enums, both adapters, polling, geometry, artifact pairing, components, unknown-enum resilience, root error boundary, golden-fixture flow, Carbon Lens adapter and workspace |
+| `test` | 204 tests: status mapping vs schema enums, both adapters, polling, geometry, artifact pairing, components, unknown-enum resilience, root error boundary, golden-fixture flow, Carbon Lens adapter and workspace, the request-state projection, and the passport hashes against a golden live result |
 | `build` + `check:dist` | offline `dist/` with relative paths, no remote hosts, no GeoTIFF |
-| `e2e` | full demo flow in a real browser + HTTP failure → manual offline fallback; `e2e/backend-integration.spec.ts` (opt-in) runs the real SPA against a live Backend incl. CORS |
+| `e2e` | full demo flow in a real browser + HTTP failure → manual offline fallback; `e2e/lens-backend.spec.ts` (opt-in) walks all three roles against a running Lens service; `e2e/backend-integration.spec.ts` (opt-in) runs the real SPA against a live `/api/v1` Backend incl. CORS |
+
+### Live Carbon Lens check in a browser
+
+Skipped unless a service URL and all three role passwords are present, so the ordinary run needs no
+backend. Passwords come from the environment only — see `backend/README.md` for starting the service.
+
+```powershell
+$env:E2E_BASE_URL             = 'http://127.0.0.1:4173'
+$env:E2E_LENS_BACKEND_URL     = 'http://127.0.0.1:8031/api/v2'
+$env:E2E_LENS_PASSWORD_OWNER    = '<same as BACKEND_LENS_DEMO_PASSWORD_OWNER>'
+$env:E2E_LENS_PASSWORD_VERIFIER = '<same as BACKEND_LENS_DEMO_PASSWORD_VERIFIER>'
+$env:E2E_LENS_PASSWORD_INVESTOR = '<same as BACKEND_LENS_DEMO_PASSWORD_INVESTOR>'
+$env:VITE_LENS_API_BASE_URL   = 'http://127.0.0.1:8031/api/v2'
+npm run build
+npx playwright test
+```
+
+Playwright is a check, not the demonstration: on the day a person clicks through this, and Playwright
+does not run.
 
 ## Adapter selection (config only, never automatic)
 

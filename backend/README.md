@@ -80,6 +80,48 @@ In CONTRACT_FIXTURE mode, `/health` reports `mode: CONTRACT_FIXTURE`. Its `chain
 describe the **mock ledger**, which is not a blockchain. Mock receipts and anchors are never
 on-chain proof. The mock uses chain ID `0` and refuses to run in LOCAL_DEMO.
 
+## Cold start: Carbon Lens with the three roles
+
+The Lens needs no chain and no seed. What it does need is a password per demo account, chosen
+here and stored nowhere else — there is no default, so an account exists only because somebody
+turned it on. `BACKEND_LENS_REQUIRE_REAL=1` makes the service refuse to start rather than serve
+replayed vectors: a deployment that looks complete and answers with numbers nobody measured is
+worse than one that is down.
+
+```bash
+export PYTHONUTF8=1
+export BACKEND_DEMO_SESSION=<at least 16 characters>
+export BACKEND_LENS_DEMO_ACCOUNTS=1
+export BACKEND_LENS_DEMO_PASSWORD_OWNER=<at least 12 characters>
+export BACKEND_LENS_DEMO_PASSWORD_VERIFIER=<at least 12 characters>
+export BACKEND_LENS_DEMO_PASSWORD_INVESTOR=<at least 12 characters>
+export BACKEND_LENS_ENGINE_MODE=REAL
+export BACKEND_LENS_REQUIRE_REAL=1
+# Only needed when the interface is served from another origin, e.g. the Vite preview:
+export BACKEND_CORS_ORIGINS=http://127.0.0.1:4173
+
+./.venv/bin/python -m backend.migrate
+./.venv/bin/python -m backend.serve --host 127.0.0.1 --port 8031
+```
+
+The three accounts are `owner` (PROJECT_OWNER), `verifier` (VERIFIER) and `investor` (INVESTOR).
+Sign in with the **username**, not an email. An account that already exists is left alone, so a
+restart never resets a password somebody changed.
+
+The whole pipeline can be walked once, for real, without a browser:
+
+```bash
+LIVE_REQUIRED=1 ./.venv/bin/python -m backend.tools.live_composition
+```
+
+It builds the real ports, carries a request from sign-in to a finalized passport, and fails rather
+than substituting anything if `rs.case2` or `carbon` is missing. `LIVE_REQUIRED=1` turns a missing
+package from a statement into a failure; CI sets it on `main`.
+
+The request lifecycle is `DRAFT -> SUBMITTED -> ANALYSING -> CALCULATED -> FINALIZED`. A run that
+fails returns the request to `SUBMITTED`; a run that finishes without a usable number still reaches
+`CALCULATED`, because the calculation did finish. Only a verifier moves a request to `FINALIZED`.
+
 ## LOCAL_DEMO: real local Anvil (Blockchain module deployment)
 
 1. Blockchain (see `blockchain/README.md`) runs `anvil --port 8545 --chain-id 31337` and

@@ -8,6 +8,7 @@
 
 import { casePrices, caseSources, scenesInPeriod } from './data';
 import { bboxOf, box } from './geometry';
+import { LENS_PROJECTION_END_YEAR } from './types';
 import type {
   AnalysisResult,
   Areas,
@@ -190,6 +191,11 @@ export interface ScenarioNumbers {
   limitations: string[];
   notes: string[];
 }
+
+/** Carried by every offline risk block, because a block gets read on its own. */
+const OFFLINE_RISK_NOTE =
+  'Офлайн-набор не измеряет риск: основание не искали, и это не установленное отсутствие. ' +
+  'Ни один риск не входит в Q ни в одном режиме.';
 
 const IPCC_ASSUMPTIONS: Record<string, unknown> = {
   cf_agb: 0.47,
@@ -1017,6 +1023,23 @@ export function buildFixtureResult(context: FixtureContext, extras: { cellsArtif
       defaults.years,
     ),
     zones,
+    // The offline set measures nothing, so it reports nothing rather than an empty list that would
+    // read as "no risk found". `observed: false` is the whole content: it says the basis was not
+    // looked for here, which is not an established absence.
+    risks: [
+      { code: 'FIRE', observed: false, basis: {}, source_ref: null, note: OFFLINE_RISK_NOTE },
+      { code: 'FOREST_LOSS', observed: false, basis: {}, source_ref: null, note: OFFLINE_RISK_NOTE },
+      { code: 'DATA_QUALITY', observed: false, basis: {}, source_ref: null, note: OFFLINE_RISK_NOTE },
+    ],
+    projection: {
+      status: 'UNAVAILABLE',
+      unavailable_reason: 'INCOMPLETE_COVERAGE',
+      horizon_year: LENS_PROJECTION_END_YEAR,
+      points: [],
+      q_projection: null,
+      q_projection_note: 'Проекция потенциальных единиц не строится ни в одном режиме.',
+      note: 'Офлайн-набор не строит ряд проекции; на экране показан сценарий базовой линии из официального data/, и он подписан как допущение.',
+    },
     evidence,
     sources: sources(),
     artifacts: extras.cellsArtifact ? [extras.cellsArtifact] : [],
