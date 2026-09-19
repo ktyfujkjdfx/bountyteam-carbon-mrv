@@ -33,6 +33,8 @@ CELLS_EXCLUDED = "CELLS_EXCLUDED"
 CANONICAL_E_DISAGREES = "CANONICAL_E_DISAGREES"
 BASELINE_PROJECTION = "BASELINE_PROJECTION"
 PROJECTION_CLIPPED = "PROJECTION_CLIPPED"
+VALUE_WITHOUT_UNITS = "VALUE_WITHOUT_UNITS"
+USER_PRICE_SCENARIO = "USER_PRICE_SCENARIO"
 
 CATALOGUE: dict[str, str] = {
     SCENARIO_INTERVAL: (
@@ -133,6 +135,14 @@ CATALOGUE: dict[str, str] = {
     PROJECTION_CLIPPED: (
         "На части горизонта траектория базовой линии опускается ниже нуля и обрезается "
         "по правилу max(0, …). Обрезанный участок не является оценкой запаса."
+    ),
+    VALUE_WITHOUT_UNITS: (
+        "Число потенциальных единиц не определено, поэтому стоимость не рассчитывается. "
+        "Это не нулевая стоимость."
+    ),
+    USER_PRICE_SCENARIO: (
+        "Пользовательская цена — сценарный ввод. Она не является условием кейса и "
+        "не меняет число потенциальных единиц."
     ),
     PROVISIONAL_INPUT: (
         "Пер-клеточные входные данные получены предварительным локальным извлечением "

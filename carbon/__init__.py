@@ -60,6 +60,16 @@ from .report import build_report, render_html
 from .research import ResearchRow, research_rows, research_table
 from .rs_adapter import RasterInputs, RsPayloadError, from_fixture, from_rs_payload
 from .units import Coverage, ScenarioValue, UnitsResult, compute_units
+from .value import (
+    OFFICIAL_CASE_PRICE,
+    USER_SCENARIO,
+    PriceScenario,
+    ScenarioValuation,
+    ValueResult,
+    official_prices,
+    scenario_values,
+    user_price,
+)
 
 __all__ = [
     "METHOD_VERSION",
@@ -85,7 +95,9 @@ __all__ = [
     "IntervalVariant",
     "MethodOptions",
     "OBSERVED",
+    "OFFICIAL_CASE_PRICE",
     "Passport",
+    "PriceScenario",
     "PassportEnvelope",
     "ProjectionPoint",
     "ProjectionResult",
@@ -93,9 +105,12 @@ __all__ = [
     "ResearchRow",
     "RsPayloadError",
     "SCENARIO_PROJECTION",
+    "ScenarioValuation",
     "ScenarioValue",
     "TimelinePoint",
+    "USER_SCENARIO",
     "UnitsResult",
+    "ValueResult",
     "analyse",
     "baseline_stock",
     "build_manifest",
@@ -116,13 +131,16 @@ __all__ = [
     "load_parameters",
     "manifest_hash",
     "notes",
+    "official_prices",
     "parameters_snapshot",
     "project_baseline",
     "reasons",
     "render_html",
+    "scenario_values",
     "research_rows",
     "research_table",
     "seal",
     "verify",
+    "user_price",
     "verify_files",
 ]
