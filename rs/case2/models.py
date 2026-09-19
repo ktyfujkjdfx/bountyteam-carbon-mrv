@@ -177,6 +177,9 @@ class RasterAnalysis:
     request_area_ha: float
     cell_weight_sum_ha: float
     parents: Sequence[str]
+    # One piece per source area the request touches. The pieces are disjoint,
+    # so their areas add up to the request and no hectare is counted twice.
+    parts: Sequence[Mapping[str, object]]
     years: Sequence[int]
     change: StockChange
     timeline: Sequence[StockYear]

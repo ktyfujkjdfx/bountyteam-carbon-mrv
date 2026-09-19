@@ -11,7 +11,7 @@ import json
 import sys
 from pathlib import Path
 
-from rs.case2 import artifacts
+from rs.case2 import artifacts, errors
 from rs.case2 import manifest as manifest_module
 from rs.case2 import payload as payload_module
 from rs.case2.analysis import analyse
@@ -48,7 +48,9 @@ def resolve_geometry(args, dataset):
         if args.aoi not in dataset.geometries:
             raise DatasetError(
                 f"unknown area {args.aoi}; the dataset supplies "
-                f"{', '.join(sorted(dataset.geometries))}")
+                f"{', '.join(sorted(dataset.geometries))}",
+                code=errors.UNKNOWN_AREA_ID, aoi_id=args.aoi,
+                available_areas=sorted(dataset.geometries))
         return dataset.geometries[args.aoi]
     with open(args.geometry, encoding="utf-8") as handle:
         return json.load(handle)
@@ -67,7 +69,8 @@ def run(argv=None):
 
     if not manifest_module.outputs_are_safe(args.out, dataset.root):
         raise DatasetError(
-            f"refusing to write results inside the supplied dataset: {args.out}")
+            f"refusing to write results inside the supplied dataset: {args.out}",
+            code=errors.OUTPUT_INSIDE_DATASET)
 
     geometry = resolve_geometry(args, dataset)
     analysis = analyse(geometry, args.start, args.end, dataset=dataset,
@@ -118,10 +121,19 @@ def run(argv=None):
 
 
 def main(argv=None):
+    """Run, or refuse in a form both a reader and a program can use.
+
+    The human line goes to stderr and the structured refusal to stdout, so a
+    caller piping the output gets a document with a code it can branch on
+    rather than a sentence it has to match on.
+    """
     try:
         return run(argv)
     except (GeometryError, DatasetError) as exc:
         print(f"rs.case2: {exc}", file=sys.stderr)
+        sys.stdout.write(
+            json.dumps(exc.as_document(), ensure_ascii=False, sort_keys=True))
+        sys.stdout.write("\n")
         return 2
 
 

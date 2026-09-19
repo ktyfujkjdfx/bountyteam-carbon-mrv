@@ -96,6 +96,33 @@ does not reach keeps its geometry and its weight, carries `valid: false` and
 null AGB. NaN is not JSON, and zero is a published biomass value in this
 product - writing either would be a measurement the map never made.
 
+## Any admissible contour
+
+A Polygon or MultiPolygon in WGS84, up to 2000 ha, is a request. A supplied
+AOI, the `CHECK_TRANSFER_01` sub-plot and a contour drawn by hand take the same
+path; no identifier is special, and nothing on the analysis path knows the name
+of any plot. A request touching two source areas is cut into one disjoint piece
+per area, published as `request.parts`, and the pairwise overlap is measured
+rather than assumed - an area counted twice is the one arithmetic error here
+that nothing downstream could see.
+
+Change zones, though, are produced for the first source area only, and the
+result says so in `change_evidence.scope` rather than leaving it to be
+inferred. Each area has its own Sentinel grid and its own scene pair, and a
+zone spanning two grids needs a partition rule that does not exist. The stock
+result still covers every part.
+
+**A refusal is a document.** Nothing is repaired: a self-intersecting contour
+is a different polygon once fixed, and analysing the fixed one under the hash
+of the one that was asked for would be a lie about provenance. Every refusal
+carries a stable code, the numbers the decision was made from, and one of two
+outcomes. `INVALID_REQUEST` means the request cannot be accepted - it is too
+large, self-intersecting, or left in a projected CRS. `INSUFFICIENT_DATA` means
+the request is well formed and the products do not reach it; that is a
+statement about coverage and never about the forest, so it must not be read as
+an absence of change. The CLI prints the document on stdout beside the human
+line on stderr.
+
 ## Change zones
 
 Zones are drawn on the paired-valid part of the 20 m Sentinel grid, from three

@@ -6,8 +6,8 @@ polygon. Nothing here computes a baseline, an uncertainty interval, potential
 units or an investment conclusion - those belong to other owners and are
 deliberately absent.
 """
-from rs.case2 import biomass, notices, optical
-from rs.case2.catalog import Dataset, DatasetError, sha256_file
+from rs.case2 import biomass, errors, notices, optical
+from rs.case2.catalog import Dataset, DatasetError, InsufficientData, sha256_file
 from rs.case2.geometry import geodesic_area_ha, validate, validate_years
 from rs.case2.models import (
     ANALYSIS_YEAR_MAX,
@@ -45,14 +45,19 @@ def analyse(geometry, year_start, year_end, *, dataset=None, include_optical=Tru
     read_years = sorted(set(timeline_years) | set(change_years))
     for year in change_years:
         if year not in read_years:
-            raise DatasetError(
-                f"biomass map for {year} is not available for {', '.join(parents)}")
+            raise InsufficientData(
+                f"biomass map for {year} is not available for "
+                f"{', '.join(parents)}",
+                code=errors.BIOMASS_YEAR_UNAVAILABLE, year=year,
+                parents=list(parents), available_years=list(read_years))
 
     cells, grids = biomass.build_cells(
         data, request, parents, read_years, validity_years=change_years)
     if not any(cell.valid for cell in cells):
-        raise DatasetError(
-            "no biomass cell covers the request in both requested years")
+        raise InsufficientData(
+            "no biomass cell covers the request in both requested years",
+            code=errors.NO_VALID_BIOMASS_CELL, cells=len(cells),
+            year_start=year_start, year_end=year_end)
 
     request_area_ha = geodesic_area_ha(request)
     weight_sum = sum(cell.weight_ha for cell in cells)
@@ -92,6 +97,7 @@ def analyse(geometry, year_start, year_end, *, dataset=None, include_optical=Tru
         request_area_ha=request_area_ha,
         cell_weight_sum_ha=weight_sum,
         parents=tuple(parents),
+        parts=_parts(data, request, parents, cells),
         years=tuple(change_years),
         change=change,
         timeline=tuple(timeline),
@@ -119,6 +125,48 @@ def analyse(geometry, year_start, year_end, *, dataset=None, include_optical=Tru
         change_evidence=change_evidence,
         raw_change=raw_change,
     )
+
+
+def _parts(data, request, parents, cells):
+    """The request cut into one piece per source area, with no piece shared.
+
+    A request that touches two source areas is analysed as two pieces, and a
+    hectare belongs to exactly one of them. The supplied areas are pairwise
+    disjoint - `Dataset.parents_for` refuses the set outright if a future one
+    is not - so the pieces are a partition by construction, and the pairwise
+    overlap is reported anyway rather than asserted: an area counted twice is
+    the one arithmetic error in this analysis that nothing downstream can see.
+    """
+    pieces = []
+    geometries = {}
+    for aoi_id in parents:
+        piece = request.intersection(data.geometries[aoi_id])
+        if piece.is_empty:
+            continue
+        geometries[aoi_id] = piece
+        in_part = [cell for cell in cells if cell.parent_aoi_id == aoi_id]
+        pieces.append({
+            "aoi_id": aoi_id,
+            "area_ha": geodesic_area_ha(piece),
+            "cells": len(in_part),
+            "valid_cells": sum(1 for cell in in_part if cell.valid),
+            "cell_weight_sum_ha": sum(cell.weight_ha for cell in in_part),
+        })
+
+    overlap_ha = 0.0
+    ordered = sorted(geometries)
+    for left in range(len(ordered)):
+        for right in range(left + 1, len(ordered)):
+            shared = geometries[ordered[left]].intersection(geometries[ordered[right]])
+            if not shared.is_empty:
+                overlap_ha += geodesic_area_ha(shared)
+    if overlap_ha > 0:
+        raise DatasetError(
+            f"the request pieces of {', '.join(ordered)} share {overlap_ha:.6f} ha; "
+            f"their stock cannot be summed without counting that area twice",
+            code=errors.SOURCE_AREAS_OVERLAP, areas=ordered,
+            overlap_ha=overlap_ha)
+    return tuple(pieces)
 
 
 def _timeline_years(data, parents):
@@ -210,6 +258,7 @@ def _change_evidence(data, request, parents, change_years, scenes, cells,
     evidence = {
         "available": True,
         "analysed_parent": parents[0],
+        "scope": _zone_scope(parents),
         "pair": raw["pair"],
         "scene_selection": raw["selection"],
         "observation_quality": raw["quality"],
@@ -224,6 +273,29 @@ def _change_evidence(data, request, parents, change_years, scenes, cells,
         "method_note": zones_method_note(),
     }
     return raw, evidence, sources
+
+
+def _zone_scope(parents):
+    """Which part of the request the zones speak for, stated rather than implied.
+
+    The rule for a request spanning several source areas: zones are produced
+    for the first parent, west to east, and for that parent only. Each source
+    area has its own Sentinel grid and its own scene pair, and a zone drawn
+    across two grids would need a partition rule that does not exist. The stock
+    result still covers every parent - only the zone map is narrower - and
+    saying which is narrower is the whole point of publishing this block.
+    """
+    return {
+        "zones_cover": [parents[0]],
+        "stock_covers": list(parents),
+        "rule": (
+            "change zones are produced for the first source area of the "
+            "request, ordered west to east; a request spanning several areas "
+            "has several grids and several scene pairs, and merging zones "
+            "across them needs a partition rule that is not defined"
+        ),
+        "complete_for_request": len(parents) == 1,
+    }
 
 
 def zones_module_geojson(raw, contribution):

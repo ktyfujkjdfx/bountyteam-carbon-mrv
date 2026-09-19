@@ -11,6 +11,8 @@ from pathlib import Path
 
 from shapely.geometry import shape
 
+from rs.case2 import errors
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATA_ROOT = REPO_ROOT / "data"
 # CSV tables in the set are UTF-8 with a BOM; reading them as plain UTF-8 puts
@@ -18,8 +20,22 @@ DEFAULT_DATA_ROOT = REPO_ROOT / "data"
 CSV_ENCODING = "utf-8-sig"
 
 
-class DatasetError(RuntimeError):
+class DatasetError(errors.StructuredError, RuntimeError):
     """The supplied dataset cannot answer the request as asked."""
+
+    default_code = errors.DATASET_FILE_MISSING
+
+
+class InsufficientData(DatasetError):
+    """The request is well formed; the supplied products do not reach it.
+
+    Separated from the rest so a consumer can tell "ask for a different
+    contour" from "this file is not where the catalogue says it is". Both are
+    refusals; only one is about the request.
+    """
+
+    default_code = errors.NO_SOURCE_COVERAGE
+    outcome = errors.INSUFFICIENT_DATA
 
 
 class Dataset:
@@ -90,9 +106,11 @@ class Dataset:
         relative = str(relative).replace("\\", "/")
         resolved = (self.root / relative).resolve()
         if not resolved.is_relative_to(self.root.resolve()):
-            raise DatasetError(f"path escapes the data root: {relative}")
+            raise DatasetError(f"path escapes the data root: {relative}",
+                               code=errors.DATASET_FILE_MISSING, path=relative)
         if not resolved.is_file():
-            raise DatasetError(f"file listed but not present: {relative}")
+            raise DatasetError(f"file listed but not present: {relative}",
+                               code=errors.DATASET_FILE_MISSING, path=relative)
         return resolved
 
     def biomass_path(self, aoi_id, year):
@@ -114,10 +132,12 @@ class Dataset:
         hits = [aoi for aoi, poly in sorted(self.geometries.items())
                 if poly.intersects(geometry) and not poly.touches(geometry)]
         if not hits:
-            raise DatasetError(
-                "the request does not intersect any supplied area; the dataset "
-                "covers RU_TVER_01, RU_VOLOGDA_02, RU_MORDOVIA_03 and RU_MORDOVIA_04"
-            )
+            raise InsufficientData(
+                f"the request does not intersect any supplied area; the dataset "
+                f"covers {', '.join(sorted(self.geometries))}",
+                code=errors.NO_SOURCE_COVERAGE,
+                available_areas=sorted(self.geometries),
+                request_bounds=[round(value, 7) for value in geometry.bounds])
         for left in range(len(hits)):
             for right in range(left + 1, len(hits)):
                 a, b = self.geometries[hits[left]], self.geometries[hits[right]]
@@ -125,8 +145,9 @@ class Dataset:
                 if not overlap.is_empty and overlap.area > 0:
                     raise DatasetError(
                         f"source areas {hits[left]} and {hits[right]} overlap; a "
-                        f"partition policy is required before their stock can be summed"
-                    )
+                        f"partition policy is required before their stock can be summed",
+                        code=errors.SOURCE_AREAS_OVERLAP,
+                        areas=[hits[left], hits[right]])
         return hits
 
     def scenes_for(self, aoi_id, years=None):
@@ -148,8 +169,9 @@ class Dataset:
         offsets = {float(band["source_offset"]) for band in radiometry}
         if len(offsets) != 1:
             raise DatasetError(
-                f"scene {scene_key} mixes radiometric offsets {sorted(offsets)}"
-            )
+                f"scene {scene_key} mixes radiometric offsets {sorted(offsets)}",
+                code=errors.SOURCE_OFFSETS_MIXED, scene_key=scene_key,
+                offsets=sorted(offsets))
         return offsets.pop()
 
 

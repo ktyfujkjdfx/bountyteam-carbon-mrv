@@ -104,6 +104,14 @@ def analysis_payload(analysis):
             "year_end": change.year_end,
             "years": change.years,
             "parents": list(analysis.parents),
+            # One disjoint piece per source area. Their areas add up to the
+            # request, so a consumer can show where the hectares came from
+            # without any risk of counting one of them twice.
+            "parts": _round([dict(part) for part in analysis.parts]),
+            "parts_note": (
+                "pieces are pairwise disjoint; a hectare belongs to exactly one "
+                "of them and the overlap is checked, not assumed"
+            ),
         },
         "stock_change": {
             "stock_start_tc": _round(change.stock_start_tc),

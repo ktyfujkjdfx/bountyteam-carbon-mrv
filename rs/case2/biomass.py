@@ -8,7 +8,8 @@ when the map does not reach it at all.
 import numpy
 import rasterio
 
-from rs.case2.catalog import DatasetError
+from rs.case2 import errors
+from rs.case2.catalog import DatasetError, InsufficientData
 from rs.case2.grid import grid_spec, weigh
 from rs.case2.models import (
     CARBON_FRACTION,
@@ -39,8 +40,9 @@ def read_year(dataset, aoi_id, year):
     with rasterio.open(dataset.biomass_path(aoi_id, year)) as source:
         if source.count < AGB_SD_BAND:
             raise DatasetError(
-                f"{aoi_id} {year}: expected AGB and AGB_SD bands, found {source.count}"
-            )
+                f"{aoi_id} {year}: expected AGB and AGB_SD bands, found {source.count}",
+                code=errors.SOURCE_BANDS_UNEXPECTED, aoi_id=aoi_id, year=year,
+                bands=source.count)
         agb = source.read(AGB_BAND).astype("float64")
         agb_sd = source.read(AGB_SD_BAND).astype("float64")
         grid = grid_spec(source, units="degree")
@@ -106,7 +108,8 @@ def stock(cells, year):
     usable = [cell for cell in cells if cell.valid and year in cell.agb]
     covered = sum(cell.weight_ha for cell in usable)
     if covered <= 0:
-        raise DatasetError(f"no covered area to compute stock for {year}")
+        raise InsufficientData(f"no covered area to compute stock for {year}",
+                               code=errors.NO_VALID_BIOMASS_CELL, year=year)
     total_agb = sum(cell.agb[year] * cell.weight_ha for cell in usable)
     total_tc = total_agb * CARBON_FRACTION
     return StockYear(
