@@ -47,33 +47,37 @@ def assert_model(body, model: str):
     return body
 
 
-def _missing_engines() -> tuple:
-    from backend.app.v2.adapters import missing_engines
-
-    return missing_engines()
-
-
 def engine_override() -> dict:
-    """How this suite gets an engine before `carbon/` and `rs/case2/` are merged.
+    """This suite runs in fixture mode on purpose, and says so rather than drifting.
 
-    The real packages win whenever they are importable, so once they land the suite
-    exercises the production path without a line changing here. Until then the raster
-    side replays labelled vectors and the carbon side is handed `reference_engine`, a
-    test double that lives in this directory precisely so that nothing under
-    `backend/app/` can reach a second implementation of the formulas.
+    These tests are about the API, the jobs, the passports and the decisions, and they
+    assert outcomes that only a controlled vector can guarantee: a q above zero, a q of
+    exactly zero, a q that is null. Running them against whatever the supplied rasters
+    happen to say would make them a test of the data instead.
+
+    The real pipeline is proved separately and for real by
+    `backend/tools/live_composition.py`, which refuses to start unless both owning
+    packages import. That is the division: controlled vectors here, one honest end-to-end
+    run there.
+
+    The carbon engine is still the real one whenever it is importable. Only when it is
+    absent does the suite inject `reference_engine`, a test double that lives in this
+    directory precisely so that nothing under `backend/app/` can reach a second
+    implementation of the formulas.
     """
-    from backend.app.v2.adapters import FIXTURE, missing_engines
+    from backend.app.v2.adapters import FIXTURE, carbon as carbon_module
 
-    if not missing_engines():
-        return {}
-    from . import reference_engine
+    override: dict = {"engine_mode": FIXTURE}
+    if not carbon_module.CARBON_AVAILABLE:
+        from . import reference_engine
 
-    return {"engine_mode": FIXTURE, "carbon_module_override": reference_engine}
+        override["carbon_module_override"] = reference_engine
+    return override
 
 
 def make_settings(tmp_path: Path, **overrides) -> Settings:
     base = Settings(demo_session=SESSION, db_path=tmp_path / "backend.sqlite",
-                    lens_engine_mode=("FIXTURE" if _missing_engines() else "REAL"),
+                    lens_engine_mode="FIXTURE",
                     artifact_store=tmp_path / "artifacts",
                     mock_chain_path=tmp_path / "mock-chain.sqlite",
                     rs_work_dir=tmp_path / "rs-runs",

@@ -1,0 +1,173 @@
+name: Carbon Lens (case 2)
+
+# The Lens has four owners and one pipeline. This workflow runs the pipeline rather
+# than each owner's corner of it, because every integration defect found so far lived
+# between two components and not inside one.
+#
+# Everything here is offline. The supplied data is in the repository, the fixtures are in
+# the repository, and no job reaches a network after `pip install`. A job that needed a
+# remote host would be a job that can fail for a reason that has nothing to do with the
+# code.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: case2-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: "1"
+  # Deterministic iteration order, so a hash that differs between two runs is a real
+  # difference rather than a dictionary that happened to be ordered differently.
+  PYTHONHASHSEED: "0"
+
+jobs:
+  contracts:
+    name: contract schemas and fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-contracts.txt
+
+      - name: Install shared dependencies
+        run: python -m pip install -r requirements-contracts.txt
+
+      - name: v2 schemas, OpenAPI and their fixtures
+        run: python -m pytest backend/tests/case2/test_g0_contracts.py -q
+
+      - name: The frozen v1 contract is untouched
+        run: python -m pytest -q
+
+  backend:
+    name: backend v2 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is not decoration: the P0 suite has already been broken once by a
+        # locale-dependent encoding, and the Lens writes UTF-8 Russian into reports.
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements-contracts.txt
+            backend/requirements-backend.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements-contracts.txt \
+                                -r backend/requirements-backend.txt
+
+      - name: Backend suite, P0 and Lens together
+        run: python -m pytest backend -q -rs
+
+      - name: Auth, roles and the audit trail
+        run: python -m pytest backend/tests/case2/test_v2_auth.py -q
+
+      - name: The verification request workflow
+        run: python -m pytest backend/tests/case2/test_v2_requests.py -q
+
+      - name: Reports, hashes and reproducibility
+        run: |
+          python -m pytest backend/tests/case2/test_v2_report.py \
+                           backend/tests/case2/test_v2_passport.py -q
+
+      - name: Fixture mode is separate from the real mode
+        run: python -m pytest backend/tests/case2/test_v2_adapters.py -q
+
+      - name: Shared contract checks
+        run: python -m pytest -q
+
+  components:
+    name: rs.case2 and carbon
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-contracts.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements-contracts.txt \
+                                -r backend/requirements-backend.txt
+
+      - name: RS case 2 tests
+        run: |
+          if [ -d rs/tests/case2 ]; then
+            python -m pytest rs/tests/case2 -q
+          else
+            echo "::notice title=rs/case2::not on this ref; nothing to run"
+          fi
+
+      - name: Carbon engine tests
+        run: |
+          if [ -d carbon/tests ]; then
+            python -m pytest carbon/tests -q
+          else
+            echo "::notice title=carbon::not on this ref; nothing to run"
+          fi
+
+  live:
+    name: live composition (real RS + real carbon)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-contracts.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements-contracts.txt \
+                                -r backend/requirements-backend.txt
+
+      # The point of this job is that the pipeline is exercised for real at least once.
+      # A run that quietly fell back to fixtures would tell us nothing, so the script
+      # refuses to start unless both owning packages import, and on main a missing
+      # package fails the job rather than skipping it.
+      - name: Real RS and real carbon end to end
+        env:
+          BACKEND_LENS_ENGINE_MODE: REAL
+          BACKEND_LENS_REQUIRE_REAL: "1"
+          LIVE_REQUIRED: ${{ github.ref == 'refs/heads/main' && '1' || '0' }}
+        run: python backend/tools/live_composition.py

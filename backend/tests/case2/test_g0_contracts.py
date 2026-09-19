@@ -207,14 +207,39 @@ def test_zero_reasons_and_unavailable_reasons_are_different_vocabularies():
     assert not zero & unavailable, "a reason that means both null and zero would erase the difference"
 
 
+# Statuses the method freeze added to the contract ahead of the engine. Each one is an
+# open change request on the carbon engine, and the list is here rather than implied so
+# that it shrinks deliberately instead of growing by accident.
+CONTRACT_AHEAD_OF_ENGINE = {"ClaimStatus": {"NOT_APPLICABLE"}}
+
+
 def test_zero_reasons_are_exactly_the_engine_vocabulary():
     """The carbon engine owns these strings; the contract must not invent a synonym."""
     pytest.importorskip("carbon", reason="carbon engine not merged into this branch yet")
     from carbon import reasons
 
     assert _enum("ZeroUnitsReason") == set(reasons.ZERO_UNIT_REASONS)
-    assert _enum("ClaimStatus") == set(reasons.CLAIM_STATUSES)
     assert set(reasons.UNAVAILABLE_REASONS) <= _enum("UnavailableReason")
+
+    # Every status the engine can emit has to be a status the contract can carry.
+    assert set(reasons.CLAIM_STATUSES) <= _enum("ClaimStatus")
+    # And the contract leads it by exactly the freeze additions, nothing else.
+    assert _enum("ClaimStatus") - set(reasons.CLAIM_STATUSES) \
+        <= CONTRACT_AHEAD_OF_ENGINE["ClaimStatus"]
+
+
+def test_a_zero_claim_is_normalised_even_by_an_engine_that_has_not_adopted_it():
+    """Backend does not wait for the engine to agree before refusing to mislead."""
+    from backend.app.v2.adapters.carbon import no_positive_claim
+
+    engine_answer = {"status": "SUPPORTED_BY_CASE", "mismatch_reasons": [],
+                     "claimed_units": 0.0, "source": "USER_INPUT", "units": 0,
+                     "gap_units": 0.0, "supported_share": 1.0, "gap_values": []}
+    normalised = no_positive_claim(dict(engine_answer))
+    assert normalised["status"] == "NOT_APPLICABLE"
+    assert normalised["mismatch_reasons"] == ["NO_POSITIVE_CLAIM"]
+    assert normalised["supported_share"] is None
+    assert normalised["gap_units"] == 0.0
 
 
 def test_no_public_investability_or_fraud_vocabulary():
