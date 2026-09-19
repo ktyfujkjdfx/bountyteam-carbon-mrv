@@ -50,8 +50,7 @@ class LensContext:
         return {"raster": self.ports.raster.name, "carbon": self.ports.carbon.name}
 
 
-def create_lens_context(ctx: AppContext, *, engine_mode: str | None = None,
-                        carbon_module_override: Any = None) -> LensContext:
+def create_lens_context(ctx: AppContext, *, engine_mode: str | None = None) -> LensContext:
     """Build the Lens for this deployment.
 
     If the engines this deployment needs are not installed, this raises. A deployment
@@ -64,8 +63,7 @@ def create_lens_context(ctx: AppContext, *, engine_mode: str | None = None,
         app=ctx,
         store=LensStore(ctx, Path(settings.lens_artifact_store)),
         ports=build_ports(Path(settings.lens_work_dir),
-                          engine_mode=engine_mode or settings.lens_engine_mode,
-                          carbon_module_override=carbon_module_override))
+                          engine_mode=engine_mode or settings.lens_engine_mode))
 
 
 # -- request ---------------------------------------------------------------------------

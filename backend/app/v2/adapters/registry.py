@@ -74,8 +74,7 @@ def report_port() -> Any:
     return ReportBuilder()
 
 
-def build_ports(work_dir: Path, *, engine_mode: str = REAL,
-                carbon_module_override: Any = None) -> Ports:
+def build_ports(work_dir: Path, *, engine_mode: str = REAL) -> Ports:
     """The ports for one deployment, or an error naming what is missing."""
     if engine_mode not in ENGINE_MODES:
         raise ValueError(f"engine_mode must be one of {ENGINE_MODES}")
@@ -84,13 +83,13 @@ def build_ports(work_dir: Path, *, engine_mode: str = REAL,
     if fixture_mode:
         # Fixture mode replays a raster payload; it does not replay the carbon engine,
         # because a recorded Q would be a second source of the numbers the engine owns.
-        if carbon_module_override is None and not carbon_module.CARBON_AVAILABLE:
+        if not carbon_module.CARBON_AVAILABLE:
             raise EnginesUnavailable(("carbon",))
     elif absent:
         raise EnginesUnavailable(absent)
     return Ports(
         raster=raster_module.build(work_dir, fixture_mode=fixture_mode),
-        carbon=carbon_module.CarbonAdapter(module=carbon_module_override),
+        carbon=carbon_module.CarbonAdapter(),
         report=report_port())
 
 

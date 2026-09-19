@@ -17,6 +17,7 @@ elsewhere.
 from __future__ import annotations
 
 import os
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -146,6 +147,11 @@ def run() -> int:
     _check(result["run"]["dataset_origin"] == "COMPUTED_FROM_SUPPLIED_DATA",
            "the numbers were computed from the supplied data")
     _check(result["fixture"] is None, "no fixture label, because nothing was replayed")
+    encoded = json.dumps(result, ensure_ascii=False)
+    _check("STUB_FIXTURE" not in encoded and "PROVISIONAL_INPUT" not in encoded,
+           "the production response contains no fixture or provisional marker")
+    _check(units["q"] != 395,
+           "the real result was not replaced by the DOC_EXAMPLE value")
     _check(units["status"] in ("AVAILABLE", "UNAVAILABLE"),
            "the calculation reports a status either way")
     # q is deliberately not asserted to be positive. Every supplied plot comes out at

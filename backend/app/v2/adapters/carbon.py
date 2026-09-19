@@ -6,9 +6,8 @@ reports itself unavailable and every analysis fails closed, because a number pro
 a stand-in and a number produced by the engine would be indistinguishable to the reader
 of a passport.
 
-A test may inject a different module through `CarbonAdapter(module=...)`. That is how the
-suite runs before `carbon/` is merged, and it is deliberately the only way: nothing in
-`backend/app/` can reach a second implementation of these formulas.
+Tests use the same package. Backend has no module-injection seam that could substitute a
+second implementation for production.
 """
 from __future__ import annotations
 
@@ -138,8 +137,8 @@ def baseline_parts(cells: dict, fallback_parents: list[str], calculated_ha: floa
 class CarbonAdapter:
     """Adapts the RS wire payload, then calls `carbon.analyse` exactly once."""
 
-    def __init__(self, module: Any | None = None, name: str | None = None):
-        self._engine = module if module is not None else engine()
+    def __init__(self, name: str | None = None):
+        self._engine = engine()
         self.name = name or ENGINE_NAME or getattr(
             self._engine, "METHOD_VERSION", type(self._engine).__name__)
 

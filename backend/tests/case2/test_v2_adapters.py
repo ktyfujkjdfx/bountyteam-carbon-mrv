@@ -107,6 +107,45 @@ def test_the_real_mode_refuses_to_build_without_the_real_engines(tmp_path):
     assert set(raised.value.missing) == set(registry.missing_engines())
 
 
+def test_real_mode_without_rs_is_a_dependency_error(monkeypatch, tmp_path):
+    monkeypatch.setattr(raster_adapter, "RS_AVAILABLE", False)
+    monkeypatch.setattr(carbon_adapter, "CARBON_AVAILABLE", True)
+    with pytest.raises(registry.EnginesUnavailable) as raised:
+        registry.build_ports(tmp_path, engine_mode=registry.REAL)
+    assert raised.value.missing == ("rs.case2",)
+
+
+def test_real_mode_without_carbon_is_a_dependency_error(monkeypatch, tmp_path):
+    monkeypatch.setattr(raster_adapter, "RS_AVAILABLE", True)
+    monkeypatch.setattr(carbon_adapter, "CARBON_AVAILABLE", False)
+    with pytest.raises(registry.EnginesUnavailable) as raised:
+        registry.build_ports(tmp_path, engine_mode=registry.REAL)
+    assert raised.value.missing == ("carbon",)
+
+
+def test_an_import_error_inside_rs_is_not_a_fixture_fallback(monkeypatch, tmp_path):
+    class BrokenRs:
+        @staticmethod
+        def analyse(*_args, **_kwargs):
+            raise ImportError("nested raster dependency vanished")
+
+    monkeypatch.setattr(raster_adapter, "_rs_analysis", BrokenRs())
+    adapter = raster_adapter.RasterCoreAdapter(tmp_path)
+    with pytest.raises(ImportError, match="nested raster dependency vanished"):
+        adapter.analyse(_raster_request("RU_TVER_01", 2019, 2024))
+    assert not isinstance(adapter, raster_adapter.ReplayRasterAdapter)
+
+
+def test_an_import_error_inside_carbon_is_not_a_fixture_fallback(monkeypatch):
+    api = carbon_adapter.engine()
+    monkeypatch.setattr(api, "analyse", lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        ImportError("nested carbon dependency vanished")))
+    replay = raster_adapter.ReplayRasterAdapter().analyse(
+        _raster_request("RU_TVER_01", 2019, 2024))
+    with pytest.raises(ImportError, match="nested carbon dependency vanished"):
+        _assess(replay.analysis, replay.cells, 2019, 2024)
+
+
 def test_the_real_mode_never_returns_a_replay_adapter(tmp_path):
     if registry.missing_engines():
         with pytest.raises(registry.EnginesUnavailable):
@@ -167,6 +206,27 @@ def test_a_stand_in_can_never_be_reported_as_a_measurement(harness):
     assert run["dataset_origin"] == "STUB_FIXTURE"
     assert run["raster_adapter"] == "backend-replay"
     assert job["result"]["fixture"] is not None
+
+
+def test_an_artifact_integrity_error_does_not_change_scientific_numbers(harness):
+    job = harness.analyse({"aoi_id": "RU_TVER_01", "year_start": 2019, "year_end": 2024},
+                          key="artifact-fail-key")
+    analysis_id = job["analysis_id"]
+    before = job["result"]["units"]
+    row = harness.lens.store.artifact_rows(analysis_id)[0]
+    path = harness.lens.store.artifact_root / row["storage_name"]
+    original = path.read_bytes()
+    try:
+        path.write_bytes(original + b"corrupt")
+        response = harness.client.get(
+            f"/api/v2/analyses/{analysis_id}/artifacts/{row['artifact_id']}",
+            headers=harness.api.headers())
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "ARTIFACT_INTEGRITY_FAILED"
+        after = harness.api.get(f"/analyses/{analysis_id}", "Analysis")["result"]["units"]
+        assert after == before
+    finally:
+        path.write_bytes(original)
 
 
 # -- the raster port ----------------------------------------------------------------------

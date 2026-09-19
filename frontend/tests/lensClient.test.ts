@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { LensError, normalizeResult, normalizeWarnings } from '../src/lens/client';
 import { createHttpLensClient } from '../src/lens/httpClient';
 import { createFixtureLensClient } from '../src/lens/fixtureClient';
-import { resolveLensConfig, switchModeHref } from '../src/lens/config';
+import { createLensClient, resolveLensConfig, switchModeHref } from '../src/lens/config';
 import { validateGeometry, approximateAreaHa } from '../src/lens/geometry';
 import type { Artifact, Geometry } from '../src/lens/types';
 
@@ -146,6 +146,17 @@ describe('mode selection', () => {
     expect(resolveLensConfig({}, '?lens=fixture').mode).toBe('fixture');
     expect(resolveLensConfig({ VITE_LENS_API_MODE: 'fixture' }, '').mode).toBe('fixture');
     expect(resolveLensConfig({ VITE_LENS_API_MODE: 'fixture' }, '?lens=http').mode).toBe('http');
+  });
+
+  it('keeps the HTTP client after Backend failure instead of enabling fixtures', async () => {
+    const config = resolveLensConfig({}, '');
+    const client = createLensClient(config, {
+      getToken: () => 'runtime-token',
+      fetchImpl: vi.fn(async () => { throw new TypeError('connection refused'); }) as unknown as typeof fetch,
+    });
+    expect(client.kind).toBe('http');
+    await expect(client.getCatalog()).rejects.toMatchObject({ code: 'NETWORK' });
+    expect(client.kind).toBe('http');
   });
 
   it('never carries a credential in configuration or in the mode switch link', () => {
