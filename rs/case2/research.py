@@ -1,8 +1,15 @@
-"""Two experiments on the supplied data, and the evidence pack they produce.
+"""Three experiments on the supplied data, and the evidence pack they produce.
 
 The case asks for at least one substantive question investigated on equal
-terms, with a disturbed plot and a control. These are the two that came out of
-actually running the pipeline rather than from planning it.
+terms, with a disturbed plot and a control. The first two came out of actually
+running the pipeline rather than from planning it; the third reports what four
+products say about three sites without reconciling them.
+
+Three sites carry the pack. A control with nothing to detect. A plot with
+pronounced cover loss that the products date but do not explain - every
+disturbance zone there is UNKNOWN, which is the case the method exists to
+report honestly. And the one plot where a trusted burn date establishes a
+cause, on the dates the official event table records.
 
 **How does the publisher transfer uncertainty between years?** The set ships a
 CCI change product for 2019-2020 alongside the annual maps, so the publisher's
@@ -35,6 +42,22 @@ from rs.determinism import write_json
 
 CONTROL_AOI = "RU_TVER_01"
 DISTURBED_AOI = "RU_MORDOVIA_03"
+# Pronounced loss with no established cause: the case where three products see
+# a real change and none of them explains it. Treating that as fire because
+# fire is the likeliest story is the failure this site exists to prevent.
+LOSS_AOI = "RU_VOLOGDA_02"
+
+SITES = (
+    {"aoi_id": CONTROL_AOI, "role": "control",
+     "why": "a plot with no disturbance to detect, used to measure what the "
+            "method reports when nothing happened"},
+    {"aoi_id": LOSS_AOI, "role": "pronounced loss, cause not established",
+     "why": "real cover loss that the supplied products date but do not "
+            "explain; every disturbance zone here is UNKNOWN"},
+    {"aoi_id": DISTURBED_AOI, "role": "confirmed fire",
+     "why": "the one site where a trusted MODIS burn date establishes a cause, "
+            "on the dates the official event table records"},
+)
 
 
 # --------------------------------------------------------------------------
@@ -186,6 +209,153 @@ def baseline_effect(dataset, aoi_id, year_start, year_end):
 
 
 # --------------------------------------------------------------------------
+# Experiment 3: what four independent products say about the same ground
+# --------------------------------------------------------------------------
+
+def product_agreement(analysis):
+    """What CCI, GFC, Sentinel-2 and MODIS each say about one site.
+
+    Four products, four different claims, reported side by side without being
+    reconciled into one number. Where they agree that is worth knowing; where
+    they do not, the disagreement is the finding. None of it is validation:
+    agreement between two satellite products is agreement between two models of
+    the same ground, and the set contains no field measurement of carbon.
+    """
+    evidence = analysis.change_evidence or {}
+    quality = evidence.get("observation_quality", {})
+    gfc = evidence.get("gfc", {})
+    fire = evidence.get("fire", {})
+    zones = evidence.get("zones", [])
+    covered = gfc.get("covered_pixels") or 0
+    denominator = quality.get("denominator_pixels") or 0
+    return {
+        "aoi_id": analysis.parents[0],
+        "period": [analysis.change.year_start, analysis.change.year_end],
+        "cci_biomass": {
+            "claim": "how much carbon the stock difference says left the pool",
+            "e_tco2e": analysis.change.e_tco2e,
+            "delta_tc": analysis.change.delta_tc,
+            "direction": "loss" if analysis.change.e_tco2e > 0 else "accumulation",
+        },
+        "gfc_lossyear": {
+            "claim": "what share of the request lost canopy inside the period",
+            "loss_fraction": (gfc.get("loss_pixels_in_request", 0) / covered)
+            if covered else None,
+            "loss_pixels": gfc.get("loss_pixels_in_request"),
+            "covered_pixels": covered or None,
+        },
+        "sentinel2_spectral": {
+            "claim": "what share of the comparable request changed spectrally",
+            "zone_fraction": (
+                sum(zone["pixel_count"] for zone in evidence.get("zones", ()))
+                / denominator) if denominator else None,
+            "paired_valid_fraction": quality.get("paired_valid_fraction"),
+            "zones": len(zones),
+        },
+        "modis_burn": {
+            "claim": "whether a trusted burn date covers any of the request",
+            "available": fire.get("available"),
+            "reason": fire.get("reason"),
+            "episodes": len(fire.get("detections", ())) if fire.get("available")
+            else None,
+            "zones_supported": sum(1 for zone in zones
+                                   if zone["cause"] == "FIRE_SUPPORTED"),
+        },
+        "zones_by_fact_and_cause": evidence.get("zone_summary", {}).get(
+            "by_fact_and_cause"),
+    }
+
+
+# --------------------------------------------------------------------------
+# Coverage and insufficient data
+# --------------------------------------------------------------------------
+
+def coverage_cases(dataset):
+    """What the method does when the products do not reach the whole request.
+
+    Three outcomes, all real runs: a complete request, a request half outside
+    its source area, and a request no product covers at all. The third is a
+    refusal with a code rather than a result with zeros, because the difference
+    between "nothing changed" and "nothing was measured" is the difference
+    between a carbon credit and a fabrication.
+    """
+    from shapely.geometry import box, mapping, shape
+
+    from rs.case2.catalog import InsufficientData
+
+    rows = []
+    with open(dataset.root / "sample_requests.geojson", encoding="utf-8") as handle:
+        sub_plot = json.load(handle)["features"][0]["geometry"]
+
+    complete = analyse(shape(sub_plot), 2020, 2024, dataset=dataset,
+                       include_optical=False)
+    rows.append(_coverage_row("a sub-plot inside its source area", complete))
+
+    bounds = shape(sub_plot).bounds
+    overhanging = box(bounds[0], bounds[1], bounds[2],
+                      bounds[3] + (bounds[3] - bounds[1]))
+    partial = analyse(mapping(overhanging), 2020, 2024, dataset=dataset,
+                      include_optical=False)
+    rows.append(_coverage_row("a contour hanging outside its source area",
+                              partial))
+
+    try:
+        analyse(mapping(box(37.60, 55.75, 37.62, 55.77)), 2019, 2024,
+                dataset=dataset)
+        refusal = None
+    except InsufficientData as exc:
+        refusal = exc.as_document()
+
+    return {
+        "cases": rows,
+        "outside_every_product": refusal,
+        "rule": (
+            "a request whose mandatory coverage is incomplete must reach the "
+            "unit owner with complete=false and a measured shortfall, so that "
+            "potential units are reported as null rather than computed on the "
+            "part that happened to be covered"),
+    }
+
+
+def _coverage_row(label, analysis):
+    coverage = analysis.coverage
+    return {
+        "case": label,
+        "requested_ha": coverage.requested_ha,
+        "calculated_ha": coverage.calculated_ha,
+        "missing_ha": coverage.missing_ha,
+        "area_difference_ha": coverage.area_difference_ha,
+        "biomass_fraction_raw": coverage.biomass_fraction,
+        "complete": coverage.complete,
+        "units_may_be_computed": coverage.complete,
+    }
+
+
+# --------------------------------------------------------------------------
+# Threshold sensitivity
+# --------------------------------------------------------------------------
+
+def threshold_sensitivity(analysis):
+    """What other mask and threshold choices would have selected.
+
+    Reported so the fixed choices can be judged, not so they can be swapped for
+    whichever produces a better number. The published choice is marked in the
+    table and nothing downstream reads any other row.
+    """
+    rows = (analysis.change_evidence or {}).get("sensitivity", [])
+    published = next((row for row in rows if row["is_published_choice"]), None)
+    return {
+        "aoi_id": analysis.parents[0],
+        "period": [analysis.change.year_start, analysis.change.year_end],
+        "published_choice": published,
+        "grid": rows,
+        "effect_on_the_official_result": (
+            "none; the stock difference comes from the CCI maps and does not "
+            "read any of these rows, and no threshold here enters a unit count"),
+    }
+
+
+# --------------------------------------------------------------------------
 # Evidence pack
 # --------------------------------------------------------------------------
 
@@ -197,6 +367,7 @@ def build(dataset=None, year_start=2019, year_end=2024):
               for aoi in (CONTROL_AOI, DISTURBED_AOI)]
     control = analyse(data.geometries[CONTROL_AOI], year_start, year_end,
                       dataset=data)
+    loss = analyse(data.geometries[LOSS_AOI], year_start, year_end, dataset=data)
     disturbed = analyse(data.geometries[DISTURBED_AOI], 2020, 2022, dataset=data)
     return {
         "schema": "rs.case2.research/1",
@@ -227,16 +398,59 @@ def build(dataset=None, year_start=2019, year_end=2024):
             "control_aoi": CONTROL_AOI,
             "disturbed_aoi": DISTURBED_AOI,
         },
+        "question_3": {
+            "question": (
+                "Where do four independent products agree about the same "
+                "ground, and where do they not?"),
+            "method": (
+                "report what CCI, Global Forest Change, Sentinel-2 and MODIS "
+                "each claim about each site, side by side and unreconciled"),
+            "results": [product_agreement(analysis)
+                        for analysis in (control, loss, disturbed)],
+            "status": (
+                "agreement between two satellite products is agreement between "
+                "two models of the same ground; the set contains no field "
+                "measurement of carbon, so nothing here is ground truth"),
+        },
+        "sites": list(SITES),
         "control_vs_disturbed": {
             CONTROL_AOI: _summary(control),
+            LOSS_AOI: _summary(loss),
             DISTURBED_AOI: _summary(disturbed),
         },
+        "coverage_and_insufficient_data": coverage_cases(data),
+        "threshold_sensitivity": [threshold_sensitivity(analysis)
+                                  for analysis in (control, disturbed)],
+        "dnbr_limitations": {
+            "finding": (
+                "a multi-year dNBR is not a reliable absolute measure. Even on "
+                "matched offset conventions the control plot reads about -0.25 "
+                "over five years, which is not growth; mixing conventions takes "
+                "it to about -0.86 and flags the whole forest as regrowth"),
+            "what_survives": (
+                "detection does. Every eligible pair over the burned plot shows "
+                "a loss, so the presence of a disturbance is robust to the "
+                "scene choice even where its absolute level is not"),
+            "consequence": (
+                "recovery is reported as RECOVERY_INDICATION and never as "
+                "recovered carbon, and scene selection prefers a matched offset "
+                "convention ahead of the seasonal-gap rule"),
+        },
+        "satellite_support_is_not_ground_truth": (
+            "every statement in this pack rests on published satellite "
+            "products. A MODIS burn date supports a cause; it does not "
+            "establish one in the way a field visit would. No plot in the set "
+            "carries an independent measurement of biomass or of a fire "
+            "perimeter, so no number here has been validated against the "
+            "ground, and none is presented as if it had"),
         "limitations": [
             "comparing two satellite products is a consistency check and not "
             "an independent validation",
             "the spatial dependence of errors between cells is not settled by "
             "either experiment; only the temporal transfer between two years is",
             "no baseline, uncertainty interval or unit count is computed here",
+            "the threshold sensitivity grid is reported so the fixed choices "
+            "can be judged; no row of it reaches the official result",
         ],
     }
 
@@ -296,10 +510,75 @@ def render(pack):
                 f"| {group['dnbr_median_mean']:+.4f} "
                 f"| {group['share_above_disturbance_mean']:.1%} "
                 f"| {group['share_below_recovery_mean']:.1%} |")
-    lines += ["", "## Limitations", ""]
+    third = pack["question_3"]
+    lines += ["", f"## 3. {third['question']}", "", third["method"], "",
+              "| AOI | period | CCI E tCO2e | GFC loss share | S2 zone share "
+              "| paired-valid | MODIS |", "|---|---|---|---|---|---|---|"]
+    for row in third["results"]:
+        modis = row["modis_burn"]
+        state = (f"{modis['episodes']} episode(s)" if modis["available"]
+                 else "not supplied")
+        lines.append(
+            f"| {row['aoi_id']} | {row['period'][0]}-{row['period'][1]} "
+            f"| {row['cci_biomass']['e_tco2e']:+.1f} "
+            f"| {_share(row['gfc_lossyear']['loss_fraction'])} "
+            f"| {_share(row['sentinel2_spectral']['zone_fraction'])} "
+            f"| {_share(row['sentinel2_spectral']['paired_valid_fraction'])} "
+            f"| {state} |")
+    lines += ["", f"Status: {third['status']}", ""]
+
+    lines += ["## Sites", "",
+              "| AOI | role | why it is in the pack |", "|---|---|---|"]
+    lines += [f"| {site['aoi_id']} | {site['role']} | {site['why']} |"
+              for site in pack["sites"]]
+
+    coverage = pack["coverage_and_insufficient_data"]
+    lines += ["", "## Coverage and insufficient data", "",
+              "| case | requested ha | calculated ha | missing ha "
+              "| signed difference ha | complete | units may be computed |",
+              "|---|---|---|---|---|---|---|"]
+    for row in coverage["cases"]:
+        lines.append(
+            f"| {row['case']} | {row['requested_ha']:.4f} "
+            f"| {row['calculated_ha']:.4f} | {row['missing_ha']:.4f} "
+            f"| {row['area_difference_ha']:+.6f} | {row['complete']} "
+            f"| {row['units_may_be_computed']} |")
+    refusal = coverage["outside_every_product"]
+    if refusal:
+        lines += ["", f"A contour no product covers is refused as "
+                      f"`{refusal['outcome']}` with code `{refusal['code']}`, "
+                      f"not answered with zeros.", ""]
+    lines += [coverage["rule"], ""]
+
+    lines += ["## Threshold sensitivity", "",
+              "| AOI | mask | dNBR threshold | zones | zone area ha "
+              "| published choice |", "|---|---|---|---|---|---|"]
+    for block in pack["threshold_sensitivity"]:
+        for row in block["grid"]:
+            lines.append(
+                f"| {block['aoi_id']} | {row['mask']} | {row['dnbr_threshold']} "
+                f"| {row['zones']} | {row['zone_area_ha']:.2f} "
+                f"| {'yes' if row['is_published_choice'] else ''} |")
+    lines += ["", pack["threshold_sensitivity"][0][
+        "effect_on_the_official_result"], ""]
+
+    dnbr = pack["dnbr_limitations"]
+    lines += ["## What dNBR can and cannot say", "",
+              f"**Finding.** {dnbr['finding']}", "",
+              f"**What survives.** {dnbr['what_survives']}", "",
+              f"**Consequence.** {dnbr['consequence']}", ""]
+
+    lines += ["## Satellite support is not ground truth", "",
+              pack["satellite_support_is_not_ground_truth"], ""]
+
+    lines += ["## Limitations", ""]
     lines += [f"- {note}" for note in pack["limitations"]]
     lines.append("")
     return "\n".join(lines)
+
+
+def _share(value):
+    return "n/a" if value is None else f"{value:.2%}"
 
 
 def main(argv=None):

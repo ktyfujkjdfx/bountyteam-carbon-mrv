@@ -240,8 +240,13 @@ def test_scene_selection_now_prefers_a_matched_offset_convention(dataset):
         analysis.change_evidence["scene_selection"]["rule"])
 
 
-def test_the_evidence_pack_states_what_it_is_not(dataset):
-    pack = research.build(dataset)
+@pytest.fixture(scope="module")
+def pack(dataset):
+    """The whole evidence pack, built once; the tests read it from many angles."""
+    return research.build(dataset)
+
+
+def test_the_evidence_pack_states_what_it_is_not(pack):
     assert "not an independent validation" in " ".join(pack["limitations"])
     assert "spatial dependence" in " ".join(pack["limitations"])
     assert "no baseline, uncertainty interval or unit count" in " ".join(
@@ -250,14 +255,107 @@ def test_the_evidence_pack_states_what_it_is_not(dataset):
     assert pack["control_vs_disturbed"][research.DISTURBED_AOI]["e_tco2e"] > 0
 
 
-def test_the_evidence_pack_renders_both_experiments(dataset, tmp_path):
-    pack = research.build(dataset)
+def test_the_evidence_pack_renders_every_section(pack, tmp_path):
     out = research.write(tmp_path / "pack", pack)
     text = (out / "research.md").read_text(encoding="utf-8")
     assert "# RS research evidence pack" in text
     assert "published SD / independent SD" in text
     assert "offset convention" in text
+    for heading in ("## 3.", "## Sites", "## Coverage and insufficient data",
+                    "## Threshold sensitivity",
+                    "## What dNBR can and cannot say",
+                    "## Satellite support is not ground truth"):
+        assert heading in text, heading
     assert json.loads((out / "research.json").read_text(encoding="utf-8"))
+
+
+def test_the_pack_carries_a_control_a_loss_and_a_confirmed_fire(pack):
+    roles = {site["role"]: site["aoi_id"] for site in pack["sites"]}
+    assert set(roles) == {"control", "pronounced loss, cause not established",
+                          "confirmed fire"}
+    assert roles["control"] == research.CONTROL_AOI
+    assert roles["confirmed fire"] == research.DISTURBED_AOI
+
+
+def test_four_products_are_reported_side_by_side_and_unreconciled(pack):
+    results = {row["aoi_id"]: row for row in pack["question_3"]["results"]}
+    assert set(results) == {research.CONTROL_AOI, research.LOSS_AOI,
+                            research.DISTURBED_AOI}
+    for row in results.values():
+        for product in ("cci_biomass", "gfc_lossyear", "sentinel2_spectral",
+                        "modis_burn"):
+            assert row[product]["claim"]
+    # The finding is the disagreement: the control plot has no canopy loss at
+    # all and yet most of it flags spectrally, which is the radiometric
+    # artefact the second experiment measured.
+    control = results[research.CONTROL_AOI]
+    assert control["gfc_lossyear"]["loss_fraction"] == 0.0
+    assert control["sentinel2_spectral"]["zone_fraction"] > 0.5
+    assert control["cci_biomass"]["direction"] == "accumulation"
+
+
+def test_the_loss_site_has_a_real_loss_and_no_established_cause(pack):
+    row = next(entry for entry in pack["question_3"]["results"]
+               if entry["aoi_id"] == research.LOSS_AOI)
+    assert row["gfc_lossyear"]["loss_fraction"] > 0.1
+    assert row["cci_biomass"]["direction"] == "loss"
+    assert row["modis_burn"]["available"] is False
+    assert row["modis_burn"]["zones_supported"] == 0
+    assert all(key.endswith("UNKNOWN") or key.endswith("NOT_APPLICABLE")
+               for key in row["zones_by_fact_and_cause"])
+
+
+def test_the_fire_site_is_the_only_one_with_an_established_cause(pack):
+    row = next(entry for entry in pack["question_3"]["results"]
+               if entry["aoi_id"] == research.DISTURBED_AOI)
+    assert row["modis_burn"]["available"] is True
+    assert row["modis_burn"]["episodes"] == 1
+    assert row["modis_burn"]["zones_supported"] > 0
+
+
+def test_the_pack_shows_what_incomplete_coverage_does(pack):
+    coverage = pack["coverage_and_insufficient_data"]
+    complete, partial = coverage["cases"]
+    assert complete["complete"] is True
+    assert complete["units_may_be_computed"] is True
+    assert complete["area_difference_ha"] > 0
+
+    assert partial["complete"] is False
+    assert partial["units_may_be_computed"] is False
+    assert partial["missing_ha"] > 0
+    assert partial["area_difference_ha"] < 0
+    assert "null rather than computed" in coverage["rule"]
+
+
+def test_a_contour_no_product_covers_is_a_refusal_not_a_zero(pack):
+    refusal = pack["coverage_and_insufficient_data"]["outside_every_product"]
+    assert refusal["outcome"] == "INSUFFICIENT_DATA"
+    assert refusal["code"] == "RS_NO_SOURCE_COVERAGE"
+    assert "never a statement that nothing changed" in refusal["note"]
+
+
+def test_the_sensitivity_grid_marks_the_published_choice_and_changes_nothing(pack):
+    for block in pack["threshold_sensitivity"]:
+        published = [row for row in block["grid"] if row["is_published_choice"]]
+        assert len(published) == 1
+        assert published[0]["dnbr_threshold"] == 0.27
+        assert published[0]["mask"] == "strict"
+        assert len(block["grid"]) > 1
+        assert "none" in block["effect_on_the_official_result"]
+
+
+def test_the_pack_separates_satellite_support_from_ground_truth(pack):
+    statement = pack["satellite_support_is_not_ground_truth"]
+    assert "does not establish one in the way a field visit would" in statement
+    assert "no number here has been validated against the ground" in statement
+
+
+def test_the_pack_states_what_a_multi_year_dnbr_cannot_measure(pack):
+    dnbr = pack["dnbr_limitations"]
+    assert "not a reliable absolute measure" in dnbr["finding"]
+    assert "Detection" in dnbr["what_survives"] or \
+        "detection" in dnbr["what_survives"]
+    assert "never as recovered carbon" in dnbr["consequence"]
 
 
 # --------------------------------------------------------------------------
