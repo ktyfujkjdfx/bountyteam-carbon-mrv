@@ -1,0 +1,103 @@
+{
+  "schema": "rs.case2.raster-analysis/1",
+  "request": {
+    "area_ha": 1750.4731237457274,
+    "year_start": 2019,
+    "year_end": 2022,
+    "years": 3,
+    "parents": [
+      "RU_TVER_01"
+    ]
+  },
+  "stock_change": {
+    "stock_start_tc": 69931.4012936418,
+    "stock_end_tc": 67463.23418916033,
+    "delta_tc": -2468.167104481472,
+    "e_tco2e": 9049.946049765396,
+    "e_per_ha_per_year": 1.7233333333333305,
+    "normalisation_area_ha": 1750.4731237457274,
+    "sign_convention": "positive E is a loss from the accounted pool",
+    "unit": "t CO2e over the period; t CO2e/ha/year for the rate"
+  },
+  "timeline": [
+    {
+      "year": 2019,
+      "mean_tc_ha": 39.949999999999996,
+      "total_tc": 69931.4012936418,
+      "mean_agb_t_ha": 85.0,
+      "cells": 16,
+      "covered_ha": 1750.4731237457274
+    },
+    {
+      "year": 2020,
+      "mean_tc_ha": 39.48,
+      "total_tc": 69108.67892548132,
+      "mean_agb_t_ha": 84.0,
+      "cells": 16,
+      "covered_ha": 1750.4731237457274
+    },
+    {
+      "year": 2021,
+      "mean_tc_ha": 39.01,
+      "total_tc": 68285.95655732082,
+      "mean_agb_t_ha": 83.0,
+      "cells": 16,
+      "covered_ha": 1750.4731237457274
+    },
+    {
+      "year": 2022,
+      "mean_tc_ha": 38.54,
+      "total_tc": 67463.23418916033,
+      "mean_agb_t_ha": 82.0,
+      "cells": 16,
+      "covered_ha": 1750.4731237457274
+    }
+  ],
+  "coverage": {
+    "requested_ha": 1750.4731237457274,
+    "calculated_ha": 1750.4731237457274,
+    "missing_ha": 0.0,
+    "complete": true,
+    "biomass": {
+      "area_ha": 1750.4731237457274,
+      "fraction": 1.0
+    },
+    "biomass_sd": {
+      "area_ha": 1750.4731237457274,
+      "fraction": 1.0
+    },
+    "optical_paired": {
+      "area_ha": 0.0,
+      "fraction": 0.0
+    },
+    "note": "три покрытия отвечают на разные вопросы и никогда не смешиваются"
+  },
+  "cells": {
+    "count": 16,
+    "valid_count": 16,
+    "weight_sum_ha": 1750.4731237457274,
+    "artifact": "cells.geojson"
+  },
+  "optical": {
+    "scenes": [],
+    "paired": null
+  },
+  "change_evidence": {
+    "available": false,
+    "reason": "NO_USABLE_SCENE_PAIR_IN_REPLAY_VECTOR",
+    "selection": null
+  },
+  "grids": {},
+  "parameters": {
+    "carbon_fraction": 0.47,
+    "co2_per_c": 3.6666666666666665,
+    "pool": "living above-ground woody biomass",
+    "method": "stock-difference",
+    "method_version": "backend-replay-vector/0.1.0"
+  },
+  "limitations": [
+    "Значения биомассы получены из размеченного вектора замены, а не измерены по растрам ESA CCI.",
+    "Пригодной пары оптических сцен за период не найдено, поэтому причина изменения не устанавливалась."
+  ],
+  "artifacts": []
+}

@@ -1,0 +1,94 @@
+{
+  "note": "Векторы замены растрового ядра. Каждый отвечает ровно на один контур и один период; любой другой запрос получает RASTER_ANALYSIS_UNAVAILABLE и q=null. Файлы исчезают вместе с заглушкой, когда rs/case2 попадает в ветку.",
+  "fixture": {
+    "kind": "UNIT_TEST_VECTOR",
+    "label": "Вектор замены растрового ядра",
+    "note": "Значения биомассы и её неопределённости заданы вручную, чтобы пройти путь решения кейса до появления rs/case2. Это не измерение по предоставленным растрам и не характеристика участка. Площадь, базовая линия, параметры и формулы — настоящие."
+  },
+  "entries": [
+    {
+      "name": "tver-2019-2024-positive",
+      "geometry_hash": "0xe413e4dced17ad0685b839ee2a779bf2d43f0adf8fc3c38a29a54354522193dd",
+      "year_start": 2019,
+      "year_end": 2024,
+      "aoi_id": "RU_TVER_01",
+      "fixture": {
+        "kind": "UNIT_TEST_VECTOR",
+        "label": "Вектор замены растрового ядра",
+        "note": "Значения биомассы и её неопределённости заданы вручную, чтобы пройти путь решения кейса до появления rs/case2. Это не измерение по предоставленным растрам и не характеристика участка. Площадь, базовая линия, параметры и формулы — настоящие."
+      },
+      "analysis": "tver-2019-2024-positive.analysis.json",
+      "cells": "tver-2019-2024-positive.cells.geojson",
+      "manifest": "tver-2019-2024-positive.manifest.json",
+      "outcome": {
+        "status": "AVAILABLE",
+        "q": 14264,
+        "zero_reason": null,
+        "unavailable_reason": null
+      }
+    },
+    {
+      "name": "tver-2019-2022-non-positive",
+      "geometry_hash": "0xe413e4dced17ad0685b839ee2a779bf2d43f0adf8fc3c38a29a54354522193dd",
+      "year_start": 2019,
+      "year_end": 2022,
+      "aoi_id": "RU_TVER_01",
+      "fixture": {
+        "kind": "UNIT_TEST_VECTOR",
+        "label": "Вектор замены растрового ядра",
+        "note": "Значения биомассы и её неопределённости заданы вручную, чтобы пройти путь решения кейса до появления rs/case2. Это не измерение по предоставленным растрам и не характеристика участка. Площадь, базовая линия, параметры и формулы — настоящие."
+      },
+      "analysis": "tver-2019-2022-non-positive.analysis.json",
+      "cells": "tver-2019-2022-non-positive.cells.geojson",
+      "manifest": "tver-2019-2022-non-positive.manifest.json",
+      "outcome": {
+        "status": "AVAILABLE",
+        "q": 0,
+        "zero_reason": "NON_POSITIVE_RELATIVE_RESULT",
+        "unavailable_reason": null
+      }
+    },
+    {
+      "name": "mordovia03-2020-2022-uncertain",
+      "geometry_hash": "0xe04f7013dc855b8c514e9b240cf3628a55616a7f58938f4eac8af5e21d656d2d",
+      "year_start": 2020,
+      "year_end": 2022,
+      "aoi_id": "RU_MORDOVIA_03",
+      "fixture": {
+        "kind": "UNIT_TEST_VECTOR",
+        "label": "Вектор замены растрового ядра",
+        "note": "Значения биомассы и её неопределённости заданы вручную, чтобы пройти путь решения кейса до появления rs/case2. Это не измерение по предоставленным растрам и не характеристика участка. Площадь, базовая линия, параметры и формулы — настоящие."
+      },
+      "analysis": "mordovia03-2020-2022-uncertain.analysis.json",
+      "cells": "mordovia03-2020-2022-uncertain.cells.geojson",
+      "manifest": "mordovia03-2020-2022-uncertain.manifest.json",
+      "outcome": {
+        "status": "AVAILABLE",
+        "q": 0,
+        "zero_reason": "UNCERTAINTY_TOO_HIGH",
+        "unavailable_reason": null
+      }
+    },
+    {
+      "name": "check-transfer-2020-2024-partial",
+      "geometry_hash": "0x0d93617eedcd4500063119e43fc0f8c49064cda04feb6e712f435b7b2849ed96",
+      "year_start": 2020,
+      "year_end": 2024,
+      "aoi_id": "RU_VOLOGDA_02",
+      "fixture": {
+        "kind": "UNIT_TEST_VECTOR",
+        "label": "Вектор замены растрового ядра",
+        "note": "Значения биомассы и её неопределённости заданы вручную, чтобы пройти путь решения кейса до появления rs/case2. Это не измерение по предоставленным растрам и не характеристика участка. Площадь, базовая линия, параметры и формулы — настоящие."
+      },
+      "analysis": "check-transfer-2020-2024-partial.analysis.json",
+      "cells": "check-transfer-2020-2024-partial.cells.geojson",
+      "manifest": "check-transfer-2020-2024-partial.manifest.json",
+      "outcome": {
+        "status": "UNAVAILABLE",
+        "q": null,
+        "zero_reason": null,
+        "unavailable_reason": "INCOMPLETE_COVERAGE"
+      }
+    }
+  ]
+}

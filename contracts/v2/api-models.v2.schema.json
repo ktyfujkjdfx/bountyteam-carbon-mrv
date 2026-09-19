@@ -1,0 +1,1269 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bountyteam.invalid/contracts/v2/api-models.v2.schema.json",
+  "title": "Carbon Lens /api/v2 wire models",
+  "description": "Public request and response models of the Carbon Lens API. Six status axes are independent and are never merged: job_state, calculation_status, evidence_status, claim.status, passport.status and anchor.status. A missing mandatory input gives q=null with an unavailable_reason; a valid input that the rules of the case take to zero gives q=0 with a zero_reason; a claim of zero is NOT_APPLICABLE, never supported.",
+  "components": {
+    "schemas": {
+      "Hash": {
+        "type": "string",
+        "pattern": "^0x[0-9a-f]{64}$",
+        "description": "SHA-256 over RFC 8785 canonical JSON or over exact file bytes."
+      },
+      "Timestamp": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+      },
+      "Date": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+      },
+      "Id": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:+-]{0,127}$",
+        "description": "Opaque identifier. Consumers must not parse it."
+      },
+      "Uuid": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "Year": {
+        "type": "integer",
+        "minimum": 2019,
+        "maximum": 2024,
+        "description": "Model year of the biomass product. This is not the acquisition date of an optical scene."
+      },
+      "Fraction": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "A public share, clamped to [0, 1]. Where the arithmetic can land just outside that range, the unclamped value is published beside it."
+      },
+      "Warning": {
+        "type": "object",
+        "description": "A machine-stable code with a human message. Consumers switch on code and may localise message; they must not parse message.",
+        "properties": {
+          "code": {"$ref": "#/components/schemas/Id"},
+          "severity": {"$ref": "#/components/schemas/WarningSeverity"},
+          "message": {"type": "string"},
+          "details": {"type": "object"}
+        },
+        "required": ["code", "severity", "message", "details"],
+        "additionalProperties": false
+      },
+      "Limitation": {
+        "type": "object",
+        "description": "A stated boundary of what the result means. Kept apart from warnings: a limitation always holds, a warning is about this run.",
+        "properties": {
+          "code": {"$ref": "#/components/schemas/Id"},
+          "message": {"type": "string"}
+        },
+        "required": ["code", "message"],
+        "additionalProperties": false
+      },
+      "Role": {
+        "type": "string",
+        "enum": ["PROJECT_OWNER", "VERIFIER", "INVESTOR"],
+        "description": "What the signed-in person may do. Held on the server and never taken from a request header: a role a client can set is not an authorization."
+      },
+      "User": {
+        "type": "object",
+        "description": "The signed-in person. Carries no password material and no session token.",
+        "properties": {
+          "user_id": {"$ref": "#/components/schemas/Id"},
+          "username": {"type": "string"},
+          "display_name": {"type": "string"},
+          "role": {"$ref": "#/components/schemas/Role"}
+        },
+        "required": ["user_id", "username", "display_name", "role"],
+        "additionalProperties": false
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "username": {"type": "string", "minLength": 1, "maxLength": 64},
+          "password": {"type": "string", "minLength": 1, "maxLength": 256}
+        },
+        "required": ["username", "password"],
+        "additionalProperties": false
+      },
+      "Session": {
+        "type": "object",
+        "description": "An opaque session token and who it belongs to. The token is random, stored only as a hash, and is not derivable from anything in a build.",
+        "properties": {
+          "token": {"type": "string", "minLength": 32},
+          "expires_at": {"$ref": "#/components/schemas/Timestamp"},
+          "user": {"$ref": "#/components/schemas/User"}
+        },
+        "required": ["token", "expires_at", "user"],
+        "additionalProperties": false
+      },
+      "RiskCode": {
+        "type": "string",
+        "enum": ["FIRE", "FOREST_LOSS", "DATA_QUALITY"],
+        "description": "The three risks the supplied data can say something about. There is no aggregate risk score: adding them up would invent a number nobody measured."
+      },
+      "Risk": {
+        "type": "object",
+        "description": "An observed basis for a risk, kept apart from q. A risk never adjusts the calculated units; it is shown beside them so a reader can weigh it themselves.",
+        "properties": {
+          "code": {"$ref": "#/components/schemas/RiskCode"},
+          "observed": {
+            "type": "boolean",
+            "description": "Whether the supplied products show the basis at all. False means nothing was found, which is not the same as an established absence."
+          },
+          "basis": {
+            "type": "object",
+            "description": "The measured quantities this rests on, copied from the owning product. No score and no probability."
+          },
+          "source_ref": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "note": {"type": "string"}
+        },
+        "required": ["code", "observed", "basis", "source_ref", "note"],
+        "additionalProperties": false
+      },
+      "SeriesKind": {
+        "type": "string",
+        "enum": ["FACT", "PROJECTION"],
+        "description": "A measured year and a projected year are never the same kind of point, and a chart must not join them into one line."
+      },
+      "ProjectionPoint": {
+        "type": "object",
+        "properties": {
+          "year": {"type": "integer"},
+          "series_kind": {"$ref": "#/components/schemas/SeriesKind"},
+          "baseline_carbon_tc_ha": {"oneOf": [{"type": "number"}, {"type": "null"}]}
+        },
+        "required": ["year", "series_kind", "baseline_carbon_tc_ha"],
+        "additionalProperties": false
+      },
+      "Projection": {
+        "type": "object",
+        "description": "The baseline trajectory of the case continued to the horizon year. It is a scenario assumption, not a forecast of what the plot will do, and it does not touch the current q.",
+        "properties": {
+          "status": {"$ref": "#/components/schemas/CalculationStatus"},
+          "unavailable_reason": {"oneOf": [{"$ref": "#/components/schemas/UnavailableReason"}, {"type": "null"}]},
+          "horizon_year": {"type": "integer"},
+          "points": {"type": "array", "items": {"$ref": "#/components/schemas/ProjectionPoint"}},
+          "q_projection": {
+            "type": "null",
+            "description": "Always null. No projection of potential units is made, because nothing in the supplied data supports one."
+          },
+          "q_projection_note": {"type": "string"},
+          "note": {"type": "string"}
+        },
+        "required": ["status", "unavailable_reason", "horizon_year", "points",
+                     "q_projection", "q_projection_note", "note"],
+        "additionalProperties": false
+      },
+      "ValueScenario": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "origin": {
+            "type": "string",
+            "enum": ["CASE_PARAMETER", "USER_SCENARIO"],
+            "description": "USER_SCENARIO marks a price the caller supplied. It is an input, never a quotation this system stands behind."
+          },
+          "price_rub": {"type": "number", "minimum": 0},
+          "value_rub": {"oneOf": [{"type": "number"}, {"type": "null"}]}
+        },
+        "required": ["id", "origin", "price_rub", "value_rub"],
+        "additionalProperties": false
+      },
+      "ValueScenarios": {
+        "type": "object",
+        "description": "q multiplied by a price, and nothing else. Not a market quote, not a revenue forecast, not a guaranteed sum.",
+        "properties": {
+          "analysis_id": {"$ref": "#/components/schemas/Uuid"},
+          "q": {"oneOf": [{"type": "integer"}, {"type": "null"}]},
+          "unit": {"const": "RUB"},
+          "price_parameters_ref": {"type": "string"},
+          "scenarios": {"type": "array", "items": {"$ref": "#/components/schemas/ValueScenario"}},
+          "note": {"type": "string"}
+        },
+        "required": ["analysis_id", "q", "unit", "price_parameters_ref", "scenarios", "note"],
+        "additionalProperties": false
+      },
+      "DemoUnitStatus": {
+        "type": "string",
+        "enum": ["ISSUED_DEMO", "TRANSFERRED_DEMO", "RETIRED_DEMO"],
+        "description": "Every value ends in _DEMO on purpose. Nothing here exists in a registry and none of it confers a right to a carbon unit."
+      },
+      "DemoUnit": {
+        "type": "object",
+        "description": "A demonstration of what issuing, transferring and retiring would look like. It is not a registry entry, and is_demonstration is always true.",
+        "properties": {
+          "request_id": {"$ref": "#/components/schemas/Id"},
+          "status": {"$ref": "#/components/schemas/DemoUnitStatus"},
+          "units": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Copied from the passport that was finalized, so a later recalculation cannot change what was demonstrated. Issuing needs a positive q: zero and null both refuse."
+          },
+          "passport_hash": {"$ref": "#/components/schemas/Hash"},
+          "issued_by": {"$ref": "#/components/schemas/Id"},
+          "issued_at": {"$ref": "#/components/schemas/Timestamp"},
+          "held_by": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "transferred_at": {"oneOf": [{"$ref": "#/components/schemas/Timestamp"}, {"type": "null"}]},
+          "retired_by": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "retired_at": {"oneOf": [{"$ref": "#/components/schemas/Timestamp"}, {"type": "null"}]},
+          "is_demonstration": {"const": true},
+          "note": {"type": "string"},
+          "events": {"type": "array", "items": {"$ref": "#/components/schemas/DemoEvent"}}
+        },
+        "required": ["request_id", "status", "units", "passport_hash", "issued_by",
+                     "issued_at", "held_by", "transferred_at", "retired_by", "retired_at",
+                     "is_demonstration", "note", "events"],
+        "additionalProperties": false
+      },
+      "DemoEvent": {
+        "type": "object",
+        "description": "One recorded step of the demonstration. The history is append-only.",
+        "properties": {
+          "occurred_at": {"$ref": "#/components/schemas/Timestamp"},
+          "from_status": {"oneOf": [{"$ref": "#/components/schemas/DemoUnitStatus"}, {"type": "null"}]},
+          "to_status": {"$ref": "#/components/schemas/DemoUnitStatus"},
+          "user_id": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "note": {"type": "string"}
+        },
+        "required": ["occurred_at", "from_status", "to_status", "user_id", "note"],
+        "additionalProperties": false
+      },
+      "RequestStatus": {
+        "type": "string",
+        "enum": ["DRAFT", "SUBMITTED", "ANALYSING", "CALCULATED", "FINALIZED"],
+        "description": "Where a verification request has got to. Only a verifier moves it to FINALIZED, and only from CALCULATED: a failed run and a result that could not produce a number never advance on their own."
+      },
+      "VerificationRequest": {
+        "type": "object",
+        "description": "One contour, one period and one stated volume, followed from a draft to a finalized passport. Finalizing pins a particular passport version; it never changes a number.",
+        "properties": {
+          "request_id": {"$ref": "#/components/schemas/Id"},
+          "status": {"$ref": "#/components/schemas/RequestStatus"},
+          "owner": {"$ref": "#/components/schemas/User"},
+          "aoi_id": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "geometry": {"$ref": "#/components/schemas/Geometry"},
+          "geometry_hash": {"$ref": "#/components/schemas/Hash"},
+          "area_ha": {"type": "number", "exclusiveMinimum": 0},
+          "year_start": {"$ref": "#/components/schemas/Year"},
+          "year_end": {"$ref": "#/components/schemas/Year"},
+          "claimed_units": {"oneOf": [{"type": "number", "minimum": 0}, {"type": "null"}]},
+          "claim_pool": {"type": "string"},
+          "claim_unit": {"type": "string"},
+          "analysis_id": {"oneOf": [{"$ref": "#/components/schemas/Uuid"}, {"type": "null"}]},
+          "analysis_url": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+          "passport_hash": {
+            "oneOf": [{"$ref": "#/components/schemas/Hash"}, {"type": "null"}],
+            "description": "The content hash a verifier pinned when finalizing. A later recalculation produces a new passport and never rewrites this one."
+          },
+          "finalized_by": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "finalized_at": {"oneOf": [{"$ref": "#/components/schemas/Timestamp"}, {"type": "null"}]},
+          "created_at": {"$ref": "#/components/schemas/Timestamp"},
+          "updated_at": {"$ref": "#/components/schemas/Timestamp"},
+          "events": {"type": "array", "items": {"$ref": "#/components/schemas/RequestEvent"}}
+        },
+        "required": ["request_id", "status", "owner", "aoi_id", "geometry", "geometry_hash",
+                     "area_ha", "year_start", "year_end", "claimed_units", "claim_pool",
+                     "claim_unit", "analysis_id", "analysis_url", "passport_hash",
+                     "finalized_by", "finalized_at", "created_at", "updated_at", "events"],
+        "additionalProperties": false
+      },
+      "RequestEvent": {
+        "type": "object",
+        "description": "One recorded move of a request. The history is append-only.",
+        "properties": {
+          "occurred_at": {"$ref": "#/components/schemas/Timestamp"},
+          "from_status": {"oneOf": [{"$ref": "#/components/schemas/RequestStatus"}, {"type": "null"}]},
+          "to_status": {"$ref": "#/components/schemas/RequestStatus"},
+          "user_id": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "note": {"type": "string"}
+        },
+        "required": ["occurred_at", "from_status", "to_status", "user_id", "note"],
+        "additionalProperties": false
+      },
+      "VerificationRequestList": {
+        "type": "object",
+        "description": "The requests this role may see: an owner's own, all of them for a verifier, and the finalized ones for an investor.",
+        "properties": {
+          "requests": {"type": "array",
+                       "items": {"$ref": "#/components/schemas/VerificationRequest"}}
+        },
+        "required": ["requests"],
+        "additionalProperties": false
+      },
+      "CreateRequest": {
+        "type": "object",
+        "description": "Either geometry or aoi_id identifies the contour, exactly as in an analysis request.",
+        "properties": {
+          "aoi_id": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "geometry": {"oneOf": [{"$ref": "#/components/schemas/Geometry"}, {"type": "null"}]},
+          "year_start": {"$ref": "#/components/schemas/Year"},
+          "year_end": {"$ref": "#/components/schemas/Year"},
+          "claimed_units": {"oneOf": [{"type": "number", "minimum": 0}, {"type": "null"}]}
+        },
+        "required": ["year_start", "year_end"],
+        "additionalProperties": false
+      },
+      "UpdateRequest": {
+        "type": "object",
+        "description": "What an owner may still change while the request is a draft. The contour and the period are not among them: changing those is a different request.",
+        "properties": {
+          "claimed_units": {"oneOf": [{"type": "number", "minimum": 0}, {"type": "null"}]}
+        },
+        "required": ["claimed_units"],
+        "additionalProperties": false
+      },
+      "JobState": {
+        "type": "string",
+        "enum": ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED"],
+        "description": "Progress of the worker only. It says nothing about whether the science produced a number."
+      },
+      "CalculationStatus": {
+        "type": "string",
+        "enum": ["AVAILABLE", "UNAVAILABLE"]
+      },
+      "EvidenceStatus": {
+        "type": "string",
+        "enum": ["SUFFICIENT", "REVIEW_REQUIRED", "INSUFFICIENT"],
+        "description": "Quality of the change explanation. Poor optical evidence never by itself sets q=null."
+      },
+      "AnchorStatus": {
+        "type": "string",
+        "enum": ["NOT_REQUESTED", "PENDING", "CONFIRMED", "FAILED"]
+      },
+      "ClaimStatus": {
+        "type": "string",
+        "enum": [
+          "NOT_PROVIDED",
+          "NOT_APPLICABLE",
+          "NOT_COMPARABLE",
+          "UNASSESSABLE",
+          "SUPPORTED_BY_CASE",
+          "PARTIALLY_SUPPORTED_BY_CASE",
+          "NOT_SUPPORTED_BY_CASE"
+        ],
+        "description": "NOT_APPLICABLE is the answer to a claim of zero: nothing positive was stated, so nothing was supported. A zero claim is never reported as SUPPORTED_BY_CASE."
+      },
+      "ClaimOrigin": {
+        "type": "string",
+        "enum": ["USER_INPUT", "DEMO_INPUT"],
+        "description": "A stated volume is an input label, never a calculated or verified fact."
+      },
+      "ClaimMismatchReason": {
+        "type": "string",
+        "enum": [
+          "INVALID_CLAIM_VALUE",
+          "GEOMETRY_MISMATCH",
+          "PERIOD_MISMATCH",
+          "POOL_MISMATCH",
+          "UNIT_MISMATCH"
+        ],
+        "description": "Why a stated volume could not be compared with the calculation. A claim of zero is not here: nothing disagreed, so it carries claim.reason instead."
+      },
+      "ClaimReason": {
+        "type": "string",
+        "enum": ["NO_POSITIVE_CLAIM"],
+        "description": "Why the comparison does not apply at all. NO_POSITIVE_CLAIM accompanies NOT_APPLICABLE: there was nothing positive to compare, which is not a disagreement."
+      },
+      "UnavailableReason": {
+        "type": "string",
+        "enum": [
+          "MISSING_INPUT",
+          "NON_FINITE_INPUT",
+          "NON_POSITIVE_AREA",
+          "NON_POSITIVE_PERIOD",
+          "INVALID_UNCERTAINTY_INPUT",
+          "INVALID_INTERVAL",
+          "INCOMPLETE_COVERAGE",
+          "BASELINE_OUT_OF_COVERAGE",
+          "BASELINE_UNKNOWN_AREA",
+          "RASTER_ANALYSIS_UNAVAILABLE"
+        ],
+        "description": "Mandatory input missing or unusable. The answer is null, never zero."
+      },
+      "ZeroUnitsReason": {
+        "type": "string",
+        "enum": ["NON_POSITIVE_RELATIVE_RESULT", "UNCERTAINTY_TOO_HIGH", "ROUNDED_TO_ZERO"],
+        "description": "Inputs were valid and a rule of the case gives exactly zero units."
+      },
+      "ZoneFact": {
+        "type": "string",
+        "enum": ["TREE_COVER_LOSS", "SPECTRAL_CHANGE_ONLY", "RECOVERY_INDICATION"]
+      },
+      "ZoneCause": {
+        "type": "string",
+        "enum": ["FIRE_SUPPORTED", "UNKNOWN", "NOT_APPLICABLE"],
+        "description": "What happened and why it happened are separate claims. Absent evidence stays UNKNOWN."
+      },
+      "DatasetOrigin": {
+        "type": "string",
+        "enum": ["COMPUTED_FROM_SUPPLIED_DATA", "CACHED_REPLAY", "EXTERNAL_RETRIEVAL", "STUB_FIXTURE"],
+        "description": "STUB_FIXTURE means a typed placeholder adapter answered; it is never real science."
+      },
+      "FixtureKind": {
+        "type": "string",
+        "enum": ["DOC_EXAMPLE", "UNIT_TEST_VECTOR", "CONTRACT_FIXTURE"]
+      },
+      "ComparisonResult": {
+        "type": "string",
+        "enum": ["INITIAL", "REVISION_OF_SAME_SCOPE", "NEW_OBSERVATION", "NOT_COMPARABLE"],
+        "description": "Version link of the passport, in the vocabulary of the carbon engine that owns passports."
+      },
+      "ComparisonDirection": {
+        "type": "string",
+        "enum": ["UNCHANGED", "INCREASED", "DECREASED", "NOT_COMPARED"],
+        "description": "How q moved between two comparable observations. A presentational summary, never a verdict on the earlier passport."
+      },
+      "PassportStatus": {
+        "type": "string",
+        "enum": ["DRAFT", "FINALIZED"],
+        "description": "State of this passport document. It is not the anchor status: a FINALIZED passport with no blockchain record is the normal case."
+      },
+      "WarningSeverity": {
+        "type": "string",
+        "enum": ["INFO", "WARNING", "BLOCKING"],
+        "description": "BLOCKING means the finding stopped a value from being published."
+      },
+      "IntervalKind": {
+        "type": "string",
+        "enum": ["SCENARIO", "PROBABILISTIC"]
+      },
+      "SpatialDependence": {
+        "type": "string",
+        "enum": ["INDEPENDENT_NATIVE_CELLS", "FULL_SPATIAL_CORRELATION"],
+        "description": "INDEPENDENT_NATIVE_CELLS is the main scenario of the method freeze. FULL_SPATIAL_CORRELATION is published as a separate stress variant and never replaces it."
+      },
+
+      "Geometry": {
+        "type": "object",
+        "description": "GeoJSON geometry in WGS84 lon/lat order.",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {"const": "Polygon"},
+              "coordinates": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "array",
+                  "minItems": 4,
+                  "items": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "prefixItems": [
+                      {"type": "number", "minimum": -180, "maximum": 180},
+                      {"type": "number", "minimum": -90, "maximum": 90}
+                    ]
+                  }
+                }
+              }
+            },
+            "required": ["type", "coordinates"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {"const": "MultiPolygon"},
+              "coordinates": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "array",
+                    "minItems": 4,
+                    "items": {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "prefixItems": [
+                        {"type": "number", "minimum": -180, "maximum": 180},
+                        {"type": "number", "minimum": -90, "maximum": 90}
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "required": ["type", "coordinates"],
+            "additionalProperties": false
+          }
+        ]
+      },
+
+      "AnalysisRequest": {
+        "type": "object",
+        "description": "Either geometry or aoi_id identifies the contour. Naming a supplied area is a shortcut for pasting its polygon and changes nothing else.",
+        "properties": {
+          "aoi_id": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "geometry": {"oneOf": [{"$ref": "#/components/schemas/Geometry"}, {"type": "null"}]},
+          "year_start": {"$ref": "#/components/schemas/Year"},
+          "year_end": {"$ref": "#/components/schemas/Year"},
+          "claimed_units": {
+            "oneOf": [{"type": "number", "minimum": 0}, {"type": "null"}],
+            "description": "Optional stated volume. It never changes the calculated numbers."
+          },
+          "claim_origin": {"oneOf": [{"$ref": "#/components/schemas/ClaimOrigin"}, {"type": "null"}]},
+          "claim_scope": {
+            "oneOf": [{"$ref": "#/components/schemas/ClaimScope"}, {"type": "null"}],
+            "description": "Scope the claim refers to. Omitted means the claim is stated for this request."
+          },
+          "include_optical": {"type": "boolean", "default": true}
+        },
+        "required": ["year_start", "year_end"],
+        "additionalProperties": false
+      },
+
+      "ClaimScope": {
+        "type": "object",
+        "properties": {
+          "geometry_hash": {"$ref": "#/components/schemas/Hash"},
+          "year_start": {"type": "integer"},
+          "year_end": {"type": "integer"},
+          "pool": {"type": "string"},
+          "unit": {"type": "string"}
+        },
+        "required": ["geometry_hash", "year_start", "year_end", "pool", "unit"],
+        "additionalProperties": false
+      },
+
+      "AreaMeasureRequest": {
+        "type": "object",
+        "description": "A contour to measure before it is submitted. The same geodesic algorithm as the analysis path, so a measurement never disagrees with a run.",
+        "properties": {
+          "geometry": {"$ref": "#/components/schemas/Geometry"}
+        },
+        "required": ["geometry"],
+        "additionalProperties": false
+      },
+
+      "AreaMeasurement": {
+        "type": "object",
+        "description": "Measured area of a normalised contour, with the limit it is judged against. An invalid contour is a measurement with valid=false and named errors, not an exception.",
+        "properties": {
+          "valid": {"type": "boolean"},
+          "area_ha": {"oneOf": [{"type": "number", "minimum": 0}, {"type": "null"}]},
+          "max_area_ha": {"type": "number"},
+          "within_limit": {"type": "boolean"},
+          "geometry_hash": {"oneOf": [{"$ref": "#/components/schemas/Hash"}, {"type": "null"}]},
+          "geometry": {"oneOf": [{"$ref": "#/components/schemas/Geometry"}, {"type": "null"}]},
+          "errors": {"type": "array", "items": {"$ref": "#/components/schemas/Warning"}}
+        },
+        "required": ["valid", "area_ha", "max_area_ha", "within_limit", "geometry_hash",
+                     "geometry", "errors"],
+        "additionalProperties": false
+      },
+
+      "AnalysisAccepted": {
+        "type": "object",
+        "properties": {
+          "analysis_id": {"$ref": "#/components/schemas/Uuid"},
+          "job_state": {"$ref": "#/components/schemas/JobState"},
+          "status_url": {"type": "string"},
+          "created_at": {"$ref": "#/components/schemas/Timestamp"}
+        },
+        "required": ["analysis_id", "job_state", "status_url", "created_at"],
+        "additionalProperties": false
+      },
+
+      "JobError": {
+        "type": "object",
+        "properties": {
+          "code": {"type": "string"},
+          "message": {"type": "string"},
+          "details": {"type": "object"}
+        },
+        "required": ["code", "message", "details"],
+        "additionalProperties": false
+      },
+
+      "Analysis": {
+        "type": "object",
+        "description": "Job progress and, once SUCCEEDED, the typed result. Polling never mixes the axes.",
+        "properties": {
+          "analysis_id": {"$ref": "#/components/schemas/Uuid"},
+          "job_state": {"$ref": "#/components/schemas/JobState"},
+          "created_at": {"$ref": "#/components/schemas/Timestamp"},
+          "updated_at": {"$ref": "#/components/schemas/Timestamp"},
+          "attempts": {"type": "integer", "minimum": 0},
+          "status_url": {"type": "string"},
+          "report_url": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+          "proof_url": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+          "error": {"oneOf": [{"$ref": "#/components/schemas/JobError"}, {"type": "null"}]},
+          "result": {"oneOf": [{"$ref": "#/components/schemas/AnalysisResult"}, {"type": "null"}]}
+        },
+        "required": ["analysis_id", "job_state", "created_at", "updated_at", "attempts",
+                     "status_url", "report_url", "proof_url", "error", "result"],
+        "additionalProperties": false
+      },
+
+      "FixtureLabel": {
+        "type": "object",
+        "description": "Present whenever any number came from a labelled vector rather than a computation over data/. The UI must display it.",
+        "properties": {
+          "kind": {"$ref": "#/components/schemas/FixtureKind"},
+          "label": {"type": "string"},
+          "note": {"type": "string"}
+        },
+        "required": ["kind", "label", "note"],
+        "additionalProperties": false
+      },
+
+      "Identity": {
+        "type": "object",
+        "properties": {
+          "analysis_id": {"$ref": "#/components/schemas/Uuid"},
+          "input_hash": {"$ref": "#/components/schemas/Hash"},
+          "geometry_hash": {"$ref": "#/components/schemas/Hash"},
+          "schema_version": {"type": "string"},
+          "method_version": {"type": "string"},
+          "dataset_version": {"type": "string"},
+          "dataset_hash": {"$ref": "#/components/schemas/Hash"},
+          "source_manifest_hash": {"$ref": "#/components/schemas/Hash"},
+          "parameters_hash": {"$ref": "#/components/schemas/Hash"},
+          "code_sha": {"oneOf": [{"type": "string", "pattern": "^[0-9a-f]{40}$"}, {"type": "null"}]}
+        },
+        "required": ["analysis_id", "input_hash", "geometry_hash", "schema_version", "method_version",
+                     "dataset_version", "dataset_hash", "source_manifest_hash", "parameters_hash", "code_sha"],
+        "additionalProperties": false
+      },
+
+      "Run": {
+        "type": "object",
+        "description": "Everything about this particular execution. Kept out of the deterministic content hash on purpose.",
+        "properties": {
+          "run_id": {"$ref": "#/components/schemas/Uuid"},
+          "created_at": {"$ref": "#/components/schemas/Timestamp"},
+          "dataset_origin": {"$ref": "#/components/schemas/DatasetOrigin"},
+          "raster_adapter": {"type": "string"},
+          "carbon_adapter": {"type": "string"}
+        },
+        "required": ["run_id", "created_at", "dataset_origin", "raster_adapter", "carbon_adapter"],
+        "additionalProperties": false
+      },
+
+      "RequestSnapshot": {
+        "type": "object",
+        "properties": {
+          "geometry": {"$ref": "#/components/schemas/Geometry"},
+          "aoi_id": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "year_start": {"$ref": "#/components/schemas/Year"},
+          "year_end": {"$ref": "#/components/schemas/Year"},
+          "claimed_units": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "claim_origin": {"oneOf": [{"$ref": "#/components/schemas/ClaimOrigin"}, {"type": "null"}]},
+          "include_optical": {"type": "boolean"}
+        },
+        "required": ["geometry", "aoi_id", "year_start", "year_end", "claimed_units",
+                     "claim_origin", "include_optical"],
+        "additionalProperties": false
+      },
+
+      "ParentPart": {
+        "type": "object",
+        "properties": {
+          "aoi_id": {"$ref": "#/components/schemas/Id"},
+          "area_ha": {"type": "number", "minimum": 0}
+        },
+        "required": ["aoi_id", "area_ha"],
+        "additionalProperties": false
+      },
+
+      "Areas": {
+        "type": "object",
+        "properties": {
+          "requested_ha": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Geodesic area of the contour that was asked about."
+          },
+          "calculated_ha": {"type": "number", "minimum": 0},
+          "missing_ha": {
+            "type": "number",
+            "minimum": 0,
+            "description": "max(0, requested - calculated): area the calculation could not cover. Never negative."
+          },
+          "area_difference_ha": {
+            "type": "number",
+            "description": "calculated - requested, signed. A small positive value is geodesic arithmetic on cell boundaries, not extra land."
+          },
+          "complete": {"type": "boolean"},
+          "parent_parts": {"type": "array", "items": {"$ref": "#/components/schemas/ParentPart"}}
+        },
+        "required": ["requested_ha", "calculated_ha", "missing_ha", "area_difference_ha",
+                     "complete", "parent_parts"],
+        "additionalProperties": false
+      },
+
+      "Coverage": {
+        "type": "object",
+        "description": "Four independent coverages. Cloud in an optical scene does not reduce biomass coverage; they are never averaged together.",
+        "properties": {
+          "biomass_fraction": {"$ref": "#/components/schemas/Fraction"},
+          "uncertainty_fraction": {"$ref": "#/components/schemas/Fraction"},
+          "baseline_fraction": {"$ref": "#/components/schemas/Fraction"},
+          "optical_paired_valid_fraction": {"$ref": "#/components/schemas/Fraction"},
+          "coverage_fraction_raw": {"$ref": "#/components/schemas/CoverageFractionRaw"}
+        },
+        "required": ["biomass_fraction", "uncertainty_fraction", "baseline_fraction",
+                     "optical_paired_valid_fraction", "coverage_fraction_raw"],
+        "additionalProperties": false
+      },
+
+      "CoverageFractionRaw": {
+        "type": "object",
+        "description": "Unclamped coverage arithmetic exactly as the owning component reported it. A geodesic area sum over native cells may land a hair above 1.0; that value is preserved here and the public fraction is the clamped one.",
+        "properties": {
+          "biomass": {"type": "number", "minimum": 0},
+          "uncertainty": {"type": "number", "minimum": 0},
+          "baseline": {"type": "number", "minimum": 0},
+          "optical_paired_valid": {"type": "number", "minimum": 0}
+        },
+        "required": ["biomass", "uncertainty", "baseline", "optical_paired_valid"],
+        "additionalProperties": false
+      },
+
+      "TimelinePoint": {
+        "type": "object",
+        "properties": {
+          "year": {"type": "integer"},
+          "mean_agb_tdm_ha": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "mean_carbon_tc_ha": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "total_carbon_tc": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "baseline_carbon_tc_ha": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "area_ha": {"type": "number", "minimum": 0},
+          "coverage": {"$ref": "#/components/schemas/Fraction"},
+          "in_period": {"type": "boolean"},
+          "source_ref": {"type": "string"}
+        },
+        "required": ["year", "mean_agb_tdm_ha", "mean_carbon_tc_ha", "total_carbon_tc",
+                     "baseline_carbon_tc_ha", "area_ha", "coverage", "in_period", "source_ref"],
+        "additionalProperties": false
+      },
+
+      "Change": {
+        "type": "object",
+        "description": "Stock difference of the accounted pool. The emission figure itself is published exactly once, in units.eproj_tco2e; this block points at it rather than restating it. Positive eproj means a loss from that pool over the period, not an instantaneous release of all its carbon.",
+        "properties": {
+          "year_start": {"type": "integer"},
+          "year_end": {"type": "integer"},
+          "mean_carbon_start_tc_ha": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "mean_carbon_end_tc_ha": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "total_carbon_start_tc": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "total_carbon_end_tc": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "delta_carbon_tc": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "eproj_ref": {
+            "const": "units.eproj_tco2e",
+            "description": "Where the single canonical Eproj lives. This block never carries a second copy of it."
+          },
+          "eproj_tco2e_ha_year": {
+            "oneOf": [{"type": "number"}, {"type": "null"}],
+            "description": "units.eproj_tco2e divided by the normalisation area and the period, for display only."
+          },
+          "normalisation_area_ha": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "sign_convention": {"const": "POSITIVE_E_MEANS_POOL_LOSS"},
+          "pool": {"const": "AGB_LIVE_WOODY"}
+        },
+        "required": ["year_start", "year_end", "mean_carbon_start_tc_ha", "mean_carbon_end_tc_ha",
+                     "total_carbon_start_tc", "total_carbon_end_tc", "delta_carbon_tc", "eproj_ref",
+                     "eproj_tco2e_ha_year", "normalisation_area_ha", "sign_convention", "pool"],
+        "additionalProperties": false
+      },
+
+      "IntervalVariant": {
+        "type": "object",
+        "properties": {
+          "label": {"type": "string"},
+          "spatial_dependence": {"$ref": "#/components/schemas/SpatialDependence"},
+          "temporal_correlation": {"type": "number"},
+          "sd_tco2e": {"type": "number"},
+          "lower_tco2e": {"type": "number"},
+          "upper_tco2e": {"type": "number"},
+          "half_width_tco2e": {"type": "number"}
+        },
+        "required": ["label", "spatial_dependence", "temporal_correlation", "sd_tco2e",
+                     "lower_tco2e", "upper_tco2e", "half_width_tco2e"],
+        "additionalProperties": false
+      },
+
+      "UncertaintyAssumptions": {
+        "type": "object",
+        "description": "The stated assumptions of the scenario interval, typed so a consumer can display them without guessing. empirically_calibrated is always false: this interval is not calibrated against field measurements.",
+        "properties": {
+          "spatial_dependence": {"$ref": "#/components/schemas/SpatialDependence"},
+          "temporal_correlation": {"type": "number", "minimum": -1, "maximum": 1},
+          "coverage_factor": {"type": "number"},
+          "cells": {"type": "integer", "minimum": 0},
+          "grid": {"type": "string"},
+          "pool": {"type": "string"},
+          "cf_agb": {"type": "number"},
+          "co2_per_c": {"type": "number"},
+          "empirically_calibrated": {"const": false},
+          "note": {"type": "string"}
+        },
+        "required": ["spatial_dependence", "temporal_correlation", "coverage_factor", "cells",
+                     "grid", "pool", "cf_agb", "co2_per_c", "empirically_calibrated"],
+        "additionalProperties": false
+      },
+
+      "Uncertainty": {
+        "type": "object",
+        "description": "A scenario interval under stated assumptions. It is not an empirically calibrated confidence interval.",
+        "properties": {
+          "status": {"$ref": "#/components/schemas/CalculationStatus"},
+          "unavailable_reason": {"oneOf": [{"$ref": "#/components/schemas/UnavailableReason"}, {"type": "null"}]},
+          "lower_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "upper_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "sd_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "method": {"type": "string"},
+          "interval_kind": {"$ref": "#/components/schemas/IntervalKind"},
+          "assumptions": {"oneOf": [{"$ref": "#/components/schemas/UncertaintyAssumptions"}, {"type": "null"}]},
+          "sensitivity": {"type": "array", "items": {"$ref": "#/components/schemas/IntervalVariant"}}
+        },
+        "required": ["status", "unavailable_reason", "lower_tco2e", "upper_tco2e", "sd_tco2e",
+                     "method", "interval_kind", "assumptions", "sensitivity"],
+        "additionalProperties": false
+      },
+
+      "BaselinePart": {
+        "type": "object",
+        "properties": {
+          "aoi_id": {"$ref": "#/components/schemas/Id"},
+          "area_ha": {"type": "number"},
+          "stock_start_tc_ha": {"type": "number"},
+          "stock_end_tc_ha": {"type": "number"},
+          "delta_tc_ha": {"type": "number"},
+          "delta_tc": {"type": "number"},
+          "clipped_at_zero": {"type": "boolean"}
+        },
+        "required": ["aoi_id", "area_ha", "stock_start_tc_ha", "stock_end_tc_ha",
+                     "delta_tc_ha", "delta_tc", "clipped_at_zero"],
+        "additionalProperties": false
+      },
+
+      "Baseline": {
+        "type": "object",
+        "description": "Scenario baseline of the case from data/methodology/baseline.csv. It does not establish additionality or the owner's effort.",
+        "properties": {
+          "status": {"$ref": "#/components/schemas/CalculationStatus"},
+          "unavailable_reason": {"oneOf": [{"$ref": "#/components/schemas/UnavailableReason"}, {"type": "null"}]},
+          "baseline_id": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+          "kind": {"type": "string"},
+          "area_ha": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "delta_tc": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "delta_tc_ha": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "ebase_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "parts": {"type": "array", "items": {"$ref": "#/components/schemas/BaselinePart"}}
+        },
+        "required": ["status", "unavailable_reason", "baseline_id", "kind", "area_ha",
+                     "delta_tc", "delta_tc_ha", "ebase_tco2e", "parts"],
+        "additionalProperties": false
+      },
+
+      "Units": {
+        "type": "object",
+        "description": "Potential units of the case. q=null and q=0 are different answers and carry different reason fields.",
+        "properties": {
+          "status": {"$ref": "#/components/schemas/CalculationStatus"},
+          "unavailable_reason": {"oneOf": [{"$ref": "#/components/schemas/UnavailableReason"}, {"type": "null"}]},
+          "zero_reason": {"oneOf": [{"$ref": "#/components/schemas/ZeroUnitsReason"}, {"type": "null"}]},
+          "eproj_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "ebase_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "lk_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "lower_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "upper_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "h_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "r_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "ratio": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "unc": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "uncertainty_deduction_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "radj_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "buffer_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "rounding_residual_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "q": {"oneOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+          "reason_codes": {"type": "array", "items": {"type": "string"}}
+        },
+        "required": ["status", "unavailable_reason", "zero_reason", "eproj_tco2e", "ebase_tco2e",
+                     "lk_tco2e", "lower_tco2e", "upper_tco2e", "h_tco2e", "r_tco2e", "ratio", "unc",
+                     "uncertainty_deduction_tco2e", "radj_tco2e", "buffer_tco2e",
+                     "rounding_residual_tco2e", "q", "reason_codes"],
+        "additionalProperties": false
+      },
+
+      "ScenarioValue": {
+        "type": "object",
+        "properties": {
+          "price_rub": {"type": "number"},
+          "value_rub": {"type": "number"}
+        },
+        "required": ["price_rub", "value_rub"],
+        "additionalProperties": false
+      },
+
+      "ScenarioValues": {
+        "type": "object",
+        "description": "Scenario prices of the case, not a market quote, a revenue forecast or a guaranteed sum.",
+        "properties": {
+          "price_parameters_ref": {"type": "string"},
+          "unit": {"const": "RUB"},
+          "low": {"oneOf": [{"$ref": "#/components/schemas/ScenarioValue"}, {"type": "null"}]},
+          "base": {"oneOf": [{"$ref": "#/components/schemas/ScenarioValue"}, {"type": "null"}]},
+          "high": {"oneOf": [{"$ref": "#/components/schemas/ScenarioValue"}, {"type": "null"}]}
+        },
+        "required": ["price_parameters_ref", "unit", "low", "base", "high"],
+        "additionalProperties": false
+      },
+
+      "Claim": {
+        "type": "object",
+        "description": "Comparison of a stated volume with q. gap_value is the scenario value of the unsupported part of the claim; it is not an established loss, a probabilistic Value at Risk or proven fraud.",
+        "properties": {
+          "status": {"$ref": "#/components/schemas/ClaimStatus"},
+          "reason": {"oneOf": [{"$ref": "#/components/schemas/ClaimReason"}, {"type": "null"}]},
+          "origin": {"oneOf": [{"$ref": "#/components/schemas/ClaimOrigin"}, {"type": "null"}]},
+          "comparable": {"type": "boolean"},
+          "claimed_units": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+          "q": {"oneOf": [{"type": "integer"}, {"type": "null"}]},
+          "unsupported_gap": {
+            "oneOf": [{"type": "number", "minimum": 0}, {"type": "null"}],
+            "description": "max(0, claimed_units - q). Zero when nothing positive was claimed, null when the two are not comparable. An unsupported difference, not an established loss."
+          },
+          "supported_share": {"oneOf": [{"$ref": "#/components/schemas/Fraction"}, {"type": "null"}]},
+          "mismatch_reasons": {"type": "array", "items": {"$ref": "#/components/schemas/ClaimMismatchReason"}},
+          "scope": {"$ref": "#/components/schemas/ClaimScope"},
+          "scenario_gap_values": {"oneOf": [{"$ref": "#/components/schemas/ScenarioValues"}, {"type": "null"}]},
+          "scope_note": {"type": "string"}
+        },
+        "required": ["status", "reason", "origin", "comparable", "claimed_units", "q",
+                     "unsupported_gap",
+                     "supported_share", "mismatch_reasons", "scope", "scenario_gap_values", "scope_note"],
+        "additionalProperties": false
+      },
+
+      "DateRange": {
+        "type": "object",
+        "properties": {
+          "start": {"$ref": "#/components/schemas/Date"},
+          "end": {"$ref": "#/components/schemas/Date"},
+          "uncertainty_days_min": {"oneOf": [{"type": "integer"}, {"type": "null"}]},
+          "uncertainty_days_max": {"oneOf": [{"type": "integer"}, {"type": "null"}]}
+        },
+        "required": ["start", "end", "uncertainty_days_min", "uncertainty_days_max"],
+        "additionalProperties": false
+      },
+
+      "Zone": {
+        "type": "object",
+        "description": "A change zone with its share of the stock change. Contributions are shares of one stock difference and are never added to a separately computed fire emission.",
+        "properties": {
+          "zone_id": {"$ref": "#/components/schemas/Id"},
+          "fact": {"$ref": "#/components/schemas/ZoneFact"},
+          "cause": {"$ref": "#/components/schemas/ZoneCause"},
+          "cause_reason": {"type": "string"},
+          "area_ha": {"type": "number", "minimum": 0},
+          "carbon_overlap_ha": {"type": "number", "minimum": 0},
+          "delta_carbon_tc": {"type": "number"},
+          "contribution_e_tco2e": {"type": "number"},
+          "date_range": {"oneOf": [{"$ref": "#/components/schemas/DateRange"}, {"type": "null"}]},
+          "evidence_refs": {"type": "array", "items": {"type": "string"}},
+          "evidence": {"type": "object"},
+          "artifact_ref": {
+            "oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}],
+            "description": "The artifact holding this zone's geometry, a GeoJSON FeatureCollection whose features carry zone_id. Non-null whenever zones are published, so a map can draw them without a second contract."
+          }
+        },
+        "required": ["zone_id", "fact", "cause", "cause_reason", "area_ha", "carbon_overlap_ha",
+                     "delta_carbon_tc", "contribution_e_tco2e", "date_range", "evidence_refs",
+                     "evidence", "artifact_ref"],
+        "additionalProperties": false
+      },
+
+      "Scene": {
+        "type": "object",
+        "properties": {
+          "scene_key": {"type": "string"},
+          "aoi_id": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "datetime_utc": {"type": "string"},
+          "year": {"type": "integer"},
+          "usable_fraction": {"$ref": "#/components/schemas/Fraction"},
+          "note": {"type": "string"}
+        },
+        "required": ["scene_key", "aoi_id", "datetime_utc", "year", "usable_fraction", "note"],
+        "additionalProperties": false
+      },
+
+      "Evidence": {
+        "type": "object",
+        "description": "Quality of the change explanation, separate from whether q could be computed.",
+        "properties": {
+          "status": {"$ref": "#/components/schemas/EvidenceStatus"},
+          "optical_paired_valid_fraction": {"$ref": "#/components/schemas/Fraction"},
+          "analysed_parent": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "scenes": {"type": "array", "items": {"$ref": "#/components/schemas/Scene"}},
+          "reconciliation": {"oneOf": [{"type": "object"}, {"type": "null"}]},
+          "warnings": {"type": "array", "items": {"$ref": "#/components/schemas/Warning"}}
+        },
+        "required": ["status", "optical_paired_valid_fraction", "analysed_parent", "scenes",
+                     "reconciliation", "warnings"],
+        "additionalProperties": false
+      },
+
+      "Passport": {
+        "type": "object",
+        "description": "Identity of the scientific content and its version link. passport.status and anchor.status are different axes and are never read as one: a passport is FINALIZED by a verifier, an anchor is written by a chain.",
+        "properties": {
+          "status": {"$ref": "#/components/schemas/PassportStatus"},
+          "finalized_at": {"oneOf": [{"$ref": "#/components/schemas/Timestamp"}, {"type": "null"}]},
+          "content_hash": {"$ref": "#/components/schemas/Hash"},
+          "report_hash": {"oneOf": [{"$ref": "#/components/schemas/Hash"}, {"type": "null"}]},
+          "previous_hash": {"oneOf": [{"$ref": "#/components/schemas/Hash"}, {"type": "null"}]},
+          "comparison_scope": {"type": "string"},
+          "comparison_result": {"$ref": "#/components/schemas/ComparisonResult"},
+          "comparison_direction": {"$ref": "#/components/schemas/ComparisonDirection"},
+          "comparison_note": {"type": "string"},
+          "created_at": {"$ref": "#/components/schemas/Timestamp"}
+        },
+        "required": ["status", "finalized_at", "content_hash", "report_hash", "previous_hash",
+                     "comparison_scope", "comparison_result", "comparison_direction",
+                     "comparison_note", "created_at"],
+        "additionalProperties": false
+      },
+
+      "Source": {
+        "type": "object",
+        "properties": {
+          "source_id": {"$ref": "#/components/schemas/Id"},
+          "product": {"type": "string"},
+          "version": {"type": "string"},
+          "license_url": {"type": "string"},
+          "attribution": {"type": "string"},
+          "access_date": {"type": "string"},
+          "role": {"type": "string"}
+        },
+        "required": ["source_id", "product", "version", "license_url", "attribution",
+                     "access_date", "role"],
+        "additionalProperties": false
+      },
+
+      "Artifact": {
+        "type": "object",
+        "description": "Manifest-listed file. The browser receives an API url, never a filesystem path.",
+        "properties": {
+          "artifact_id": {"$ref": "#/components/schemas/Id"},
+          "role": {"type": "string"},
+          "media_type": {"type": "string"},
+          "sha256": {"$ref": "#/components/schemas/Hash"},
+          "size_bytes": {"type": "integer", "minimum": 0},
+          "url": {"type": "string"},
+          "bbox_wgs84": {
+            "oneOf": [
+              {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "number"}},
+              {"type": "null"}
+            ]
+          },
+          "crs": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+          "resolution": {
+            "oneOf": [
+              {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number"}},
+              {"type": "null"}
+            ]
+          },
+          "resolution_units": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+          "unit": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+          "provenance": {"type": "string"}
+        },
+        "required": ["artifact_id", "role", "media_type", "sha256", "size_bytes", "url",
+                     "bbox_wgs84", "crs", "resolution", "resolution_units", "unit", "provenance"],
+        "additionalProperties": false
+      },
+
+      "AnalysisResult": {
+        "type": "object",
+        "properties": {
+          "fixture": {"oneOf": [{"$ref": "#/components/schemas/FixtureLabel"}, {"type": "null"}]},
+          "identity": {"$ref": "#/components/schemas/Identity"},
+          "run": {"$ref": "#/components/schemas/Run"},
+          "request": {"$ref": "#/components/schemas/RequestSnapshot"},
+          "calculation_status": {"$ref": "#/components/schemas/CalculationStatus"},
+          "evidence_status": {"$ref": "#/components/schemas/EvidenceStatus"},
+          "areas": {"$ref": "#/components/schemas/Areas"},
+          "coverage": {"$ref": "#/components/schemas/Coverage"},
+          "timeline": {"type": "array", "items": {"$ref": "#/components/schemas/TimelinePoint"}},
+          "change": {"$ref": "#/components/schemas/Change"},
+          "uncertainty": {"$ref": "#/components/schemas/Uncertainty"},
+          "baseline": {"$ref": "#/components/schemas/Baseline"},
+          "units": {"$ref": "#/components/schemas/Units"},
+          "scenario_values": {"$ref": "#/components/schemas/ScenarioValues"},
+          "claim": {"$ref": "#/components/schemas/Claim"},
+          "zones": {"type": "array", "items": {"$ref": "#/components/schemas/Zone"}},
+          "risks": {"type": "array", "items": {"$ref": "#/components/schemas/Risk"}},
+          "projection": {"$ref": "#/components/schemas/Projection"},
+          "evidence": {"$ref": "#/components/schemas/Evidence"},
+          "passport": {"$ref": "#/components/schemas/Passport"},
+          "sources": {"type": "array", "items": {"$ref": "#/components/schemas/Source"}},
+          "artifacts": {"type": "array", "items": {"$ref": "#/components/schemas/Artifact"}},
+          "limitations": {"type": "array", "items": {"$ref": "#/components/schemas/Limitation"}},
+          "notes": {"type": "array", "items": {"type": "string"}}
+        },
+        "required": ["fixture", "identity", "run", "request", "calculation_status", "evidence_status",
+                     "areas", "coverage", "timeline", "change", "uncertainty", "baseline", "units",
+                     "scenario_values", "claim", "zones", "risks", "projection",
+                     "evidence", "passport", "sources",
+                     "artifacts", "limitations", "notes"],
+        "additionalProperties": false
+      },
+
+      "CatalogArea": {
+        "type": "object",
+        "properties": {
+          "aoi_id": {"$ref": "#/components/schemas/Id"},
+          "name": {"type": "string"},
+          "region": {"type": "string"},
+          "area_ha": {"type": "number"},
+          "analysis_start_year": {"type": "integer"},
+          "analysis_end_year": {"type": "integer"},
+          "selection_role": {"type": "string"},
+          "project_status": {"type": "string"},
+          "baseline_id": {"type": "string"},
+          "bbox": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "number"}},
+          "geometry": {"$ref": "#/components/schemas/Geometry"},
+          "available_years": {"type": "array", "items": {"type": "integer"}}
+        },
+        "required": ["aoi_id", "name", "region", "area_ha", "analysis_start_year", "analysis_end_year",
+                     "selection_role", "project_status", "baseline_id", "bbox", "geometry",
+                     "available_years"],
+        "additionalProperties": false
+      },
+
+      "CatalogSampleRequest": {
+        "type": "object",
+        "properties": {
+          "request_id": {"$ref": "#/components/schemas/Id"},
+          "parent_aoi_id": {"$ref": "#/components/schemas/Id"},
+          "year_start": {"type": "integer"},
+          "year_end": {"type": "integer"},
+          "area_ha": {"type": "number"},
+          "purpose": {"type": "string"},
+          "baseline_rule": {"type": "string"},
+          "geometry": {"$ref": "#/components/schemas/Geometry"}
+        },
+        "required": ["request_id", "parent_aoi_id", "year_start", "year_end", "area_ha",
+                     "purpose", "baseline_rule", "geometry"],
+        "additionalProperties": false
+      },
+
+      "PriceScenario": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string", "enum": ["low", "base", "high"]},
+          "rub_per_unit": {"type": "number"}
+        },
+        "required": ["id", "rub_per_unit"],
+        "additionalProperties": false
+      },
+
+      "Catalog": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"type": "string"},
+          "method_version": {"type": "string"},
+          "dataset_version": {"type": "string"},
+          "dataset_hash": {"$ref": "#/components/schemas/Hash"},
+          "year_min": {"type": "integer"},
+          "year_max": {"type": "integer"},
+          "max_area_ha": {"type": "number"},
+          "raster_adapter": {"type": "string"},
+          "carbon_adapter": {"type": "string"},
+          "engine_mode": {
+            "type": "string",
+            "enum": ["REAL", "FIXTURE"],
+            "description": "REAL means the owning packages answered. FIXTURE means labelled vectors were replayed and every result carries a fixture label; a deployment must opt into it by name."
+          },
+          "areas": {"type": "array", "items": {"$ref": "#/components/schemas/CatalogArea"}},
+          "sample_requests": {"type": "array", "items": {"$ref": "#/components/schemas/CatalogSampleRequest"}},
+          "prices": {"type": "array", "items": {"$ref": "#/components/schemas/PriceScenario"}},
+          "sources": {"type": "array", "items": {"$ref": "#/components/schemas/Source"}}
+        },
+        "required": ["schema_version", "method_version", "dataset_version", "dataset_hash",
+                     "year_min", "year_max", "max_area_ha", "raster_adapter", "carbon_adapter",
+                     "areas", "sample_requests", "prices", "sources"],
+        "additionalProperties": false
+      },
+
+      "Anchor": {
+        "type": "object",
+        "description": "A hash anchor detects a changed file against a trusted record. It does not prevent double selling and does not certify that the calculation is true.",
+        "properties": {
+          "status": {"$ref": "#/components/schemas/AnchorStatus"},
+          "deployment_id": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+          "tx_hash": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+          "anchored_at": {"oneOf": [{"$ref": "#/components/schemas/Timestamp"}, {"type": "null"}]},
+          "note": {"type": "string"}
+        },
+        "required": ["status", "deployment_id", "tx_hash", "anchored_at", "note"],
+        "additionalProperties": false
+      },
+
+      "Proof": {
+        "type": "object",
+        "properties": {
+          "analysis_id": {"$ref": "#/components/schemas/Uuid"},
+          "identity": {"$ref": "#/components/schemas/Identity"},
+          "passport": {"$ref": "#/components/schemas/Passport"},
+          "canonical_url": {"type": "string"},
+          "report_urls": {
+            "type": "object",
+            "properties": {
+              "json": {"type": "string"},
+              "html": {"type": "string"}
+            },
+            "required": ["json", "html"],
+            "additionalProperties": false
+          },
+          "artifacts": {"type": "array", "items": {"$ref": "#/components/schemas/Artifact"}},
+          "anchor": {"$ref": "#/components/schemas/Anchor"},
+          "verification_note": {"type": "string"}
+        },
+        "required": ["analysis_id", "identity", "passport", "canonical_url", "report_urls",
+                     "artifacts", "anchor", "verification_note"],
+        "additionalProperties": false
+      },
+
+      "Report": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"type": "string"},
+          "generated_at": {"$ref": "#/components/schemas/Timestamp"},
+          "report_hash": {"$ref": "#/components/schemas/Hash"},
+          "result": {"$ref": "#/components/schemas/AnalysisResult"}
+        },
+        "required": ["schema_version", "generated_at", "report_hash", "result"],
+        "additionalProperties": false
+      },
+
+      "Error": {
+        "type": "object",
+        "description": "Error envelope. It never carries a stack trace, a secret or a local filesystem path.",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {"type": "string"},
+              "message": {"type": "string"},
+              "details": {"type": "object"}
+            },
+            "required": ["code", "message", "details"],
+            "additionalProperties": false
+          },
+          "request_id": {"type": "string"}
+        },
+        "required": ["error", "request_id"],
+        "additionalProperties": false
+      }
+    }
+  }
+}

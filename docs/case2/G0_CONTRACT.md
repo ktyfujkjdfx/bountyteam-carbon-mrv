@@ -1,0 +1,363 @@
+# G0 — the shared Carbon Lens v2 contract
+
+Owner: Backend (Integration Owner). Consumers: RS, Trust, Frontend, Team Lead.
+
+Frozen `contracts-v1.0.0` is untouched. Everything below lives in `contracts/v2/` and
+`fixtures/v2/`, beside the v1 documents and never on top of them.
+
+| Document | What it fixes |
+|---|---|
+| `contracts/v2/api-models.v2.schema.json` | Every public wire model of `/api/v2` |
+| `contracts/v2/internal-models.v2.schema.json` | The adapter boundary: `RasterAnalysis`, `CellLayer`, `CarbonAssessment`, `ArtifactManifest` |
+| `contracts/v2/openapi.v2.yaml` | The HTTP shape: seven routes, their headers and their failure codes |
+| `fixtures/v2/` | Labelled examples; see `fixtures/v2/README.md` |
+
+## Routes
+
+```
+GET  /api/v2/catalog
+POST /api/v2/areas/measure                              -> 200 AreaMeasurement
+POST /api/v2/analyses                                   -> 202 {analysis_id, job_state, status_url}
+GET  /api/v2/analyses/{analysis_id}
+GET  /api/v2/analyses/{analysis_id}/artifacts/{artifact_id}
+GET  /api/v2/analyses/{analysis_id}/report?format=json|html
+GET  /api/v2/analyses/{analysis_id}/proof
+```
+
+```
+POST /api/v2/auth/login                                 -> 200 {token, expires_at, user}
+GET  /api/v2/auth/me
+POST /api/v2/auth/logout
+```
+
+`Authorization: Bearer <token>` on every route except `/auth/login`;
+`Idempotency-Key` additionally on the one mutation. Path identifiers are opaque and must
+not be parsed.
+
+**There is no `X-Demo-Actor` header and no `X-Demo-Session` header on `/api/v2`.** A role
+a client can set is not an authorization, so the caller and the role are read from the
+session row on the server and from nothing else. Anyone still sending those headers should
+stop; they are ignored.
+
+## Signing in
+
+`POST /auth/login` takes a username and a password and returns an opaque random token.
+The token is stored on the server only as a hash, so a copy of the database does not hand
+anyone a working session, and it never reaches a log line, an audit row, a passport or a
+content hash.
+
+Three rules the client should know about:
+
+- a wrong username and a wrong password are the same 401 with the same message, and
+  repeated failures for one username are 429;
+- **there is no refresh token and no silent restoration.** Keep the token in memory; a
+  reload signs the person in again. The alternative is a secret that survives the page,
+  which is the thing this design exists to avoid, and it must never be a value baked into
+  a build;
+- a session lives in the database, so it survives a backend restart, and `POST
+  /auth/logout` revokes it immediately. Signing out twice is 401, because the session the
+  second call names is already gone.
+
+## Roles and what the server refuses
+
+| Action | PROJECT_OWNER | VERIFIER | INVESTOR |
+|---|---|---|---|
+| Read the catalog | yes | yes | yes |
+| Measure a contour | yes | yes | no |
+| Queue an analysis | yes | yes | no |
+| Read an analysis, its artifacts and its proof | own only | all | finalized only |
+| Download a draft report | own only | yes | no |
+| Download a final report | yes | yes | yes |
+| Finalize a passport | no | yes | no |
+
+Every one of these is checked on the server. A hidden button is a styling choice, not an
+authorization, and the suite asserts each cell of this table over HTTP.
+
+An analysis the caller may not read is **404, not 403**, so that probing identifiers
+cannot be used to learn which ones exist. An investor sees a passport only once a verifier
+has finalized it: a draft is not a finding, and presenting one as if it were would be the
+most consequential mistake this screen could make.
+
+## The verification request
+
+An analysis is a calculation; a request is the thing somebody is responsible for. They
+are separate resources on purpose: the calculation is immutable once published, the
+request moves through states, and neither rewrites the other.
+
+```
+POST  /api/v2/requests                                  -> 201 DRAFT
+GET   /api/v2/requests
+GET   /api/v2/requests/{request_id}
+PATCH /api/v2/requests/{request_id}                     claimed_units only, DRAFT only
+POST  /api/v2/requests/{request_id}/submit
+POST  /api/v2/requests/{request_id}/analysis            -> 202, queues the calculation
+POST  /api/v2/requests/{request_id}/finalize            verifier only, from CALCULATED
+```
+
+`DRAFT → SUBMITTED → ANALYSING → CALCULATED → FINALIZED`, and a move that is not in that
+table is `409 INVALID_TRANSITION` rather than a silently ignored call.
+
+Two rules the whole workflow rests on:
+
+- **Nothing advances on its own.** A run that fails returns the request to `SUBMITTED` so
+  it can be tried again. A run that finishes with `q = null` still reaches `CALCULATED`,
+  because the calculation did finish and "we could not tell" is a result; what it may
+  never do is arrive at `FINALIZED` without a verifier putting it there.
+- **Finalizing changes no number.** It records that a named person accepted a particular
+  passport content hash at a particular time. `units`, `change`, `uncertainty`,
+  `baseline`, `claim` and `scenario_values` are byte-identical before and after, and a
+  test asserts exactly that.
+
+`passport.status` is served from that finalization record and overlaid at read time; the
+stored result keeps saying `DRAFT`, because that is what it was when it was computed.
+The overlay cannot disturb a hash: the passport block is not part of `content_view`, so
+`content_hash` and `report_hash` are the same before and after finalizing. Recalculating
+later produces a new passport and leaves the pinned one exactly as it was — nothing leads
+out of `FINALIZED`, and a further verification of the same contour is a new request.
+
+`POST /areas/measure` answers "how big is this, and may I submit it" without creating an
+analysis. It runs the same normalisation and the same geodesic area as the analysis path,
+so a figure shown before submitting cannot disagree with the run that follows. A contour
+that may not be used comes back as `200` with `valid: false` and named `errors[]`; `422`
+is only for a body that is not a GeoJSON geometry at all.
+
+## The six status axes never collapse into one
+
+| Axis | Values | Answers |
+|---|---|---|
+| `job_state` | `QUEUED` `RUNNING` `SUCCEEDED` `FAILED` | did the worker finish |
+| `calculation_status` | `AVAILABLE` `UNAVAILABLE` | is there a number for Q |
+| `evidence_status` | `SUFFICIENT` `REVIEW_REQUIRED` `INSUFFICIENT` | how well the change is explained |
+| `claim.status` | `NOT_PROVIDED` `NOT_APPLICABLE` `NOT_COMPARABLE` `UNASSESSABLE` `SUPPORTED_BY_CASE` `PARTIALLY_SUPPORTED_BY_CASE` `NOT_SUPPORTED_BY_CASE` | how a stated volume compares with Q |
+| `passport.status` | `DRAFT` `FINALIZED` | has a verifier signed off this document |
+| `anchor.status` | `NOT_REQUESTED` `PENDING` `CONFIRMED` `FAILED` | is the passport hash anchored |
+
+`passport.status` and `anchor.status` are separate fields on separate objects and share no
+vocabulary. A `FINALIZED` passport with `NOT_REQUESTED` anchor is the normal case: a
+verifier signs off documents, a chain records hashes, and neither implies the other.
+
+A job that succeeds with `q = null` is a success. Partial coverage is a scientific
+outcome, not a worker failure. Poor optical quality lowers `evidence_status` and by
+itself never makes `q` null.
+
+## `q = null` and `q = 0` are different answers
+
+`units.status = UNAVAILABLE` carries `unavailable_reason` and `q = null`: a mandatory
+input was missing or unusable. `units.status = AVAILABLE` with `q = 0` carries
+`zero_reason` — one of `NON_POSITIVE_RELATIVE_RESULT`, `UNCERTAINTY_TOO_HIGH`,
+`ROUNDED_TO_ZERO` — and means the rules of the case were applied and gave zero. The two
+vocabularies do not overlap, and a test enforces that. Frontend must not render them the
+same way, and `scenario_values` is all-null whenever `q` is null.
+
+## A claim of zero is `NOT_APPLICABLE`
+
+`claimed_units = 0` gives `claim.status = NOT_APPLICABLE`, `claim.reason =
+NO_POSITIVE_CLAIM`, `supported_share = null` and `unsupported_gap = 0`. Nothing positive
+was stated, so nothing was supported; calling that `SUPPORTED_BY_CASE` would let an empty
+statement inherit the vocabulary of a confirmed one. `unsupported_gap` is never negative.
+
+`reason` and `mismatch_reasons` are separate fields because they answer separate
+questions. `mismatch_reasons` says why a comparison could not be made — a different
+contour, period, pool or unit. `reason` says the comparison does not apply at all, and
+`NO_POSITIVE_CLAIM` is not a disagreement.
+
+## Coverage, area and the arithmetic that lands outside the range
+
+Geodesic area is not additive over a partition, so a sum over native cells can land a
+hair above the whole. Two rules follow:
+
+- every public fraction is clamped to `[0, 1]`, and the unclamped value is published
+  beside it in `coverage.coverage_fraction_raw` — a reader who sees `1.0` can find out it
+  was `1.000000113`;
+- `areas.missing_ha = max(0, requested - calculated)` is never negative, and
+  `areas.area_difference_ha = calculated - requested` keeps its sign. They answer
+  different questions and are not interchangeable.
+
+Consumers of `carbon`: pass the **clamped** share into `compute_units`. The raw value
+belongs in the report, not in a validator that requires a share.
+
+## Warnings and limitations are structured and separate
+
+`evidence.warnings[]` is `{code, severity, message, details}` with `severity` one of
+`INFO`, `WARNING`, `BLOCKING`. `limitations[]` is `{code, message}`. Switch on `code`;
+`message` is Russian prose and may be localised, never parsed. A warning is about this
+run; a limitation always holds. The two lists never share a code.
+
+## One canonical Eproj
+
+The emission figure is published exactly once, as `units.eproj_tco2e`. `change` carries
+the stocks and their difference and points at it with `change.eproj_ref`; it does not
+restate it. Backend compares the raster owner's own derivation against it and raises a
+`BLOCKING` `EPROJ_DISAGREEMENT` warning if the two ever differ by more than floating-point
+noise, rather than averaging them.
+
+## Unknown enumeration values
+
+Every enumeration in the contract is closed, and a value outside it is refused rather than
+served — a test proves it. The other half of that bargain is on the consumer: treat an
+unrecognised value as unknown and keep rendering, so that adding a value is a contract
+change and not an outage.
+
+## Field groups of `AnalysisResult`
+
+`fixture` · `identity` · `run` · `request` · `calculation_status` · `evidence_status` ·
+`areas` · `coverage` · `timeline[]` · `change` · `uncertainty` · `baseline` · `units` ·
+`scenario_values` · `claim` · `zones[]` · `evidence` · `passport` · `sources[]` ·
+`artifacts[]` · `limitations[]` · `notes[]`.
+
+Three deliberate separations:
+
+- `identity` holds the deterministic description of the calculation; `run` holds the run
+  time, the run id and which adapter answered. The passport content hash covers the
+  scientific content and never the run time, so a genuine replay is distinguishable from
+  a coincidence.
+- `coverage` has four independent fractions — biomass, uncertainty, baseline and
+  optical-paired-valid. They are never averaged into one "coverage" number.
+- A zone reports `fact` and `cause` separately. Cover loss is something the loss-year
+  product can establish; why it was lost needs its own evidence, and without it `cause`
+  stays `UNKNOWN`. Whenever zones are published, `zone.artifact_ref` points at the GeoJSON
+  artifact whose features carry `zone_id`, so a map can draw them without a second
+  contract.
+
+## Risk, the projection and money stay outside the number
+
+Each of these is a place where a tool like this usually starts lying, so each is a block
+of its own and none of them touches `units`.
+
+`risks[]` reports three codes — `FIRE`, `FOREST_LOSS`, `DATA_QUALITY` — each with the
+measured `basis` it rests on, its `source_ref` and a note. There is no score and no
+probability, and there is deliberately no aggregate: adding a fire indication to a
+coverage fraction produces a number that means nothing, and a reader handed one tends to
+stop asking what it was made of. `observed: false` means nothing was found in the
+supplied products, which is not the same as an established absence.
+
+`projection` continues the **baseline** of the case to 2029, because the rules of the
+case define that line for any year. The observed stock is not extrapolated, and
+`q_projection` is permanently `null`: nothing in the supplied data supports a statement
+about what this plot will actually do. Points carry `series_kind` of `FACT` or
+`PROJECTION`, every fact precedes every projection, and a chart must not join them into
+one line.
+
+`GET /analyses/{id}/value?price_rub=…` multiplies q by each price. The three official
+prices are `CASE_PARAMETER`; a price the caller supplies comes back as `USER_SCENARIO`
+and is their assumption, not a quotation this system stands behind. Nothing is stored and
+no hash moves — a stated price must never be able to change a passport. When q is null
+every value is null.
+
+## The demonstration lifecycle is a demonstration
+
+```
+GET  /api/v2/requests/{request_id}/demo
+POST /api/v2/requests/{request_id}/demo/issue        owner, after FINALIZED, q > 0
+POST /api/v2/requests/{request_id}/demo/transfer     investor accepts
+POST /api/v2/requests/{request_id}/demo/retire       the holder retires
+```
+
+`ISSUED_DEMO → TRANSFERRED_DEMO → RETIRED_DEMO`. Every status ends in `_DEMO`, every
+answer carries `is_demonstration: true`, and the note says in plain Russian that nothing
+was issued, transferred or retired in any registry and that the record confers no right
+to a carbon unit.
+
+**`q = 0` and `q = null` refuse with `409 NO_POSITIVE_UNITS`.** This is not a corner case.
+Every real plot in the supplied data comes out at zero, so a lifecycle that issued anyway
+would be the single genuinely misleading thing in the tool, and the message says that
+zero is a result rather than a fault.
+
+Issuing also needs a passport a verifier has already finalized — issuing against a draft
+is issuing against a number nobody accepted — and the quantity is copied from that
+passport, never taken from the caller. Each role performs its own step, every transition
+is idempotent, the history is append-only, and none of it touches a P0 table or the
+frozen ABI.
+
+## The report is a document somebody keeps
+
+`GET /analyses/{id}/report?format=json|html`. Both formats carry the same values; the
+JSON document is the whole result plus the schema version, the run time and the report
+hash.
+
+The HTML is self-contained in the strict sense: no `<script>`, no `<link>`, no `@import`,
+no inline event handler and no `http://` or `https://` anywhere in the file. A copy saved
+today still reads correctly after the session is gone, which is the whole point of
+handing someone a passport rather than a dashboard link. It also carries no session
+token, no password, no `Authorization` header and no local filesystem path, on the
+degraded path as well as the normal one.
+
+It has to contain the plot and its area, the period, the sources and their versions, the
+coverage and evidence quality, the change and the zones, the carbon ledger, the baseline
+and its parts, the uncertainty interval with its sensitivity variants, Q and the buffer,
+the claim comparison, the risks, the projection to 2029, the scenario values, the method
+and its limitations, the analysis id and date, and every hash. A test walks that list.
+
+`report_hash` covers the content and not the rendering: it is `digest({report: version,
+content: content_view(result)})`, and `content_view` excludes the passport block. Two
+downloads are the same bytes, a fresh deployment reproduces the same hash for the same
+request, and finalizing does not invalidate a report somebody already downloaded. A
+changed number no longer matches the hash it was published with, and a stored report
+cannot be rewritten in place.
+
+## Language the contract will not carry
+
+No public `INVESTABLE`, no "approved for purchase", no "proven fraud". A gap value is the
+scenario value of the unsupported part of a claim: not an established loss, not a
+probabilistic Value at Risk, not guaranteed savings. A hash anchor detects a changed file
+against a trusted record; it does not prevent double selling and does not certify that
+the calculation is true. A test greps the schema for the forbidden vocabulary.
+
+## Who produces what
+
+| Owner | Produces | Backend consumes it as |
+|---|---|---|
+| RS (`rs/case2/`) | `analysis_payload`, `cells_payload`, `manifest.build` | `RasterAnalysis`, `CellLayer`, `ArtifactManifest` |
+| Trust (`carbon/`) | `compute_interval`, `compute_baseline`, `compute_units`, `compare_claim` | `CarbonAssessment` |
+| Backend (`backend/`) | API, jobs, persistence, artifact and report serving, passports | — |
+| Frontend (`frontend/`) | `/lens`, generated v2 types | the public models only |
+
+Backend calls those functions and copies their numbers. It contains no stock-difference,
+no interval, no baseline and no Q arithmetic of its own, and a test asserts that the
+adapter output validates against the internal schema before any of it reaches a passport.
+
+## Answers to the open questions consumers raised
+
+**RS.** The internal schema matches `rs.case2.payload` as it stands today; Backend added
+no field and renamed none. The models are additive: adding a key is always safe, removing
+or retyping a required key is a contract change. `change_evidence` is passed through
+opaquely apart from the zone rows Backend projects into `zones[]`.
+
+**Trust.** `carbon.reasons` is the source of truth for the status and reason strings; the
+schema enumerations are pinned to it by a test that runs as soon as `carbon/` is on the
+branch. `carbon` keeps `units`, Backend keeps nullability and presentation. Four
+alignments were settled in Backend's favour of the engine, so that nobody has to translate
+twice:
+
+- `pool` is `AGB_LIVE_WOODY` and `unit` is `POTENTIAL_UNIT_OF_THE_CASE`, exactly as the
+  engine emits them. These strings are compared for equality when a claim is checked, so
+  a second spelling would manufacture a `POOL_MISMATCH` out of nothing.
+- `passport.comparison_result` uses the engine's version vocabulary — `INITIAL`,
+  `REVISION_OF_SAME_SCOPE`, `NEW_OBSERVATION`, `NOT_COMPARABLE`. Whether Q rose or fell is
+  a separate presentational field, `comparison_direction`, so "a later observation" is
+  never read as "the earlier passport was wrong".
+- `spatial_dependence` uses the method freeze names, `INDEPENDENT_NATIVE_CELLS` and
+  `FULL_SPATIAL_CORRELATION`. Backend translates the engine's spelling at the adapter
+  boundary and changes no number, so the engine may rename at its own pace.
+- `claim.status` gains `NOT_APPLICABLE` and `mismatch_reasons` gains `NO_POSITIVE_CLAIM`.
+  Backend normalises a zero claim to these values itself, so an engine that has not
+  adopted them yet still cannot publish a zero claim as supported.
+
+**Frontend.** The provisional shapes in `src/lens/types.ts` were the right vocabulary;
+the differences are structural, not semantic. Job and result are one resource
+(`GET /analyses/{id}` returns `job_state` and, when ready, `result`), so the separate
+`result_id` round trip is gone; `coverage` is an object of four named fractions rather
+than an array; `units` uses `r_tco2e`, `ratio`, `unc`, `radj_tco2e`, `buffer_tco2e`,
+`rounding_residual_tco2e`; the zero and unavailable reasons are two fields rather than
+one. `fixture` stays exactly as proposed and must stay visible on screen.
+
+**Team Lead.** The method freeze covers the interval mode and the sensitivity grid owned
+by Trust, and the zone attribution rule owned by RS. Backend records
+`identity.method_version` as the composition of the three versions, so a passport names
+the method it was produced under.
+
+## Changing this contract
+
+One Backend PR with consumer review, never an edit by a consumer to a shared file. A
+change that removes or retypes a required field needs the producer, the consumer and the
+Team Lead to agree, and the fixtures move in the same commit.

@@ -1,0 +1,95 @@
+{
+  "schema": "rs.case2.raster-analysis/1",
+  "request": {
+    "area_ha": 1829.5983677452086,
+    "year_start": 2020,
+    "year_end": 2022,
+    "years": 2,
+    "parents": [
+      "RU_MORDOVIA_03"
+    ]
+  },
+  "stock_change": {
+    "stock_start_tc": 29236.98191656843,
+    "stock_end_tc": 28807.026300148307,
+    "delta_tc": -429.955616420124,
+    "e_tco2e": 1576.5039268737878,
+    "e_per_ha_per_year": 0.43083333333333323,
+    "normalisation_area_ha": 1829.5983677452086,
+    "sign_convention": "positive E is a loss from the accounted pool",
+    "unit": "t CO2e over the period; t CO2e/ha/year for the rate"
+  },
+  "timeline": [
+    {
+      "year": 2020,
+      "mean_tc_ha": 15.979999999999999,
+      "total_tc": 29236.98191656843,
+      "mean_agb_t_ha": 34.0,
+      "cells": 16,
+      "covered_ha": 1829.5983677452086
+    },
+    {
+      "year": 2021,
+      "mean_tc_ha": 15.51,
+      "total_tc": 28377.070683728187,
+      "mean_agb_t_ha": 33.0,
+      "cells": 16,
+      "covered_ha": 1829.5983677452086
+    },
+    {
+      "year": 2022,
+      "mean_tc_ha": 15.745,
+      "total_tc": 28807.026300148307,
+      "mean_agb_t_ha": 33.5,
+      "cells": 16,
+      "covered_ha": 1829.5983677452086
+    }
+  ],
+  "coverage": {
+    "requested_ha": 1829.5983677452086,
+    "calculated_ha": 1829.5983677452086,
+    "missing_ha": 0.0,
+    "complete": true,
+    "biomass": {
+      "area_ha": 1829.5983677452086,
+      "fraction": 1.0
+    },
+    "biomass_sd": {
+      "area_ha": 1829.5983677452086,
+      "fraction": 1.0
+    },
+    "optical_paired": {
+      "area_ha": 0.0,
+      "fraction": 0.0
+    },
+    "note": "три покрытия отвечают на разные вопросы и никогда не смешиваются"
+  },
+  "cells": {
+    "count": 16,
+    "valid_count": 16,
+    "weight_sum_ha": 1829.5983677452086,
+    "artifact": "cells.geojson"
+  },
+  "optical": {
+    "scenes": [],
+    "paired": null
+  },
+  "change_evidence": {
+    "available": false,
+    "reason": "NO_USABLE_SCENE_PAIR_IN_REPLAY_VECTOR",
+    "selection": null
+  },
+  "grids": {},
+  "parameters": {
+    "carbon_fraction": 0.47,
+    "co2_per_c": 3.6666666666666665,
+    "pool": "living above-ground woody biomass",
+    "method": "stock-difference",
+    "method_version": "backend-replay-vector/0.1.0"
+  },
+  "limitations": [
+    "Значения биомассы получены из размеченного вектора замены, а не измерены по растрам ESA CCI.",
+    "Пригодной пары оптических сцен за период не найдено, поэтому причина изменения не устанавливалась."
+  ],
+  "artifacts": []
+}

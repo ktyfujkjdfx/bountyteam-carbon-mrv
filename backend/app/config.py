@@ -9,6 +9,15 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ROOT = REPO_ROOT / "backend"
 
 MODES = ("CONTRACT_FIXTURE", "LOCAL_DEMO")
+LENS_ENGINE_MODES = ("REAL", "FIXTURE")
+LENS_ROLES = ("PROJECT_OWNER", "VERIFIER", "INVESTOR")
+# The three demo sign-ins, and the environment variable that supplies each password.
+# No password has a default: an account exists only if someone chose a password for it.
+LENS_DEMO_ACCOUNTS = (
+    ("owner", "PROJECT_OWNER", "BACKEND_LENS_DEMO_PASSWORD_OWNER"),
+    ("verifier", "VERIFIER", "BACKEND_LENS_DEMO_PASSWORD_VERIFIER"),
+    ("investor", "INVESTOR", "BACKEND_LENS_DEMO_PASSWORD_INVESTOR"),
+)
 CHAIN_ADAPTERS = ("mock", "web3")
 ACTORS = ("issuer", "buyer", "recipient")
 SIGNER_ROLES = ("issuer", "buyer", "recipient", "oracle")
@@ -29,6 +38,20 @@ def _csv(value: str | None) -> tuple[str, ...]:
     return tuple(item.strip() for item in (value or "").split(",") if item.strip())
 
 
+def _demo_accounts(env: dict[str, str]) -> tuple[tuple[str, str, str], ...]:
+    """The demo sign-ins this deployment configured.
+
+    Both the switch and a password are required: a demo account should be something
+    somebody turned on deliberately, not something that appears because a variable was
+    left at a default. There are no defaults here for exactly that reason.
+    """
+    if env.get("BACKEND_LENS_DEMO_ACCOUNTS", "0") in ("0", "false", "False", ""):
+        return ()
+    return tuple((username, role, env[variable])
+                 for username, role, variable in LENS_DEMO_ACCOUNTS
+                 if env.get(variable))
+
+
 @dataclass(frozen=True)
 class Settings:
     mode: str = "CONTRACT_FIXTURE"
@@ -47,6 +70,20 @@ class Settings:
     rs_mode: str = "cached_bundle"
     rs_command: tuple[str, ...] = ()
     rs_work_dir: Path = BACKEND_ROOT / "runtime" / "rs-runs"
+    # Carbon Lens /api/v2. Its files live beside the P0 runtime, never inside it.
+    lens_artifact_store: Path = BACKEND_ROOT / "runtime" / "lens-artifacts"
+    lens_work_dir: Path = BACKEND_ROOT / "runtime" / "lens-runs"
+    lens_enabled: bool = True
+    # REAL is the only mode that answers with measurements. FIXTURE replays labelled
+    # vectors and must be asked for by name; it is never reached by falling back.
+    lens_engine_mode: str = "REAL"
+    # Refuse to start at all unless the owning packages are installed, for a deployment
+    # that would rather be down than be approximately right.
+    lens_require_real: bool = False
+    # (username, role, password) for the demo accounts. Passwords come from the
+    # environment and are never in the repository, never in a log line and never in a
+    # repr of these settings.
+    lens_demo_accounts: tuple[tuple[str, str, str], ...] = field(default=(), repr=False)
     cors_origins: tuple[str, ...] = ()
     max_artifact_bytes: int = 64 * 1024 * 1024
     max_bundle_bytes: int = 512 * 1024 * 1024
@@ -65,6 +102,23 @@ class Settings:
             raise ConfigError("BACKEND_DEMO_SESSION must be set (>= 16 characters)")
         if self.rs_mode not in ("cached_bundle", "rs_cli"):
             raise ConfigError("BACKEND_RS_MODE must be cached_bundle or rs_cli")
+        if self.lens_engine_mode not in LENS_ENGINE_MODES:
+            raise ConfigError(f"BACKEND_LENS_ENGINE_MODE must be one of {LENS_ENGINE_MODES}")
+        # A deployment that says it demonstrates real data may not serve replayed vectors:
+        # the two are indistinguishable once they are on a screen.
+        if self.mode == "LOCAL_DEMO" and self.lens_engine_mode == "FIXTURE":
+            raise ConfigError(
+                "LOCAL_DEMO may not run the Carbon Lens in FIXTURE mode; replayed vectors "
+                "are not a demonstration of the supplied data")
+        if self.lens_require_real and self.lens_engine_mode == "FIXTURE":
+            raise ConfigError(
+                "BACKEND_LENS_REQUIRE_REAL=1 contradicts BACKEND_LENS_ENGINE_MODE=FIXTURE")
+        for username, role, password in self.lens_demo_accounts:
+            if role not in LENS_ROLES:
+                raise ConfigError(f"demo account {username}: role must be one of {LENS_ROLES}")
+            if len(password) < 12:
+                raise ConfigError(
+                    f"demo account {username}: password must be at least 12 characters")
         return self
 
 
@@ -88,6 +142,14 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
         rs_mode=env.get("BACKEND_RS_MODE", "cached_bundle"),
         rs_command=tuple(env.get("BACKEND_RS_COMMAND", "").split()),
         rs_work_dir=_path(env.get("BACKEND_RS_WORK_DIR"), Settings.rs_work_dir),
+        lens_artifact_store=_path(env.get("BACKEND_LENS_ARTIFACT_STORE"),
+                                  Settings.lens_artifact_store),
+        lens_work_dir=_path(env.get("BACKEND_LENS_WORK_DIR"), Settings.lens_work_dir),
+        lens_enabled=env.get("BACKEND_LENS_ENABLED", "1") not in ("0", "false", "False"),
+        lens_engine_mode=env.get("BACKEND_LENS_ENGINE_MODE", "REAL").upper(),
+        lens_require_real=env.get("BACKEND_LENS_REQUIRE_REAL", "0")
+        not in ("0", "false", "False", ""),
+        lens_demo_accounts=_demo_accounts(env),
         cors_origins=_csv(env.get("BACKEND_CORS_ORIGINS")),
         worker_poll_seconds=float(env.get("BACKEND_WORKER_POLL_SECONDS", "1.0")),
     ).validate()
