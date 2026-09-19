@@ -205,7 +205,7 @@ export function createFixtureLensClient(options: FixtureClientOptions = {}): Len
       const cellsHash = (await sha256HexOfText(cellsText)) ?? '0x00';
       const cellsArtifact: Artifact = {
         artifact_id: `cells-${cellsHash.slice(2, 14)}`,
-        role: 'cells',
+        role: 'cci_cell_layer',
         media_type: 'application/geo+json',
         sha256: cellsHash,
         size_bytes: textBytes(cellsText).byteLength,
@@ -218,7 +218,37 @@ export function createFixtureLensClient(options: FixtureClientOptions = {}): Len
         provenance: 'STUB_FIXTURE',
       };
 
-      const withoutPassport = buildFixtureResult(context, { cellsArtifact });
+      const built = buildFixtureResult(context, { cellsArtifact });
+      const zonesDocument = {
+        type: 'FeatureCollection',
+        name: 'change_zones',
+        features: built.zones.filter((zone) => zone.geometry).map((zone) => ({
+          type: 'Feature', geometry: zone.geometry, properties: {
+            zone_id: zone.zone_id, fact: zone.fact, cause: zone.cause,
+            cause_reason: zone.cause_reason, severity: 'FIXTURE',
+            evidence_events: [], event_date_range: zone.date_range,
+            observed_between: { start: `${context.yearStart}-01-01`, end: `${context.yearEnd}-12-31` },
+            detected_area_ha: zone.area_ha, cci_overlap_ha: zone.carbon_overlap_ha,
+            delta_tc: zone.delta_carbon_tc, contribution_tco2e: zone.contribution_e_tco2e,
+            detection_resolution_m: 20, evidence: zone.evidence,
+          },
+        })),
+      };
+      const zonesText = JSON.stringify(zonesDocument);
+      const zonesHash = (await sha256HexOfText(zonesText)) ?? '0x00';
+      const zonesArtifact: Artifact = {
+        artifact_id: `zones-${zonesHash.slice(2, 14)}`,
+        role: 'change_zones', media_type: 'application/geo+json', sha256: zonesHash,
+        size_bytes: textBytes(zonesText).byteLength,
+        url: `/api/v2/analyses/${analysisId}/artifacts/zones-${zonesHash.slice(2, 14)}`,
+        bbox_wgs84: null, crs: 'EPSG:4326', resolution: [20, 20],
+        resolution_units: 'm', unit: 'ha; t CO2e', provenance: 'STUB_FIXTURE',
+      };
+      const withoutPassport = {
+        ...built,
+        zones: built.zones.map((zone) => ({ ...zone, artifact_ref: zonesArtifact.artifact_id })),
+        artifacts: [cellsArtifact, zonesArtifact],
+      };
       const contentHash = (await sha256HexOfText(passportContent(withoutPassport as AnalysisResult))) ?? '0x00';
       const result: AnalysisResult = {
         ...withoutPassport,
@@ -275,7 +305,10 @@ export function createFixtureLensClient(options: FixtureClientOptions = {}): Len
         analysis,
         createdAt: now(),
         result,
-        artifacts: new Map([[cellsArtifact.artifact_id, { bytes: textBytes(cellsText), mediaType: cellsArtifact.media_type }]]),
+        artifacts: new Map([
+          [cellsArtifact.artifact_id, { bytes: textBytes(cellsText), mediaType: cellsArtifact.media_type }],
+          [zonesArtifact.artifact_id, { bytes: textBytes(zonesText), mediaType: zonesArtifact.media_type }],
+        ]),
         proof,
       });
       idempotency.set(options_.idempotencyKey, analysisId);

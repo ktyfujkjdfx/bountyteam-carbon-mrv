@@ -1,13 +1,13 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useResource } from '../hooks/useResource';
 import { LensError, type LensApiClient } from './client';
 import { approximateAreaHa, validateGeometry } from './geometry';
 import { renderReportHtml } from './passport';
 import { useAnalysis } from './useAnalysis';
-import type { CellFeature, CellsState } from './components/LensMapView';
+import type { CellFeature, CellsState, GapLayerState } from './components/LensMapView';
 import type { PriceKey } from './components/Headline';
 import type { RequestDraft } from './components/RequestForm';
-import type { AnalysisResult, AreaMeasurement, Catalog, Geometry, Proof } from './types';
+import type { AnalysisResult, AreaMeasurement, Artifact, Catalog, Geometry, Proof, Zone } from './types';
 import {
   loadSubmissions,
   newSubmission,
@@ -47,6 +47,46 @@ function cellsFromGeoJson(data: unknown): CellFeature[] {
     .filter((cell): cell is CellFeature => cell !== null);
 }
 
+function featuresFromGeoJson(data: unknown): Array<{ geometry: Geometry; properties: Record<string, unknown> }> {
+  const collection = data as { type?: string; features?: Array<{ geometry?: Geometry; properties?: Record<string, unknown> }> };
+  if (collection.type !== 'FeatureCollection' || !Array.isArray(collection.features)) {
+    throw new LensError('CONTRACT', 'Артефакт слоя не является GeoJSON FeatureCollection.');
+  }
+  return collection.features
+    .filter((feature): feature is { geometry: Geometry; properties?: Record<string, unknown> } => Boolean(feature.geometry))
+    .map((feature) => ({ geometry: feature.geometry, properties: feature.properties ?? {} }));
+}
+
+function uniqueArtifact(result: AnalysisResult, role: string): Artifact | null {
+  const candidates = result.artifacts.filter((item) => item.role === role);
+  const keys = new Set(candidates.map((item) => `${item.role}:${item.sha256.toLowerCase()}`));
+  if (keys.size > 1 || candidates.length > 1) {
+    throw new LensError('ARTIFACT_AMBIGUOUS', `Для роли ${role} опубликовано несколько артефактов; слой не выбран автоматически.`);
+  }
+  return candidates[0] ?? null;
+}
+
+function mergeZoneFeatures(result: AnalysisResult, features: Array<{ geometry: Geometry; properties: Record<string, unknown> }>): AnalysisResult {
+  const byId = new Map(features.map((feature) => [String(feature.properties.zone_id ?? ''), feature]));
+  return {
+    ...result,
+    zones: result.zones.map((zone): Zone => {
+      const feature = byId.get(zone.zone_id);
+      if (!feature) return zone;
+      const props = feature.properties;
+      return {
+        ...zone,
+        geometry: feature.geometry,
+        severity: typeof props.severity === 'string' ? props.severity : null,
+        detection_resolution_m: typeof props.detection_resolution_m === 'number' ? props.detection_resolution_m : null,
+        observed_between: typeof props.observed_between === 'object' && props.observed_between !== null
+          ? props.observed_between as Record<string, unknown> : null,
+        evidence_events: Array.isArray(props.evidence_events) ? props.evidence_events : [],
+      };
+    }),
+  };
+}
+
 /**
  * Everything the three workspaces share: the catalog, the contour being measured, the analysis in
  * flight, the submissions of this session and the cells layer of the shown result.
@@ -70,6 +110,8 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const [cells, setCells] = useState<CellsState>({ kind: 'hidden' });
+  const [gaps, setGaps] = useState<GapLayerState>({ kind: 'hidden' });
+  const [zoneResult, setZoneResult] = useState<AnalysisResult | null>(null);
   const [proof, setProof] = useState<Proof | null>(null);
 
   const analysis = useAnalysis(client);
@@ -120,7 +162,50 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
     [submissions, activeSubmissionId],
   );
 
-  const shownResult: AnalysisResult | null = activeSubmission?.result ?? analysis.state.result;
+  const rawResult: AnalysisResult | null = activeSubmission?.result ?? analysis.state.result;
+  const shownResult = zoneResult?.identity.analysis_id === rawResult?.identity.analysis_id ? zoneResult : rawResult;
+
+  useEffect(() => {
+    const result = rawResult;
+    if (!result) return;
+    const controller = new AbortController();
+    const load = async () => {
+      await Promise.resolve();
+      if (controller.signal.aborted) return;
+      setGaps({ kind: 'loading' });
+      try {
+        const refs = [...new Set(result.zones.map((zone) => zone.artifact_ref).filter((item): item is string => Boolean(item)))];
+        if (refs.length > 1) throw new LensError('ARTIFACT_AMBIGUOUS', 'Зоны результата ссылаются на разные геометрические артефакты.');
+        const artifact = refs.length === 1 ? result.artifacts.find((item) => item.artifact_id === refs[0]) ?? null : uniqueArtifact(result, 'change_zones');
+        if (result.zones.length > 0 && (!artifact || artifact.role !== 'change_zones')) {
+          throw new LensError('ZONE_ARTIFACT_MISSING', 'Сервис не связал зоны с проверяемым артефактом change_zones.');
+        }
+        if (artifact) {
+          const payload = await client.getArtifact(artifact, controller.signal);
+          if (payload.integrity === 'MISMATCH') throw new LensError('ARTIFACT_INTEGRITY', `Хеш зон не совпал с ${artifact.sha256}.`);
+          setZoneResult(mergeZoneFeatures(result, featuresFromGeoJson(payload.data)));
+        }
+        const gapArtifact = uniqueArtifact(result, 'observation_gap_zones');
+        if (!gapArtifact) {
+          setGaps({ kind: 'empty' });
+        } else {
+          const payload = await client.getArtifact(gapArtifact, controller.signal);
+          if (payload.integrity === 'MISMATCH') {
+            setGaps({ kind: 'integrity-failed', reason: `Хеш файла не совпал с ${gapArtifact.sha256}.` });
+          } else {
+            const geometries = featuresFromGeoJson(payload.data).map((feature) => feature.geometry);
+            setGaps(geometries.length ? { kind: 'ready', geometries } : { kind: 'empty' });
+          }
+        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        const reason = error instanceof LensError ? `${error.code}: ${error.message}` : String(error);
+        setGaps({ kind: 'unavailable', reason });
+      }
+    };
+    void load();
+    return () => controller.abort();
+  }, [client, rawResult]);
 
   const submitRequest = useCallback(
     (title: string) => {
@@ -214,7 +299,7 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
 
   const showCells = useCallback(async () => {
     const result = shownResult;
-    const artifact = result?.artifacts.find((item) => item.role === 'cells') ?? null;
+    const artifact = result?.artifacts.find((item) => item.role === 'cci_cell_layer' || item.role === 'cells') ?? null;
     if (!result || !artifact) {
       setCells({ kind: 'unavailable', reason: 'Сервис не приложил к этому результату слой ячеек.' });
       return;
@@ -274,7 +359,7 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
   );
 
   const downloadReport = useCallback(() => {
-    const result = shownResult;
+    const result = rawResult;
     if (!result) return;
     const html = renderReportHtml(result);
     const blob = new Blob([html], { type: 'text/html' });
@@ -284,7 +369,7 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
     link.download = `carbon-lens-${result.identity.input_hash.slice(2, 14)}.html`;
     link.click();
     URL.revokeObjectURL(url);
-  }, [shownResult]);
+  }, [rawResult]);
 
   return {
     catalog,
@@ -314,6 +399,7 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
     selectedCellId,
     setSelectedCellId,
     cells,
+    gaps,
     showCells,
     submitRequest,
     runAnalysis,

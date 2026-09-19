@@ -87,6 +87,7 @@ function MapArea({ workspace }: { workspace: WorkspaceState }) {
       geometry={workspace.shownResult?.request.geometry ?? workspace.draft.geometry}
       result={workspace.shownResult}
       cells={workspace.cells}
+      gaps={workspace.gaps}
       selectedZoneId={workspace.selectedZoneId}
       onSelectZone={workspace.setSelectedZoneId}
       selectedCellId={workspace.selectedCellId}

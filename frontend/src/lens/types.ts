@@ -322,6 +322,10 @@ export interface Zone {
   artifact_ref: string | null;
   /** Outline of the zone when the service ships one; otherwise the map anchors a labelled marker. */
   geometry?: Geometry | null;
+  severity?: string | null;
+  detection_resolution_m?: number | null;
+  observed_between?: Record<string, unknown> | null;
+  evidence_events?: unknown[];
 }
 
 export interface Scene {

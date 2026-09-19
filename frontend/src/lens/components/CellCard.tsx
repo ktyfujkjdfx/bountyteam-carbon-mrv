@@ -14,7 +14,7 @@ export function CellCard({ cell, result }: { cell: CellFeature; result: Analysis
   const start = first ? cell.carbon[first] : null;
   const end = last ? cell.carbon[last] : null;
   const delta = start === null || start === undefined || end === null || end === undefined ? null : end - start;
-  const artifact = result.artifacts.find((item) => item.role === 'cells') ?? null;
+  const artifact = result.artifacts.find((item) => item.role === 'cci_cell_layer' || item.role === 'cells') ?? null;
 
   return (
     <article className="lens-zone-card" data-testid="lens-cell-card">

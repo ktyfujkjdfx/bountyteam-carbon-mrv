@@ -98,6 +98,22 @@ export function WhatHappened({
                   <dd className="mono">{num(selected.contribution_e_tco2e, 1, 'т CO₂-экв.')}</dd>
                 </div>
                 <div className="field">
+                  <dt>Разрешение обнаружения</dt>
+                  <dd className="mono">{num(selected.detection_resolution_m, 0, 'м')}</dd>
+                </div>
+                <div className="field">
+                  <dt>Интервал наблюдений</dt>
+                  <dd className="mono">
+                    {selected.observed_between
+                      ? `${String(selected.observed_between.start ?? 'нет данных')} … ${String(selected.observed_between.end ?? 'нет данных')}`
+                      : 'нет данных'}
+                  </dd>
+                </div>
+                <div className="field">
+                  <dt>События доказательной базы</dt>
+                  <dd className="mono">{selected.evidence_events?.length ? selected.evidence_events.map(String).join(', ') : 'не установлены'}</dd>
+                </div>
+                <div className="field">
                   <dt>Основание</dt>
                   <dd>
                     {selected.cause_reason}

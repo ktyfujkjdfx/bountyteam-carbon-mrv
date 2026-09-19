@@ -23,10 +23,19 @@ export type CellsState =
   | { kind: 'unavailable'; reason: string }
   | { kind: 'integrity-failed'; reason: string };
 
+export type GapLayerState =
+  | { kind: 'hidden' }
+  | { kind: 'loading' }
+  | { kind: 'ready'; geometries: Geometry[] }
+  | { kind: 'empty' }
+  | { kind: 'unavailable'; reason: string }
+  | { kind: 'integrity-failed'; reason: string };
+
 interface Props {
   geometry: Geometry | null;
   result: AnalysisResult | null;
   cells: CellsState;
+  gaps: GapLayerState;
   selectedZoneId: string | null;
   onSelectZone: (zoneId: string) => void;
   selectedCellId: string | null;
@@ -54,7 +63,7 @@ function anchorFor(geometry: Geometry, index: number, total: number): [number, n
  * canvas with the reason, and an artifact whose hash does not match is refused rather than trusted.
  */
 export function LensMapView(props: Props) {
-  const { geometry, result, cells, selectedZoneId, onSelectZone, selectedCellId, onSelectCell, drawing, onDrawn } = props;
+  const { geometry, result, cells, gaps, selectedZoneId, onSelectZone, selectedCellId, onSelectCell, drawing, onDrawn } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const readoutRef = useRef<HTMLDivElement | null>(null);
@@ -141,6 +150,15 @@ export function LensMapView(props: Props) {
       drawn.forEach((item) => item.remove());
     };
   }, [ready, geometry, result, selectedZoneId, onSelectZone]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || gaps.kind !== 'ready') return;
+    const drawn = gaps.geometries.map((item) => L.polygon(toLatLngs(item), {
+      color: '#d8b46a', weight: 1.5, fillColor: '#d8b46a', fillOpacity: 0.16, dashArray: '5 4',
+    }).addTo(map).bindTooltip('Разрыв наблюдений: две даты нельзя сравнить', { direction: 'top' }));
+    return () => drawn.forEach((item) => item.remove());
+  }, [ready, gaps]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -249,6 +267,19 @@ export function LensMapView(props: Props) {
             <strong>Целостность слоя не подтверждена</strong>
             <span>{cells.reason}</span>
             <span className="muted small">Слой не отображается: показывать непроверенные данные как доверенные нельзя.</span>
+          </div>
+        )}
+        {gaps.kind === 'loading' && <p className="muted small">Разрывы наблюдений загружаются…</p>}
+        {gaps.kind === 'ready' && gaps.geometries.length > 0 && (
+          <p className="muted small" data-testid="lens-observation-gaps">
+            Жёлтый пунктир — участки, где две оптические даты нельзя сравнить. Это не доказательство отсутствия изменений.
+          </p>
+        )}
+        {(gaps.kind === 'unavailable' || gaps.kind === 'integrity-failed') && (
+          <div className={`state ${gaps.kind === 'integrity-failed' ? 'state-error' : 'state-warn'} compact`} role="status" data-testid="lens-gaps-unavailable">
+            <strong>Слой разрывов наблюдений недоступен</strong>
+            <span>{gaps.reason}</span>
+            <span className="muted small">Остальные слои карты и научный результат сохранены.</span>
           </div>
         )}
         {notAvailable.length > 0 && (

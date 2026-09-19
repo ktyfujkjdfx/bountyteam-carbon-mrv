@@ -88,17 +88,35 @@ describe('offline set answers in the shape of the service', () => {
     expect(result.areas.area_difference_ha).toBeLessThan(0);
   });
 
-  it('serves a cells artifact whose hash matches its bytes', async () => {
+  it('serves a CCI cell artifact whose hash matches its bytes', async () => {
     const client = fast();
     const accepted = await client.createAnalysis({ aoi_id: 'RU_TVER_01', year_start: 2019, year_end: 2024 }, { idempotencyKey: 'cells-1', scenario: 'FIRE_SUPPORTED_LOSS' });
     const analysis = await client.getAnalysis(accepted.analysis_id);
-    const artifact = analysis.result?.artifacts.find((item) => item.role === 'cells');
-    if (!artifact) throw new Error('the offline set must ship a cells artifact');
+    const artifact = analysis.result?.artifacts.find((item) => item.role === 'cci_cell_layer');
+    if (!artifact) throw new Error('the offline set must ship a CCI cell artifact');
     const payload = await client.getArtifact(artifact);
     expect(payload.integrity).toBe('VERIFIED');
     const collection = payload.data as { features: Array<{ properties: Record<string, unknown> }> };
     expect(collection.features.length).toBeGreaterThan(0);
     expect(collection.features[0]?.properties.cell_id).toBeTruthy();
+  });
+
+  it('links every published zone to a verified change-zones artifact', async () => {
+    const client = fast();
+    const accepted = await client.createAnalysis(
+      { aoi_id: 'RU_MORDOVIA_03', year_start: 2020, year_end: 2022 },
+      { idempotencyKey: 'zones-1', scenario: 'FIRE_SUPPORTED_LOSS' },
+    );
+    const analysis = await client.getAnalysis(accepted.analysis_id);
+    const result = analysis.result;
+    if (!result) throw new Error('the offline analysis must finish');
+    const artifact = result.artifacts.find((item) => item.role === 'change_zones');
+    if (!artifact) throw new Error('the offline set must ship a change-zones artifact');
+    expect(new Set(result.zones.map((zone) => zone.artifact_ref))).toEqual(new Set([artifact.artifact_id]));
+    const payload = await client.getArtifact(artifact);
+    expect(payload.integrity).toBe('VERIFIED');
+    const collection = payload.data as { features: Array<{ properties: Record<string, unknown> }> };
+    expect(collection.features.map((feature) => feature.properties.zone_id)).toEqual(result.zones.map((zone) => zone.zone_id));
   });
 
   it('stamps a passport that a reader can verify and a tampered copy fails', async () => {
