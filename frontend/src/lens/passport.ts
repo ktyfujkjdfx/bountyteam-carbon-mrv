@@ -142,7 +142,7 @@ table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:.4
 <p class="note">${escapeHtml(origin)}</p>
 <table><tbody>${rows.map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td><code>${escapeHtml(value)}</code></td></tr>`).join('')}</tbody></table>
 <h2>Источники</h2><ul>${result.sources.map((s) => `<li>${escapeHtml(s.product)} ${escapeHtml(s.version)} — ${escapeHtml(s.attribution)}</li>`).join('')}</ul>
-<h2>Ограничения</h2><ul>${result.limitations.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+<h2>Ограничения</h2><ul>${result.limitations.map((item) => `<li>${escapeHtml(item.message)} <code>${escapeHtml(item.code)}</code></li>`).join('')}</ul>
 <p>Хеш подтверждает неизменность содержания относительно зафиксированного значения. Он не удостоверяет истинность расчёта и не предотвращает повторную продажу.</p>
 </body></html>`;
 }

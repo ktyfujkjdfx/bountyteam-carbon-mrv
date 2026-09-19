@@ -83,7 +83,8 @@ describe('offline set answers in the shape of the service', () => {
 
   it('ships four coverages and a signed area difference', async () => {
     const result = await settle('UNAVAILABLE_COVERAGE');
-    expect(Object.keys(result.coverage).sort()).toEqual(['baseline_fraction', 'biomass_fraction', 'optical_paired_valid_fraction', 'uncertainty_fraction']);
+    expect(Object.keys(result.coverage).sort()).toEqual(['baseline_fraction', 'biomass_fraction', 'coverage_fraction_raw', 'optical_paired_valid_fraction', 'uncertainty_fraction']);
+    expect(result.coverage.coverage_fraction_raw.biomass).toBe(result.coverage.biomass_fraction);
     expect(result.areas.missing_ha).toBeGreaterThan(0);
     expect(result.areas.area_difference_ha).toBeLessThan(0);
   });

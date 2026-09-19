@@ -4,7 +4,9 @@ import { eventsForAoi } from '../data';
 import { SEVERITY_META } from '../status';
 import type { AnalysisResult } from '../types';
 
-const COVERAGE_ROWS: Array<{ key: keyof AnalysisResult['coverage']; label: string; note: string }> = [
+type PublicCoverageKey = 'biomass_fraction' | 'uncertainty_fraction' | 'baseline_fraction' | 'optical_paired_valid_fraction';
+
+const COVERAGE_ROWS: Array<{ key: PublicCoverageKey; label: string; note: string }> = [
   { key: 'biomass_fraction', label: 'Биомасса (CCI)', note: 'Доля площади с числовыми значениями запаса на обе даты. Без неё единицы не считаются.' },
   { key: 'uncertainty_fraction', label: 'Неопределённость (SD)', note: 'Доля площади, для которой известна погрешность оценки биомассы.' },
   { key: 'baseline_fraction', label: 'Базовая линия', note: 'Доля площади, покрытая таблицей базовой линии кейса.' },
@@ -86,6 +88,10 @@ export function riskCards(result: AnalysisResult): RiskCard[] {
 export function QualityRisks({ result }: { result: AnalysisResult }) {
   const cards = riskCards(result);
   const sensitivity = result.uncertainty.sensitivity ?? [];
+  const severityRank: Record<string, number> = { BLOCKING: 0, CRITICAL: 0, WARNING: 1, INFO: 2 };
+  const warnings = [...result.evidence.warnings].sort(
+    (left, right) => (severityRank[String(left.severity)] ?? 3) - (severityRank[String(right.severity)] ?? 3),
+  );
 
   return (
     <div className="lens-tab-body" data-testid="lens-quality-risks">
@@ -93,6 +99,10 @@ export function QualityRisks({ result }: { result: AnalysisResult }) {
       <div className="lens-coverage" data-testid="lens-coverage">
         {COVERAGE_ROWS.map((row) => {
           const value = result.coverage[row.key];
+          const rawKey = row.key === 'biomass_fraction' ? 'biomass'
+            : row.key === 'uncertainty_fraction' ? 'uncertainty'
+              : row.key === 'baseline_fraction' ? 'baseline' : 'optical_paired_valid';
+          const raw = result.coverage.coverage_fraction_raw?.[rawKey];
           return (
             <div key={row.key} className="lens-coverage-row" data-testid={`lens-coverage-${row.key}`}>
               <div className="lens-coverage-head">
@@ -103,6 +113,7 @@ export function QualityRisks({ result }: { result: AnalysisResult }) {
                 <span style={{ width: `${Math.max(0, Math.min(1, value ?? 0)) * 100}%` }} />
               </div>
               <p className="muted small">{row.note}</p>
+              {raw !== undefined && raw !== value && <p className="muted small mono">raw: {raw.toFixed(9)}</p>}
             </div>
           );
         })}
@@ -186,13 +197,13 @@ export function QualityRisks({ result }: { result: AnalysisResult }) {
       </p>
 
       <h3>Предупреждения расчёта</h3>
-      {result.evidence.warnings.length === 0 ? (
+      {warnings.length === 0 ? (
         <p className="muted small" data-testid="lens-warnings-empty">
           Предупреждений нет.
         </p>
       ) : (
         <ul className="limitations small" data-testid="lens-warnings">
-          {result.evidence.warnings.map((warning) => (
+          {warnings.map((warning) => (
             <li key={`${warning.code}-${warning.message}`} data-testid={`lens-warning-${warning.code}`}>
               <StatusBadge meta={metaFor(SEVERITY_META, warning.severity)} />{' '}
               <span>{warning.message}</span>
@@ -219,7 +230,7 @@ export function QualityRisks({ result }: { result: AnalysisResult }) {
       <h3>Ограничения</h3>
       <ul className="limitations small" data-testid="lens-limitations">
         {result.limitations.map((item) => (
-          <li key={item}>{item}</li>
+          <li key={`${item.code}-${item.message}`}><span>{item.message}</span><div className="mono small muted">{item.code}</div></li>
         ))}
       </ul>
     </div>

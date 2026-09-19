@@ -73,6 +73,7 @@ export function asArray(value: unknown): unknown[] {
  * own, and the UI says so rather than inventing one.
  */
 export function normalizeWarnings(value: unknown): EvidenceWarning[] {
+  const rank: Record<string, number> = { BLOCKING: 0, CRITICAL: 0, WARNING: 1, INFO: 2 };
   return asArray(value).map((entry) => {
     if (typeof entry === 'string') {
       return { code: 'UNSTRUCTURED_WARNING', severity: 'WARNING', message: entry, details: {} };
@@ -80,9 +81,20 @@ export function normalizeWarnings(value: unknown): EvidenceWarning[] {
     const record = asRecord(entry);
     return {
       code: typeof record.code === 'string' ? record.code : 'UNSTRUCTURED_WARNING',
-      severity: typeof record.severity === 'string' ? record.severity : 'WARNING',
+      severity: record.severity === 'CRITICAL' ? 'BLOCKING' : typeof record.severity === 'string' ? record.severity : 'WARNING',
       message: typeof record.message === 'string' ? record.message : JSON.stringify(record),
       details: asRecord(record.details),
+    };
+  }).sort((left, right) => (rank[String(left.severity)] ?? 3) - (rank[String(right.severity)] ?? 3));
+}
+
+function normalizeLimitations(value: unknown): Array<{ code: string; message: string }> {
+  return asArray(value).map((entry, index) => {
+    if (typeof entry === 'string') return { code: `UNSTRUCTURED_LIMITATION_${index + 1}`, message: entry };
+    const record = asRecord(entry);
+    return {
+      code: typeof record.code === 'string' ? record.code : `UNSTRUCTURED_LIMITATION_${index + 1}`,
+      message: typeof record.message === 'string' ? record.message : JSON.stringify(record),
     };
   });
 }
@@ -101,7 +113,7 @@ export function normalizeResult(payload: unknown): AnalysisResult {
     zones: asArray(record.zones).map((zone) => ({ ...asRecord(zone), evidence_refs: asArray(asRecord(zone).evidence_refs) })),
     sources: asArray(record.sources),
     artifacts: asArray(record.artifacts),
-    limitations: asArray(record.limitations).filter((item): item is string => typeof item === 'string'),
+    limitations: normalizeLimitations(record.limitations),
     notes: asArray(record.notes).filter((item): item is string => typeof item === 'string'),
     evidence: {
       ...evidence,

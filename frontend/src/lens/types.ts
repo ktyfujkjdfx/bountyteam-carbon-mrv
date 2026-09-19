@@ -178,6 +178,12 @@ export interface Coverage {
   uncertainty_fraction: number;
   baseline_fraction: number;
   optical_paired_valid_fraction: number;
+  coverage_fraction_raw: {
+    biomass: number;
+    uncertainty: number;
+    baseline: number;
+    optical_paired_valid: number;
+  };
 }
 
 export interface TimelinePoint {
@@ -345,6 +351,11 @@ export interface EvidenceWarning {
   details: Record<string, unknown>;
 }
 
+export interface Limitation {
+  code: string;
+  message: string;
+}
+
 export interface Evidence {
   status: EvidenceStatus;
   optical_paired_valid_fraction: number | null;
@@ -413,7 +424,7 @@ export interface AnalysisResult {
   passport: Passport;
   sources: Source[];
   artifacts: Artifact[];
-  limitations: string[];
+  limitations: Limitation[];
   notes: string[];
 }
 

@@ -128,6 +128,16 @@ describe('payload normalisation', () => {
     expect(warnings[0]).toMatchObject({ code: 'LOW_OPTICS', severity: 'BLOCKING', details: { fraction: 0.1 } });
     expect(warnings[1]?.code).toBe('UNSTRUCTURED_WARNING');
   });
+
+  it('normalises legacy critical severity and sorts blocking findings first', () => {
+    const warnings = normalizeWarnings([
+      { code: 'INFO_FIRST', severity: 'INFO', message: 'info', details: {} },
+      { code: 'OLD_CRITICAL', severity: 'CRITICAL', message: 'critical', details: {} },
+      { code: 'WARN', severity: 'WARNING', message: 'warning', details: {} },
+    ]);
+    expect(warnings.map((item) => item.code)).toEqual(['OLD_CRITICAL', 'WARN', 'INFO_FIRST']);
+    expect(warnings[0]?.severity).toBe('BLOCKING');
+  });
 });
 
 describe('mode selection', () => {

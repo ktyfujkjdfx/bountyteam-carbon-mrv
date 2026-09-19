@@ -183,7 +183,7 @@ export interface ScenarioNumbers {
   units: Partial<Units>;
   uncertainty?: Partial<Uncertainty>;
   baseline?: Partial<Baseline>;
-  coverage: Coverage;
+  coverage: Omit<Coverage, 'coverage_fraction_raw'>;
   stockSeries: Array<{ year: number; carbon: number | null; baseline: number | null; observed: boolean }>;
   zones: Array<Omit<Zone, 'geometry'> & { geometryShare?: number }>;
   warnings: EvidenceWarning[];
@@ -994,7 +994,15 @@ export function buildFixtureResult(context: FixtureContext, extras: { cellsArtif
     calculation_status: numbers.calculation_status,
     evidence_status: numbers.evidence_status,
     areas,
-    coverage: numbers.coverage,
+    coverage: {
+      ...numbers.coverage,
+      coverage_fraction_raw: {
+        biomass: numbers.coverage.biomass_fraction,
+        uncertainty: numbers.coverage.uncertainty_fraction,
+        baseline: numbers.coverage.baseline_fraction,
+        optical_paired_valid: numbers.coverage.optical_paired_valid_fraction,
+      },
+    },
     timeline,
     change,
     uncertainty,
@@ -1017,7 +1025,7 @@ export function buildFixtureResult(context: FixtureContext, extras: { cellsArtif
       'Базовая линия задана сценарными правилами кейса по истории 2015–2019; она не доказывает дополнительность.',
       'Сценарная стоимость использует заданные кейсом цены. Это не рыночная котировка и не гарантированная выручка.',
       ...numbers.limitations,
-    ],
+    ].map((message, index) => ({ code: `FIXTURE_LIMITATION_${index + 1}`, message })),
     notes: numbers.notes,
   };
 }
