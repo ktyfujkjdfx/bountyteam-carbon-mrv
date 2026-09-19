@@ -6,7 +6,7 @@ polygon. Nothing here computes a baseline, an uncertainty interval, potential
 units or an investment conclusion - those belong to other owners and are
 deliberately absent.
 """
-from rs.case2 import biomass, optical
+from rs.case2 import biomass, notices, optical
 from rs.case2.catalog import Dataset, DatasetError, sha256_file
 from rs.case2.geometry import geodesic_area_ha, validate, validate_years
 from rs.case2.models import (
@@ -83,6 +83,7 @@ def analyse(geometry, year_start, year_end, *, dataset=None, include_optical=Tru
         biomass_sd_fraction=sd_ha / request_area_ha,
         optical_paired_fraction=optical_ha / request_area_ha,
         missing_ha=missing_ha,
+        area_difference_ha=biomass_ha - request_area_ha,
         complete=missing_ha <= COVERAGE_TOLERANCE_HA,
     )
 
@@ -113,6 +114,8 @@ def analyse(geometry, year_start, year_end, *, dataset=None, include_optical=Tru
         },
         limitations=_limitations(coverage, paired, timeline_years, cells,
                                  change_years, include_optical, change_evidence),
+        warnings=_warnings(coverage, paired, cells, change_years, include_optical,
+                           change_evidence, scenes, weight_sum, parents),
         change_evidence=change_evidence,
         raw_change=raw_change,
     )
@@ -159,8 +162,9 @@ def _optical(data, request, parents, change_years, biomass_ha, include_optical):
             scenes.append(quality)
             masks[quality.scene_key] = (quality.year, usable)
             pixels_in_request = max(pixels_in_request, quality.pixels_in_request)
-            for key in ("reflectance_path", "scl_path"):
-                sources.append(_source(data, row[key], f"sentinel2:{key}"))
+            for key, role in (("reflectance_path", "sentinel2_reflectance"),
+                              ("scl_path", "sentinel2_scl")):
+                sources.append(_source(data, row[key], role))
     paired = optical.best_pair(
         masks, change_years[0], change_years[1], pixels_in_request)
     # Optical coverage is expressed on the same hectare scale as the other two
@@ -194,13 +198,14 @@ def _change_evidence(data, request, parents, change_years, scenes, cells,
     raw["contribution"] = contribution
     raw["zones_geojson"] = zones_module_geojson(raw, contribution)
 
-    sources = [_source(data, f"{parents[0]}/GFC_2025_v1_13.tif", "gfc")]
+    sources = [_source(data, f"{parents[0]}/GFC_2025_v1_13.tif", "gfc_lossyear")]
     if raw["fire"]["available"]:
         for detection in raw["fire"]["detections"]:
             stem = detection["granule"]
             for suffix in ("Burn_Date", "QA", "Burn_Date_Uncertainty"):
                 sources.append(_source(
-                    data, f"{parents[0]}/MODIS/{stem}_{suffix}.tif", "modis_burn"))
+                    data, f"{parents[0]}/MODIS/{stem}_{suffix}.tif",
+                    "modis_burn_date"))
 
     evidence = {
         "available": True,
@@ -260,11 +265,17 @@ def _sources(data, parents, years):
             files.append(_source(
                 data, f"{aoi_id}/CCI_Biomass_{year}.tif", "cci_biomass"))
     for name in ("areas.geojson", "areas.csv", "scenes.csv", "scene_metadata.json"):
-        files.append(_source(data, name, "table"))
+        files.append(_source(data, name, "case_table"))
     return files
 
 
 def _source(data, relative, role):
+    from rs.case2.artifacts import SOURCE_ROLES
+
+    if role not in SOURCE_ROLES:
+        raise DatasetError(
+            f"unknown source role {role!r}; the agreed vocabulary is "
+            f"{', '.join(SOURCE_ROLES)}")
     path = data.path(relative)
     return SourceFile(
         relative_path=data.relative(path),
@@ -272,6 +283,156 @@ def _source(data, relative, role):
         size_bytes=path.stat().st_size,
         role=role,
     )
+
+
+def _warnings(coverage, paired, cells, change_years, include_optical,
+              change_evidence, scenes, weight_sum, parents):
+    """Every caution the run raised, as `{code, severity, message, details}`.
+
+    This is the machine-readable twin of `_limitations`. Nothing is summarised
+    away: a rejected scene, a mixed radiometric pair and an absent burn product
+    each keep their own code and their own measurement, because a consumer that
+    collapses them into one quality number cannot tell a cloudy request from a
+    comparison that must not be read at all.
+    """
+    items = []
+    if not coverage.complete:
+        items.append(notices.warning(
+            notices.INCOMPLETE_COVERAGE,
+            f"{coverage.missing_ha:.4f} ha of the request has no biomass map; "
+            f"potential units must not be computed for a partial request",
+            missing_ha=coverage.missing_ha,
+            requested_ha=coverage.requested_ha,
+            calculated_ha=coverage.calculated_ha,
+            biomass_fraction_raw=coverage.biomass_fraction,
+            tolerance_ha=COVERAGE_TOLERANCE_HA))
+    elif coverage.area_difference_ha > 0:
+        items.append(notices.warning(
+            notices.CELL_WEIGHT_SUM_DIFFERS,
+            f"the summed cell weights exceed the polygon area by "
+            f"{coverage.area_difference_ha:.9f} ha; geodesic area is not "
+            f"additive over a partition, so the raw coverage fraction is "
+            f"slightly above 1 and the published one is clamped",
+            area_difference_ha=coverage.area_difference_ha,
+            biomass_fraction_raw=coverage.biomass_fraction,
+            cell_weight_sum_ha=weight_sum))
+
+    valid = [cell for cell in cells if cell.valid]
+    invalid = len(cells) - len(valid)
+    if invalid:
+        items.append(notices.warning(
+            notices.INVALID_CELLS,
+            f"{invalid} of {len(cells)} cells have no biomass value in both "
+            f"requested years and carry null values with valid=false; they are "
+            f"excluded from the stock, not counted as zero",
+            invalid_cells=invalid, total_cells=len(cells)))
+    zero_cells = sum(1 for cell in valid
+                     if any(cell.agb[year] == 0 for year in change_years))
+    if zero_cells:
+        items.append(notices.warning(
+            notices.ZERO_AGB_CELLS,
+            f"{zero_cells} of {len(valid)} cells carry a published AGB of zero "
+            f"on at least one date; zero is a value in this product and is "
+            f"summed as zero, not dropped",
+            zero_cells=zero_cells, valid_cells=len(valid)))
+
+    items.append(notices.warning(
+        notices.MODEL_YEARS_NOT_OBSERVATIONS,
+        "CCI years are annual model estimates, not observations on a date; the "
+        "Sentinel acquisition dates are reported separately",
+        year_start=change_years[0], year_end=change_years[1]))
+
+    if not include_optical:
+        items.append(notices.warning(
+            notices.OPTICAL_DISABLED,
+            "optical reading was switched off for this run; optical coverage is "
+            "absent rather than zero, and the biomass result is unaffected"))
+    elif paired is None:
+        items.append(notices.warning(
+            notices.NO_SCENE_PAIR,
+            "no Sentinel-2 pair spans the requested years; optical coverage is "
+            "reported as zero, which says nothing about biomass coverage",
+            scenes_read=len(scenes)))
+    elif paired.paired_usable_fraction < 0.5:
+        items.append(notices.warning(
+            notices.LOW_PAIRED_COVERAGE,
+            f"paired-valid optical coverage is only "
+            f"{paired.paired_usable_fraction:.1%}; change interpretation from "
+            f"imagery is limited on this request",
+            paired_usable_fraction=paired.paired_usable_fraction,
+            before_scene_key=paired.before_scene_key,
+            after_scene_key=paired.after_scene_key))
+
+    if len(parents) > 1:
+        items.append(notices.warning(
+            notices.ZONES_FIRST_PARENT_ONLY,
+            f"the request spans {len(parents)} source areas; the stock covers "
+            f"every one of them, but change zones are produced for "
+            f"{parents[0]} only, because two grids and two scene pairs need a "
+            f"partition rule that is not defined",
+            parents=list(parents), zones_parent=parents[0]))
+
+    items.extend(_change_warnings(change_evidence))
+    return tuple(items)
+
+
+def _change_warnings(change_evidence):
+    """Cautions that come out of the change evidence, or its absence."""
+    if change_evidence is None:
+        return ()
+    if not change_evidence.get("available"):
+        return (notices.warning(
+            notices.CHANGE_EVIDENCE_UNAVAILABLE,
+            f"change zones were not produced: {change_evidence.get('reason')}",
+            reason=change_evidence.get("reason")),)
+
+    items = []
+    selection = change_evidence["scene_selection"]
+    for rejected in selection.get("rejected", ()):
+        items.append(notices.warning(
+            notices.SCENE_REJECTED,
+            f"scene {rejected['scene_key']} was not used: {rejected['reason']}",
+            scene_key=rejected["scene_key"], reason=rejected["reason"]))
+    if selection.get("seasonal_warning"):
+        items.append(notices.warning(
+            notices.SEASONAL_GAP, selection["seasonal_warning"],
+            seasonal_gap_days=selection.get("seasonal_gap_days")))
+    if selection.get("extent_warning"):
+        items.append(notices.warning(
+            notices.CHANGE_EXTENT_UNIFORM, selection["extent_warning"]))
+    note = selection.get("radiometric_note")
+    if note:
+        code = (notices.RADIOMETRIC_BASELINE_DIFFERS
+                if note["same_offset_convention"]
+                else notices.RADIOMETRIC_OFFSET_MIXED)
+        items.append(notices.warning(code, note["warning"], **note))
+
+    fire = change_evidence["fire"]
+    if not fire["available"]:
+        items.append(notices.warning(
+            notices.FIRE_PRODUCT_ABSENT, fire["reason"]))
+
+    zones = change_evidence["zones"]
+    disturbances = [zone for zone in zones if zone["fact"] != "RECOVERY_INDICATION"]
+    unknown = [zone for zone in disturbances if zone["cause"] == "UNKNOWN"]
+    if unknown:
+        items.append(notices.warning(
+            notices.ZONE_CAUSE_UNKNOWN,
+            f"{len(unknown)} of {len(disturbances)} disturbance zones have no "
+            f"established cause and are reported as UNKNOWN",
+            unknown_zones=len(unknown), disturbance_zones=len(disturbances)))
+    recovery = [zone for zone in zones if zone["fact"] == "RECOVERY_INDICATION"]
+    if recovery:
+        items.append(notices.warning(
+            notices.RECOVERY_NOT_RECOVERED_CARBON,
+            "recovery zones are a spectral indication of regrowth, not evidence "
+            "that carbon has been recovered",
+            recovery_zones=len(recovery)))
+    if zones:
+        items.append(notices.warning(
+            notices.ZONE_ATTRIBUTION_RESOLUTION, change_evidence["method_note"],
+            detection_resolution_m=20, attribution_source="ESA CCI Biomass v7.0"))
+    return tuple(items)
 
 
 def _limitations(coverage, paired, timeline_years, cells, change_years,

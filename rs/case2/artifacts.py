@@ -24,9 +24,57 @@ MEDIA_PNG = "image/png"
 MEDIA_GEOJSON = "application/geo+json"
 MEDIA_JSON = "application/json"
 
+# Roles a consumer may key on. One vocabulary covers both the files a run reads
+# and the files it writes, so `cci_biomass` means the same product whether it
+# appears as a manifest source or as the provenance of a written layer. A role
+# outside this set is a typo, and a typo in a role is a file a consumer will
+# silently fail to find.
+SOURCE_ROLES = (
+    "cci_biomass",
+    "sentinel2_reflectance",
+    "sentinel2_scl",
+    "gfc_lossyear",
+    "modis_burn_date",
+    "case_table",
+)
+ARTIFACT_ROLES = (
+    "cci_cell_layer",
+    "change_zones",
+    "observation_gap_zones",
+    "optical_preview_before",
+    "optical_preview_after",
+    "dnbr_preview",
+    "paired_valid_mask",
+    "zone_mask",
+)
+ROLES = frozenset(SOURCE_ROLES + ARTIFACT_ROLES)
+
+
+class ArtifactError(ValueError):
+    """An artifact record cannot be published as written."""
+
 
 def _sha256(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def index_by_role_and_sha256(records):
+    """Map `(role, sha256)` to the record, refusing an ambiguous pair.
+
+    A consumer matches a stored file back to the run it came from by what the
+    file *is* and what it *contains*, never by a path or an id that a store is
+    free to rewrite. That only works while the pair is unique, so the check
+    lives here rather than in the consumer's hope.
+    """
+    index = {}
+    for item in records:
+        key = (item["role"], item["sha256"])
+        if key in index:
+            raise ArtifactError(
+                f"two artifacts share role {item['role']} and the same sha256; "
+                f"a consumer cannot tell {index[key]['id']} from {item['id']}")
+        index[key] = item
+    return index
 
 
 def wgs84_bounds(transform, width, height, crs):
@@ -45,6 +93,10 @@ def wgs84_bounds(transform, width, height, crs):
 def record(artifact_id, *, role, media_type, data, relative_path, grid=None,
            unit=None, provenance=None, bounds=None):
     """One artifact entry. `data` is the exact bytes that were written."""
+    if role not in ROLES:
+        raise ArtifactError(
+            f"unknown artifact role {role!r}; the agreed vocabulary is "
+            f"{', '.join(sorted(ROLES))}")
     entry = {
         "id": artifact_id,
         "role": role,

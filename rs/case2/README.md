@@ -79,7 +79,22 @@ finiteness, never by sign.
 **Coverage is three numbers, not one.** Biomass, biomass SD and paired-valid
 optical coverage answer different questions. A clouded scene says nothing about
 whether the biomass map covers the plot, and merging them into a single quality
-score would hide that.
+score would hide that. The fourth coverage the contract names - baseline - is
+computed by the consumer that owns the baseline, not here.
+
+**Every fraction is published twice.** `fraction` is clamped to `[0, 1]` and is
+what a display may use; `fraction_raw` is the measurement. They differ on a
+fully covered request: geodesic area is not additive over a partition, so the
+summed cell weights exceed the polygon area by about 2e-4 ha and the raw
+fraction reads 1.000000113. `missing_ha` is the clamped shortfall a consumer
+acts on; `area_difference_ha` is the signed `calculated_ha - requested_ha` that
+explains it. Four numbers, because collapsing them to one loses either the
+honesty or the usability.
+
+**A missing value is null, never NaN and never zero.** A cell the biomass map
+does not reach keeps its geometry and its weight, carries `valid: false` and
+null AGB. NaN is not JSON, and zero is a published biomass value in this
+product - writing either would be a measurement the map never made.
 
 ## Change zones
 
@@ -153,7 +168,16 @@ produce data that does not match the reference.
 `analysis.json` carries the request, the stock change, a 2015-2024 timeline on
 the requested period's support, the three coverages, per-scene optical quality,
 the change evidence with its zones and reconciliation, the artifact records,
-and the limitations that apply to this particular result.
+and two separate accounts of what constrains the result.
+
+`limitations[]` is prose for a reader. `warnings[]` is the machine-readable
+twin: every caution carries a stable `code`, a `severity` fixed by that code,
+a `message` and a `details` object holding the measurement it was raised from.
+Nothing is summarised away - a rejected scene, a mixed radiometric pair and an
+absent burn product each keep their own code, because a consumer that collapses
+them into one quality number cannot tell a cloudy request from a comparison
+that must not be read as change at all. That last case is the only `CRITICAL`
+severity the module defines.
 
 `zones.geojson`, `before.png`, `after.png`, `dnbr_preview.png`,
 `paired_valid_mask.png` and `zone_mask.png` are the change artifacts. Each is

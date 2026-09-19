@@ -5,17 +5,34 @@ G0 fixes the shared v2 contract, this file changes and the raster core does not.
 Floats are rounded here, once, so the same request produces the same bytes on
 every platform and the content hash means something.
 """
+import math
 from dataclasses import asdict
 
+from rs.case2.models import clamp_fraction
 from rs.determinism import COORDINATE_DECIMALS
 
 VALUE_DECIMALS = 9
+
+
+class PayloadError(ValueError):
+    """A value cannot be serialised as strict JSON and must not be smuggled out.
+
+    NaN and Infinity are accepted by Python's json module and rejected by every
+    strict reader, including the one on the other side of this contract. A
+    non-finite number that reaches here is a defect upstream, so it stops the
+    run instead of travelling as the literal `NaN` in a file a consumer will
+    fail to parse - or, worse, parse as a number.
+    """
 
 
 def _round(value, decimals=VALUE_DECIMALS):
     if isinstance(value, bool) or value is None:
         return value
     if isinstance(value, float):
+        if not math.isfinite(value):
+            raise PayloadError(
+                f"non-finite value {value!r} in the payload; strict JSON has no "
+                f"NaN or Infinity, and a missing measurement must be null")
         rounded = round(value, decimals)
         # Keep zero unsigned so -0.0 and 0.0 cannot hash differently.
         return rounded + 0.0
@@ -26,9 +43,42 @@ def _round(value, decimals=VALUE_DECIMALS):
     return value
 
 
+def _nullable(value, decimals=VALUE_DECIMALS):
+    """A measurement that may be absent: non-finite becomes null, not NaN.
+
+    Used only where the contract declares the field nullable - a cell the map
+    does not reach. Everywhere else a non-finite number is an error, because
+    silently nulling a required figure hides the defect that produced it.
+    """
+    if value is None:
+        return None
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return _round(value, decimals)
+
+
 def _years(mapping):
-    """Year-keyed mapping with string keys, as JSON requires."""
-    return {str(year): _round(value) for year, value in sorted(mapping.items())}
+    """Year-keyed mapping with string keys, as JSON requires.
+
+    Values are nullable: a cell the biomass map does not reach carries null and
+    `valid=false`, never a NaN and never a zero, because zero is a published
+    biomass value in this product and would be summed as one.
+    """
+    return {str(year): _nullable(value) for year, value in sorted(mapping.items())}
+
+
+def _axis(area_ha, fraction):
+    """One coverage axis: the area, the published fraction and the raw one.
+
+    Both fractions are kept. The clamped one is what a consumer may display;
+    the raw one is the measurement, and it legitimately exceeds 1 by about
+    1e-7 because geodesic area is not additive over a partition.
+    """
+    return {
+        "area_ha": _round(area_ha),
+        "fraction": _round(clamp_fraction(fraction)),
+        "fraction_raw": _round(fraction),
+    }
 
 
 def grid_payload(grid):
@@ -80,29 +130,43 @@ def analysis_payload(analysis):
             "requested_ha": _round(coverage.requested_ha),
             "calculated_ha": _round(coverage.calculated_ha),
             "missing_ha": _round(coverage.missing_ha),
+            "area_difference_ha": _round(coverage.area_difference_ha),
             "complete": coverage.complete,
-            "biomass": {
-                "area_ha": _round(coverage.biomass_ha),
-                "fraction": _round(coverage.biomass_fraction),
-            },
-            "biomass_sd": {
-                "area_ha": _round(coverage.biomass_sd_ha),
-                "fraction": _round(coverage.biomass_sd_fraction),
-            },
-            "optical_paired": {
-                "area_ha": _round(coverage.optical_paired_ha),
-                "fraction": _round(coverage.optical_paired_fraction),
-            },
+            # The same number the `cells` block reports, repeated here because
+            # this is where a consumer assembles its area view and the summed
+            # weights are what make the raw fraction exceed 1.
+            "cell_weight_sum_ha": _round(analysis.cell_weight_sum_ha),
+            "biomass": _axis(coverage.biomass_ha, coverage.biomass_fraction),
+            "biomass_sd": _axis(coverage.biomass_sd_ha,
+                                coverage.biomass_sd_fraction),
+            "optical_paired": _axis(coverage.optical_paired_ha,
+                                    coverage.optical_paired_fraction),
             "note": (
                 "the three coverages answer different questions and are never "
                 "combined; cloud in an optical scene does not reduce biomass coverage"
+            ),
+            "area_note": (
+                "missing_ha is the clamped shortfall a consumer acts on; "
+                "area_difference_ha is the signed technical difference "
+                "calculated_ha - requested_ha and is positive when the summed "
+                "cell weights exceed the polygon area"
+            ),
+            "fraction_note": (
+                "fraction is clamped to [0, 1] for display; fraction_raw is the "
+                "measurement and may exceed 1 by about 1e-7"
             ),
         },
         "cells": {
             "count": len(analysis.cells),
             "valid_count": sum(1 for cell in analysis.cells if cell.valid),
+            "invalid_count": sum(1 for cell in analysis.cells if not cell.valid),
             "weight_sum_ha": _round(analysis.cell_weight_sum_ha),
             "artifact": "cells.geojson",
+            "note": (
+                "an invalid cell keeps its geometry and weight and carries null "
+                "AGB and AGB_SD; null is not zero, and zero is a published "
+                "biomass value in this product"
+            ),
         },
         "optical": {
             "scenes": [
@@ -145,6 +209,7 @@ def analysis_payload(analysis):
                   for name, grid in sorted(analysis.grids.items())},
         "parameters": _round(dict(sorted(analysis.parameters.items()))),
         "limitations": list(analysis.limitations),
+        "warnings": _round([dict(item) for item in analysis.warnings]),
     }
 
 
@@ -191,6 +256,33 @@ def cells_payload(analysis):
         ),
         "features": features,
     }
+
+
+def ensure_strict(value, path="$"):
+    """Raise unless every number in `value` is finite and every key a string.
+
+    `_round` already refuses a non-finite number as it serialises, but records
+    written after that - the artifact rows, for instance - never pass through
+    it. This is the last gate before bytes are hashed, so what a consumer
+    receives is strict JSON by construction rather than by inspection.
+    """
+    if isinstance(value, bool) or value is None or isinstance(value, (str, int)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise PayloadError(f"non-finite value at {path}: {value!r}")
+        return value
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise PayloadError(f"non-string key at {path}: {key!r}")
+            ensure_strict(item, f"{path}.{key}")
+        return value
+    if isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            ensure_strict(item, f"{path}[{index}]")
+        return value
+    raise PayloadError(f"unserialisable type at {path}: {type(value).__name__}")
 
 
 def as_dict(analysis):

@@ -68,6 +68,11 @@ def build(analysis, payload, *, generated_at=None, repo_root=REPO_ROOT):
             "sha256 over the canonical JSON of analysis.json; it excludes the run "
             "time, so an identical request reproduces an identical hash"
         ),
+        # Repeated from the payload so a stored file can be matched back to this
+        # manifest by role and checksum without reading the result document.
+        # The hash above is taken over the payload, which already carries these
+        # rows, so copying them here cannot change it.
+        "artifacts": payload.get("artifacts", []),
     }
     if generated_at is not None:
         manifest["generated_at"] = generated_at

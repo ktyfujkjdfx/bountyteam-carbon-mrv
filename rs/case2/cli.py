@@ -85,7 +85,11 @@ def run(argv=None):
     if analysis.raw_change is not None:
         records.extend(artifacts.write_change_artifacts(
             out, prefix, analysis.raw_change, analysis.raw_change["grid"], out))
+    # A consumer matches a stored file back to this run by role and checksum,
+    # so the pair has to be unique before the bytes leave.
+    artifacts.index_by_role_and_sha256(records)
     payload["artifacts"] = records
+    payload_module.ensure_strict(payload)
 
     manifest = manifest_module.build(analysis, payload)
     write_json(out / OUTPUT_ANALYSIS, payload)

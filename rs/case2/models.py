@@ -65,12 +65,27 @@ class StockYear:
     covered_ha: float
 
 
+def clamp_fraction(value):
+    """A fraction as a consumer may display it, held inside [0, 1].
+
+    The raw value is kept beside it everywhere this is used. Geodesic area is
+    not additive over a partition, so the sum of cell weights exceeds the
+    polygon area in the seventh significant digit and a raw fraction of
+    1.000000113 is arithmetic rather than more-than-complete coverage. Clamping
+    the published number keeps a progress bar honest; discarding the raw one
+    would hide the arithmetic, so both travel together.
+    """
+    return min(1.0, max(0.0, value))
+
+
 @dataclass(frozen=True)
 class Coverage:
-    """Coverage of the request, as three independent fractions.
+    """Coverage of the request, as independent fractions.
 
     They answer different questions and are never merged into one quality
-    number: a cloudy optical scene says nothing about biomass coverage.
+    number: a cloudy optical scene says nothing about biomass coverage. Every
+    fraction here is raw; clamping happens once, at the serialisation boundary,
+    and never in place.
     """
 
     requested_ha: float
@@ -82,6 +97,10 @@ class Coverage:
     biomass_sd_fraction: float
     optical_paired_fraction: float
     missing_ha: float
+    # Signed: positive when the summed cell weights exceed the polygon area.
+    # `missing_ha` is the clamped shortfall a consumer acts on; this is the
+    # technical difference that explains it, and the two are not the same number.
+    area_difference_ha: float
     complete: bool
 
 
@@ -168,7 +187,12 @@ class RasterAnalysis:
     grids: Mapping[str, GridSpec]
     sources: Sequence[SourceFile]
     parameters: Mapping[str, object]
+    # Prose for a reader. Kept separate from `warnings` on purpose: one is an
+    # account of what the method cannot do, the other is a machine-actionable
+    # list, and deriving either from the other loses what makes it useful.
     limitations: Sequence[str] = field(default_factory=tuple)
+    # Structured cautions, each {code, severity, message, details}.
+    warnings: Sequence[Mapping[str, object]] = field(default_factory=tuple)
     # Change evidence: scene pair, observation quality, zones, their share of
     # the stock change and the reconciliation. None when optical reading was
     # switched off, which is not the same as "no change was found".
