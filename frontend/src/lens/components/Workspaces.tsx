@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Empty, Section, Skeleton } from '../../components/common';
 import type { LensSession } from '../auth';
-import { PASSPORT_STATUS_TEXT, passportStatusOf, type Submission } from '../workspace';
+import { PASSPORT_STATUS_TEXT, passportStatusOf, type Submission, type SubmissionStatus } from '../workspace';
 import type { WorkspaceState } from '../useWorkspace';
 import { LensMapView } from './LensMapView';
 import { LifecyclePanel } from './LifecyclePanel';
@@ -9,6 +9,17 @@ import { PassportPanel } from './PassportPanel';
 import { RequestForm } from './RequestForm';
 import { ResultView } from './ResultView';
 import { FIXTURE_SCENARIO_ORDER, FIXTURE_LABELS, SCENARIO_DEFAULTS } from '../fixtures';
+
+/** One sentence per state the request can be in, so no state renders as an empty paragraph. */
+const OWNER_STATUS_TEXT: Record<SubmissionStatus, string> = {
+  DRAFT: 'Черновик: заявка ещё не подана на проверку.',
+  SUBMITTED: 'Заявка подана и ждёт верификатора: расчёт запускает он.',
+  ANALYSING: 'Сервис считает заявку. Результат появится здесь, когда расчёт завершится.',
+  CALCULATED: 'Расчёт выполнен. Паспорт станет финальным после подтверждения верификатора.',
+  FINALIZED: 'Верификатор финализировал паспорт.',
+  INTEGRITY_FAILED: 'Целостность паспорта не подтверждена: содержимое изменилось после фиксации.',
+  UNKNOWN: 'Сервис сообщил состояние, которого этот клиент не знает. Обновите клиент, чтобы работать с этой заявкой.',
+};
 
 function SubmissionRow({ submission, active, onOpen }: { submission: Submission; active: boolean; onOpen: () => void }) {
   const status = PASSPORT_STATUS_TEXT[passportStatusOf(submission)];
@@ -163,12 +174,7 @@ export function OwnerWorkspace({ workspace, session }: { workspace: WorkspaceSta
         <Section title="Статус обработки" id="lens-status">
           {active ? (
             <>
-              <p data-testid="lens-owner-status">
-                {active.status === 'SUBMITTED' && 'Заявка подана и ждёт верификатора: расчёт запускает он.'}
-                {active.status === 'CALCULATED' && 'Расчёт выполнен. Паспорт станет финальным после подтверждения верификатора.'}
-                {active.status === 'FINALIZED' && 'Верификатор финализировал паспорт.'}
-                {active.status === 'INTEGRITY_FAILED' && 'Целостность паспорта не подтверждена: содержимое изменилось после фиксации.'}
-              </p>
+              <p data-testid="lens-owner-status">{OWNER_STATUS_TEXT[active.status]}</p>
               <ResultArea workspace={workspace} session={session} showClaim showValue />
               {active.result && (
                 <PassportPanel
@@ -246,16 +252,21 @@ export function VerifierWorkspace({ workspace, session, offline }: { workspace: 
                   type="button"
                   className="btn"
                   onClick={() => void workspace.runAnalysis(active, offline ? scenario : undefined)}
-                  disabled={workspace.analysis.busy}
+                  // Three separate reasons to refuse, and the service enforces all three itself.
+                  // The button follows the service rather than only this tab's own busy flag: after
+                  // a reload during a run, the flag is false while the request is still ANALYSING.
+                  disabled={workspace.analysis.busy || active.status === 'ANALYSING' || active.status === 'UNKNOWN'}
                   data-testid="lens-run-analysis"
                 >
-                  {workspace.analysis.busy ? 'Расчёт выполняется…' : active.result ? 'Пересчитать' : 'Проверить проект'}
+                  {workspace.analysis.busy || active.status === 'ANALYSING'
+                    ? 'Расчёт выполняется…'
+                    : active.result ? 'Пересчитать' : 'Проверить проект'}
                 </button>
                 <button
                   type="button"
                   className="btn btn-small btn-secondary"
                   onClick={() => void workspace.finalize(active, session.username)}
-                  disabled={!active.result || active.status === 'FINALIZED'}
+                  disabled={!active.result || active.status === 'FINALIZED' || active.status === 'UNKNOWN'}
                   data-testid="lens-finalize"
                 >
                   Финализировать паспорт

@@ -16,6 +16,7 @@ import {
   type LifecycleStep,
   type LifecycleEntry,
   type Submission,
+  type SubmissionStatus,
 } from './workspace';
 
 const EMPTY_DRAFT: RequestDraft = {
@@ -27,8 +28,22 @@ const EMPTY_DRAFT: RequestDraft = {
   claimedUnits: '',
 };
 
+/**
+ * Every state the service publishes, mapped one to one. Collapsing them loses the one that matters
+ * most on screen: a request the service is calculating would otherwise be indistinguishable from
+ * one waiting for a verifier, and the queue would offer a second run the service answers with 409.
+ */
+const SERVER_STATUS: Readonly<Record<string, SubmissionStatus>> = {
+  DRAFT: 'DRAFT',
+  SUBMITTED: 'SUBMITTED',
+  ANALYSING: 'ANALYSING',
+  CALCULATED: 'CALCULATED',
+  FINALIZED: 'FINALIZED',
+};
+
 function serverSubmission(request: VerificationRequest, result: AnalysisResult | null): Submission {
-  const status = request.status === 'FINALIZED' ? 'FINALIZED' : request.status === 'CALCULATED' ? 'CALCULATED' : 'SUBMITTED';
+  // A state this client does not know is shown as unknown rather than guessed into a known one.
+  const status = SERVER_STATUS[request.status] ?? 'UNKNOWN';
   return {
     submission_id: request.request_id,
     created_at: request.created_at,
@@ -36,7 +51,7 @@ function serverSubmission(request: VerificationRequest, result: AnalysisResult |
     owner_email: request.owner.username,
     title: request.aoi_id ?? 'Контур пользователя',
     aoi_id: request.aoi_id,
-    geometry: request.geometry as Geometry,
+    geometry: request.geometry,
     geometry_hash: request.geometry_hash,
     year_start: request.year_start,
     year_end: request.year_end,
@@ -53,6 +68,22 @@ function serverSubmission(request: VerificationRequest, result: AnalysisResult |
       return [];
     }),
   };
+}
+
+/**
+ * The contour as the wire contract types it, where a position is a pair.
+ *
+ * Written out rather than asserted: a cast would hand the compiler's blessing to a position that
+ * carries an elevation or a stray third number, and the request would then be refused by the
+ * service with a schema error instead of being sent in the shape the contract asks for. Everything
+ * here has already survived `validateGeometry`, which rejects a non-numeric coordinate outright.
+ */
+function wireGeometry(geometry: Geometry): NonNullable<CreateVerificationRequest['geometry']> {
+  const ring = (points: number[][]): [number, number][] =>
+    points.map((point) => [point[0] ?? 0, point[1] ?? 0]);
+  return geometry.type === 'Polygon'
+    ? { type: 'Polygon', coordinates: geometry.coordinates.map(ring) }
+    : { type: 'MultiPolygon', coordinates: geometry.coordinates.map((polygon) => polygon.map(ring)) };
 }
 
 function cellsFromGeoJson(data: unknown): CellFeature[] {
@@ -290,11 +321,16 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
         return null;
       }
       if (client.kind === 'http') {
-        if (!client.createRequest || !client.submitRequest) throw new LensError('CONTRACT', 'Сервисный клиент не поддерживает заявки.');
+        if (!client.createRequest || !client.submitRequest) {
+          // Reported, not thrown: these callbacks are invoked from a click handler, and a rejected
+          // promise there becomes an unhandled page error instead of a message the user can read.
+          setRequestError('CONTRACT: сервисный клиент не поддерживает заявки.');
+          return null;
+        }
         try {
           const created = await client.createRequest({
             aoi_id: draft.aoiId,
-            geometry: acceptedMeasurement.geometry as NonNullable<CreateVerificationRequest['geometry']>,
+            geometry: wireGeometry(acceptedMeasurement.geometry),
             year_start: draft.yearStart,
             year_end: draft.yearEnd,
             claimed_units: claimed === '' ? null : Number(claimed),
@@ -335,7 +371,10 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
       let result: AnalysisResult | null;
       let analysisId: string | null = null;
       if (client.kind === 'http') {
-        if (!client.startRequestAnalysis) throw new LensError('CONTRACT', 'Сервисный клиент не поддерживает lifecycle заявок.');
+        if (!client.startRequestAnalysis) {
+          setRequestError('CONTRACT: сервисный клиент не поддерживает lifecycle заявок.');
+          return null;
+        }
         try {
           const accepted = await client.startRequestAnalysis(submission.submission_id, { idempotencyKey: `lens-request-${crypto.randomUUID()}` });
           analysisId = accepted.analysis_id;
@@ -343,6 +382,9 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
           result = await analysis.watch(analysisId);
         } catch (error) {
           setRequestError(error instanceof LensError ? `${error.code}: ${error.message}` : String(error));
+          // The service owns what happened to the request: a failed run returns it to SUBMITTED,
+          // and guessing that here would leave the queue showing a state the service disagrees with.
+          void refreshRequests();
           return null;
         }
       } else result = await analysis.run(
@@ -367,7 +409,11 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
       );
       if (!result) return null;
       if (submission.geometry_hash && result.identity.geometry_hash !== submission.geometry_hash) {
-        throw new LensError('GEOMETRY_HASH_MISMATCH', 'Сервис рассчитал другой нормализованный контур; результат не принят.');
+        // The most consequential mismatch this screen can meet: the number would describe a
+        // different contour than the one submitted. It is refused, and it is refused where the
+        // person can read it — a thrown rejection here would reach only the console.
+        setRequestError('GEOMETRY_HASH_MISMATCH: сервис рассчитал другой нормализованный контур; результат не принят.');
+        return null;
       }
       const updated: Submission = {
         ...submission,
@@ -376,7 +422,11 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
         result,
         updated_at: new Date().toISOString(),
       };
-      persist(submissionsRef.current.map((item) => (item.submission_id === submission.submission_id ? recordStep(updated, 'CALCULATION', actorEmail) : item)));
+      // The lifecycle entry is recorded locally only in fixture mode. In HTTP mode the service has
+      // already written the real event, with the real user id and its own timestamp; adding a
+      // second one from the browser would put a fabricated row next to the recorded one.
+      const shown = client.kind === 'http' ? updated : recordStep(updated, 'CALCULATION', actorEmail);
+      persist(submissionsRef.current.map((item) => (item.submission_id === submission.submission_id ? shown : item)));
       setActiveSubmissionId(submission.submission_id);
       const id = updated.analysis_id;
       if (id) {
@@ -385,9 +435,12 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
           .then(setProof)
           .catch(() => setProof(null));
       }
+      // Reconcile with the service once the number is on screen: status and events are its state,
+      // not a conclusion this client is entitled to draw from a finished poll.
+      if (client.kind === 'http') void refreshRequests();
       return result;
     },
-    [actorEmail, analysis, client, persist],
+    [actorEmail, analysis, client, persist, refreshRequests],
   );
 
   const showCells = useCallback(async () => {
@@ -417,7 +470,10 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
   const finalize = useCallback(
     async (submission: Submission, verifier: string) => {
       if (client.kind === 'http') {
-        if (!client.finalizeRequest) throw new LensError('CONTRACT', 'Сервисный клиент не поддерживает финализацию.');
+        if (!client.finalizeRequest) {
+          setRequestError('CONTRACT: сервисный клиент не поддерживает финализацию.');
+          return;
+        }
         try {
           const finalized = await client.finalizeRequest(submission.submission_id);
           const updated = serverSubmission(finalized, submission.result);

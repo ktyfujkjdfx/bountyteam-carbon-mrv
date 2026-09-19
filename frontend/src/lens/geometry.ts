@@ -5,7 +5,7 @@ import { LensError } from './client';
 import type { Geometry } from './types';
 
 export function rings(geometry: Geometry): number[][][] {
-  return geometry.type === 'Polygon' ? (geometry.coordinates as number[][][]) : (geometry.coordinates as number[][][][]).flat();
+  return geometry.type === 'Polygon' ? geometry.coordinates : geometry.coordinates.flat();
 }
 
 export function bboxOf(geometry: Geometry): { west: number; south: number; east: number; north: number } | null {
@@ -73,8 +73,12 @@ function segmentsIntersect(a: number[], b: number[], c: number[], d: number[]): 
  */
 export function validateGeometry(geometry: Geometry | null): void {
   if (!geometry) throw new LensError('GEOMETRY_MISSING', 'Контур не задан: выберите участок, нарисуйте его или импортируйте GeoJSON.');
-  if (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon') {
-    throw new LensError('GEOMETRY_TYPE', `Поддерживаются только Polygon и MultiPolygon, получено «${String(geometry.type)}».`);
+  // Pasted GeoJSON reaches this function before anything has confirmed its type tag, so the tag is
+  // read as a plain string: the static type admits only two values, and the whole point here is to
+  // catch the value that arrived claiming to be one of them.
+  const tag: string = geometry.type;
+  if (tag !== 'Polygon' && tag !== 'MultiPolygon') {
+    throw new LensError('GEOMETRY_TYPE', `Поддерживаются только Polygon и MultiPolygon, получено «${tag}».`);
   }
   const allRings = rings(geometry);
   if (allRings.length === 0 || allRings.every((ring) => ring.length === 0)) {

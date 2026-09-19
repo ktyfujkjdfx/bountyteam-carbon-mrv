@@ -1,6 +1,11 @@
-// Submissions of this browser session: what an owner sent, what a verifier finalised, what an investor
-// may read. The service has no lifecycle endpoints yet, so this store is local and labelled DEMO on
-// every screen that shows it. It never changes a calculated number — it only records who did what.
+// One request as the workspaces show it: what an owner sent, what a verifier finalised, what an
+// investor may read.
+//
+// In HTTP mode every field here is a projection of server state. The service owns the lifecycle at
+// `/requests/...`, and the store below belongs to the fixture mode alone: keeping server state in
+// sessionStorage would let a stale tab contradict the service, so `useWorkspace` reads and writes it
+// only when the fixture client answers. Neither mode changes a calculated number — both record only
+// who did what.
 
 import type { AnalysisResult, Geometry } from './types';
 import type { LensRole } from './auth';
@@ -8,8 +13,15 @@ import type { LensRole } from './auth';
 export const WORKSPACE_STORAGE_KEY = 'carbon-lens.workspace';
 export const WORKSPACE_SCHEMA = 'carbon-lens-workspace-3';
 
-export type SubmissionStatus = 'SUBMITTED' | 'CALCULATED' | 'FINALIZED' | 'INTEGRITY_FAILED';
-export type PassportStatus = 'DRAFT' | 'CALCULATED' | 'FINALIZED' | 'INTEGRITY_FAILED';
+/**
+ * The five states the service moves a request through, and two this client reaches on its own:
+ * INTEGRITY_FAILED is a finding about a downloaded passport, and UNKNOWN is what a state this
+ * client does not recognise becomes. A newer service must be able to add a state without either
+ * crashing this screen or having it claim one of the states it does know.
+ */
+export type SubmissionStatus =
+  'DRAFT' | 'SUBMITTED' | 'ANALYSING' | 'CALCULATED' | 'FINALIZED' | 'INTEGRITY_FAILED' | 'UNKNOWN';
+export type PassportStatus = 'DRAFT' | 'ANALYSING' | 'CALCULATED' | 'FINALIZED' | 'INTEGRITY_FAILED' | 'UNKNOWN';
 export type LifecycleStep = 'CALCULATION' | 'VERIFICATION' | 'DEMO_ISSUE' | 'DEMO_TRANSFER' | 'DEMO_RETIREMENT';
 
 export interface VerifierNote {
@@ -124,16 +136,22 @@ export function newSubmission(input: {
 }
 
 export function passportStatusOf(submission: Submission): PassportStatus {
+  if (submission.status === 'UNKNOWN') return 'UNKNOWN';
   if (submission.status === 'INTEGRITY_FAILED') return 'INTEGRITY_FAILED';
   if (submission.status === 'FINALIZED') return 'FINALIZED';
+  // A run in flight is its own state. Without it a request the service is calculating looks exactly
+  // like one waiting for a verifier, and the screen invites a second run the service will refuse.
+  if (submission.status === 'ANALYSING' && !submission.result) return 'ANALYSING';
   return submission.result ? 'CALCULATED' : 'DRAFT';
 }
 
 export const PASSPORT_STATUS_TEXT: Record<PassportStatus, { label: string; tone: string; hint: string }> = {
   DRAFT: { label: 'ЧЕРНОВИК', tone: 'neutral', hint: 'Заявка подана, расчёт ещё не выполнялся.' },
+  ANALYSING: { label: 'РАСЧЁТ ИДЁТ', tone: 'info', hint: 'Сервис считает эту заявку. Повторный запуск он отклонит.' },
   CALCULATED: { label: 'РАССЧИТАН', tone: 'info', hint: 'Расчёт выполнен; верификатор его ещё не финализировал.' },
   FINALIZED: { label: 'ФИНАЛИЗИРОВАН', tone: 'ok', hint: 'Верификатор подтвердил, что паспорт отражает этот расчёт.' },
   INTEGRITY_FAILED: { label: 'ЦЕЛОСТНОСТЬ НАРУШЕНА', tone: 'blocked', hint: 'Хеш содержания не совпал: файл или расчёт изменились после фиксации.' },
+  UNKNOWN: { label: 'СОСТОЯНИЕ НЕИЗВЕСТНО', tone: 'neutral', hint: 'Сервис сообщил состояние, которого этот клиент не знает. Действия над заявкой скрыты, пока клиент не обновлён.' },
 };
 
 export const LIFECYCLE_STEPS: Array<{ step: LifecycleStep; label: string; description: string }> = [

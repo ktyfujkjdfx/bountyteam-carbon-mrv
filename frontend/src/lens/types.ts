@@ -27,10 +27,14 @@ export type ComparisonDirection = Unknowable<ApiSchemas['ComparisonDirection']>;
 export type IntervalKind = Unknowable<ApiSchemas['IntervalKind']>;
 export type WarningSeverity = Unknowable<ApiSchemas['WarningSeverity']>;
 
-export interface Geometry {
-  type: 'Polygon' | 'MultiPolygon';
-  coordinates: number[][][] | number[][][][];
-}
+/**
+ * Discriminated on `type`, so `coordinates` narrows with it. A single interface carrying the union
+ * of both shapes would force a cast at every use, and a cast is exactly the place where a
+ * MultiPolygon gets read as a Polygon without the compiler noticing.
+ */
+export type Geometry =
+  | { type: 'Polygon'; coordinates: number[][][] }
+  | { type: 'MultiPolygon'; coordinates: number[][][][] };
 
 export interface CatalogArea {
   aoi_id: string;
