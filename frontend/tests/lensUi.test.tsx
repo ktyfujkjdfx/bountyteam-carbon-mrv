@@ -2,199 +2,215 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { LensApp } from '../src/lens/LensApp';
-import { RootErrorBoundary } from '../src/components/RootErrorBoundary';
-import { CoveragePanel } from '../src/lens/components/CoveragePanel';
-import { PassportPanel, passportContent } from '../src/lens/components/PassportPanel';
-import { SummaryPanel } from '../src/lens/components/SummaryPanel';
-import { TimelinePanel } from '../src/lens/components/TimelinePanel';
-import { WaterfallPanel } from '../src/lens/components/WaterfallPanel';
-import { ZonesPanel } from '../src/lens/components/ZonesPanel';
-import { areaGeometryFromData, createFixtureLensClient } from '../src/lens/adapter';
-import { buildFixtureResult, type FixtureScenarioId } from '../src/lens/fixtures';
-import type { LensRequest, LensResult } from '../src/lens/types';
+import { Headline, headlineSentence } from '../src/lens/components/Headline';
+import { ClaimStressTest } from '../src/lens/components/ClaimStressTest';
+import { QualityRisks, riskCards } from '../src/lens/components/QualityRisks';
+import { ValueCalculator } from '../src/lens/components/ValueCalculator';
+import { ProjectionChart } from '../src/lens/components/ProjectionChart';
+import { CellCard } from '../src/lens/components/CellCard';
+import { createFixtureLensClient } from '../src/lens/fixtureClient';
+import { resetSessionStore } from '../src/lens/sessionStore';
+import { demoLogin } from '../src/lens/auth';
+import { parsedAreas } from '../src/lens/data';
+import { newSubmission, saveSubmissions } from '../src/lens/workspace';
+import type { AnalysisResult } from '../src/lens/types';
 
-function requestFor(years: [number, number] = [2019, 2020], claimed: number | null = null): LensRequest {
-  return {
-    aoi_id: 'RU_TVER_01',
-    parent_aoi_id: null,
-    geometry: areaGeometryFromData('RU_TVER_01') as never,
-    year_start: years[0],
-    year_end: years[1],
-    claimed_units: claimed,
-  };
+const offline = { mode: 'fixture' as const, baseUrl: '/api/v2', source: 'url' as const, demoAccounts: true };
+
+async function resultOf(scenario: string, body: Record<string, unknown> = {}): Promise<AnalysisResult> {
+  const client = createFixtureLensClient({ queuedMs: 0, runningMs: 0 });
+  const accepted = await client.createAnalysis({ aoi_id: 'RU_TVER_01', year_start: 2019, year_end: 2024, ...body }, { idempotencyKey: `k-${Math.random()}`, scenario });
+  const analysis = await client.getAnalysis(accepted.analysis_id);
+  if (!analysis.result) throw new Error('no result');
+  return analysis.result;
 }
 
-function resultOf(scenario: FixtureScenarioId, claimed: number | null = null): LensResult {
-  return buildFixtureResult(scenario, requestFor([2019, 2020], claimed), 100);
-}
-
-const fastClient = () => createFixtureLensClient({ queuedMs: 0, runningMs: 0 });
-
-describe('SummaryPanel separates q = null from q = 0', () => {
-  it('shows a computed Q with scenario value and price switching', async () => {
-    const result = resultOf('DOC_EXAMPLE_Q395');
-    function Harness() {
-      return <SummaryPanel result={result} priceId="price_base" onPrice={vi.fn()} />;
-    }
-    render(<Harness />);
-    expect(screen.getByTestId('lens-q-value')).toHaveTextContent('395');
-    expect(screen.getByTestId('lens-scenario-value')).toHaveTextContent('592 500');
-    expect(screen.getByTestId('lens-status-calculation')).toHaveTextContent('РАСЧЁТ ДОСТУПЕН');
+describe('headline speaks plainly', () => {
+  it('states the outcome for a positive, a zero and an unavailable result', async () => {
+    expect(headlineSentence(await resultOf('DOC_EXAMPLE_Q395', { year_start: 2019, year_end: 2020 }))).toMatchObject({ tone: 'ok' });
+    expect(headlineSentence(await resultOf('DOC_EXAMPLE_Q395', { year_start: 2019, year_end: 2020 })).text).toMatch(/подтверждено 395/);
+    expect(headlineSentence(await resultOf('ZERO_UNCERTAINTY')).text).toMatch(/H\/R ≥ 1/);
+    expect(headlineSentence(await resultOf('UNAVAILABLE_COVERAGE')).title).toMatch(/Недостаточно данных/);
   });
 
-  it('shows 0 with its reason, never as unavailable', () => {
-    render(<SummaryPanel result={resultOf('ZERO_UNCERTAINTY')} priceId="price_base" onPrice={vi.fn()} />);
-    expect(screen.getByTestId('lens-q-value')).toHaveTextContent('0');
-    expect(screen.getByTestId('lens-q-value')).not.toHaveTextContent('Недоступно');
-    expect(screen.getByTestId('lens-q-reason')).toHaveTextContent('неопределённость слишком велика');
-  });
-
-  it('shows unavailable with its reason, never as 0', () => {
-    render(<SummaryPanel result={resultOf('UNAVAILABLE_COVERAGE')} priceId="price_base" onPrice={vi.fn()} />);
-    const value = screen.getByTestId('lens-q-value');
-    expect(value).toHaveTextContent('Недоступно');
-    expect(value).not.toHaveTextContent('0');
-    expect(screen.getByTestId('lens-q-reason')).toHaveTextContent('покрытие');
-    expect(screen.getByTestId('lens-scenario-value')).toHaveTextContent('—');
-  });
-
-  it('renders unknown statuses from a drifted contract as neutral UNKNOWN', () => {
-    render(<SummaryPanel result={resultOf('UNKNOWN_DRIFT')} priceId="price_base" onPrice={vi.fn()} />);
-    const evidence = screen.getByTestId('lens-status-evidence');
-    expect(evidence).toHaveTextContent('UNKNOWN: PARTIALLY_OBSERVED');
-    expect(evidence).toHaveAttribute('data-tone', 'neutral');
-    expect(screen.getByTestId('lens-status-claim')).toHaveTextContent('UNKNOWN: ESCALATED_TO_REGISTRY');
-    expect(screen.getAllByTestId('unknown-value-note').length).toBeGreaterThan(0);
+  it('shows four numbers and switches the scenario price', async () => {
+    const user = userEvent.setup();
+    const result = await resultOf('DOC_EXAMPLE_Q395', { year_start: 2019, year_end: 2020 });
+    const onPrice = vi.fn();
+    render(<Headline result={result} priceKey="base" onPriceKey={onPrice} customPrice={null} />);
+    expect(screen.getByTestId('lens-q')).toHaveTextContent('395');
+    expect(screen.getByTestId('lens-eproj')).toHaveTextContent('-689,3');
+    expect(screen.getByTestId('lens-r')).toHaveTextContent('517');
+    expect(screen.getByTestId('lens-value')).toHaveTextContent('592 500');
+    await user.click(screen.getByTestId('lens-price-high'));
+    expect(onPrice).toHaveBeenCalledWith('high');
   });
 });
 
-describe('calculation, coverage, zones and passport panels', () => {
-  it('waterfall exposes formulas and the stop-rule note without recomputing', async () => {
-    render(<WaterfallPanel result={resultOf('ZERO_NON_POSITIVE')} />);
-    expect(screen.getByTestId('lens-step-r')).toHaveTextContent('-245,666');
-    expect(screen.getByTestId('lens-step-q')).toHaveTextContent('0');
-    expect(screen.getByText(/Расчёт остановлен на нуле/)).toBeVisible();
-    await userEvent.click(within(screen.getByTestId('lens-step-unc')).getByText(/Вычет за неопределённость/));
-    expect(screen.getByTestId('lens-step-unc')).toHaveTextContent('H/R не вычисляется при R ≤ 0');
+describe('claim stress test', () => {
+  it('calls a zero claim absent, never supported', async () => {
+    const result = await resultOf('DOC_EXAMPLE_Q395', { year_start: 2019, year_end: 2020, claimed_units: 0 });
+    render(<ClaimStressTest result={result} priceKey="base" />);
+    expect(screen.getByTestId('lens-claim-status')).toHaveTextContent('ПОЛОЖИТЕЛЬНОГО ЗАЯВЛЕНИЯ НЕТ');
+    expect(screen.getByTestId('lens-claim-sentence')).toHaveTextContent('Положительное заявление отсутствует');
+    expect(screen.queryByTestId('lens-claim-zero-warning')).toBeNull();
   });
 
-  it('coverage keeps biomass and optics apart', () => {
-    render(<CoveragePanel result={resultOf('WEAK_OPTICS_VALID_CCI')} />);
-    expect(screen.getByTestId('lens-coverage-BIOMASS_CCI')).toHaveTextContent('100 %');
-    expect(screen.getByTestId('lens-coverage-OPTICAL_PAIRED_VALID')).toHaveTextContent('18 %');
-    expect(screen.getByTestId('lens-coverage')).toHaveTextContent('не восполняет отсутствующие числовые данные');
+  it('warns when a service still reports a zero claim as supported', async () => {
+    const base = await resultOf('DOC_EXAMPLE_Q395', { year_start: 2019, year_end: 2020, claimed_units: 0 });
+    const drifted: AnalysisResult = { ...base, claim: { ...base.claim, status: 'SUPPORTED_BY_CASE' } };
+    render(<ClaimStressTest result={drifted} priceKey="base" />);
+    expect(screen.getByTestId('lens-claim-zero-warning')).toHaveTextContent('не является подтверждённым');
   });
 
-  it('timeline marks gaps and scenario years instead of drawing a continuous line', () => {
-    render(<TimelinePanel result={resultOf('DOC_EXAMPLE_Q395')} />);
-    const table = screen.getByTestId('lens-timeline-table');
-    expect(table).toHaveTextContent('нет данных');
-    expect(table).toHaveTextContent('сценарий');
-    // 2015 and 2019 are not consecutive observations, so the observed series must not bridge them.
-    const series = screen.getByTestId('lens-timeline').querySelectorAll('path.chart-series');
-    expect(series.length).toBe(1);
-    expect(series[0]?.getAttribute('d')).not.toMatch(/M[\d.,]+ L[\d.,]+ L/);
+  it('shows the gap, its scenario value and the scope of the comparison', async () => {
+    const result = await resultOf('DOC_EXAMPLE_Q395', { year_start: 2019, year_end: 2020, claimed_units: 1000 });
+    render(<ClaimStressTest result={result} priceKey="base" />);
+    expect(screen.getByTestId('lens-claim-status')).toHaveTextContent('ПОДТВЕРЖДЕНО ЧАСТИЧНО');
+    expect(screen.getByTestId('lens-claim-gap')).toHaveTextContent('605');
+    expect(screen.getByTestId('lens-claim-gap')).toHaveTextContent('907 500');
+    expect(screen.getByTestId('lens-claim-share')).toHaveTextContent('40 %');
+    expect(screen.getByTestId('lens-claim-scope')).toHaveTextContent('2019–2020');
+    expect(screen.queryByText(/мошенничеств|greenwashing/i)).toBeNull();
   });
 
-  it('zone card shows contribution in E and refuses to attribute Q to a zone', async () => {
-    const result = resultOf('WEAK_OPTICS_VALID_CCI');
-    render(<ZonesPanel result={result} selectedZoneId={null} onSelectZone={vi.fn()} />);
-    const card = screen.getByTestId('lens-zone-card');
-    expect(card).toHaveTextContent('24,5 га');
-    expect(card).toHaveTextContent('1 136,7 т CO₂-экв.');
-    expect(screen.getByTestId('lens-zone-cause')).toHaveTextContent('ПРИЧИНА НЕ УСТАНОВЛЕНА');
-    expect(screen.getByTestId('lens-zones')).toHaveTextContent('неаддитивны');
+  it('explains an incomparable period instead of showing a gap', async () => {
+    const result = await resultOf('DOC_EXAMPLE_Q395', { year_start: 2019, year_end: 2024, claimed_units: 500 });
+    render(<ClaimStressTest result={result} priceKey="base" />);
+    expect(screen.getByTestId('lens-claim-status')).toHaveTextContent('СРАВНЕНИЕ НЕВОЗМОЖНО');
+    expect(screen.getByTestId('lens-claim-reasons')).toHaveTextContent('другому периоду');
+    expect(screen.getByTestId('lens-claim-gap')).toHaveTextContent('—');
+  });
+});
+
+describe('quality and risks', () => {
+  it('shows four coverage axes and keeps them apart', async () => {
+    const result = await resultOf('WEAK_OPTICS_VALID_CCI', { year_start: 2021, year_end: 2022 });
+    render(<QualityRisks result={result} />);
+    expect(screen.getByTestId('lens-coverage-biomass_fraction')).toHaveTextContent('100 %');
+    expect(screen.getByTestId('lens-coverage-optical_paired_valid_fraction')).toHaveTextContent('18 %');
+    expect(screen.getByTestId('lens-coverage-uncertainty_fraction')).toBeVisible();
+    expect(screen.getByTestId('lens-coverage-baseline_fraction')).toBeVisible();
+    expect(screen.getByTestId('lens-warning-LOW_OPTICAL_PAIRED_VALID')).toHaveTextContent('ПРЕДУПРЕЖДЕНИЕ');
   });
 
-  it('passport verifies the downloaded content and explains a mismatch', async () => {
-    const result = resultOf('DOC_EXAMPLE_Q395');
-    const payload = passportContent(result);
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
-    const hash = `0x${[...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+  it('builds three independent risk cards from measured facts and no overall rating', async () => {
+    const result = await resultOf('FIRE_SUPPORTED_LOSS', { aoi_id: 'RU_MORDOVIA_03', year_start: 2020, year_end: 2022 });
+    const cards = riskCards(result);
+    expect(cards.map((card) => card.id)).toEqual(['fire', 'forest-loss', 'data-quality']);
+    render(<QualityRisks result={result} />);
+    expect(screen.getByTestId('lens-risk-fire')).toHaveTextContent('признаком горения');
+    expect(screen.getByTestId('lens-risk-forest-loss')).toHaveTextContent('га');
+    expect(screen.getByText(/не сводятся в один рейтинг/)).toBeVisible();
+    expect(screen.queryByText(/рейтинг A|инвестиционный рейтинг|INVESTABLE/i)).toBeNull();
+  });
 
-    const matching: LensResult = { ...result, passport: { ...result.passport, content_sha256: hash } };
-    const { unmount } = render(<PassportPanel result={matching} />);
-    await userEvent.click(screen.getByTestId('lens-passport-verify'));
-    expect(await screen.findByTestId('lens-passport-result')).toHaveTextContent('совпадает');
+  it('names the interval a scenario range, not a confidence interval', async () => {
+    const result = await resultOf('DOC_EXAMPLE_Q395', { year_start: 2019, year_end: 2020 });
+    render(<QualityRisks result={result} />);
+    expect(screen.getByTestId('lens-uncertainty')).toHaveTextContent('Сценарный диапазон');
+    expect(screen.getByTestId('lens-uncertainty')).toHaveTextContent('не вероятностный доверительный интервал');
+    expect(within(screen.getByTestId('lens-sensitivity')).getAllByRole('row').length).toBeGreaterThan(1);
+  });
+});
+
+describe('value scenarios', () => {
+  it('labels a custom price as the reader’s own scenario', async () => {
+    const user = userEvent.setup();
+    const result = await resultOf('DOC_EXAMPLE_Q395', { year_start: 2019, year_end: 2020 });
+    const onCustom = vi.fn();
+    render(<ValueCalculator result={result} priceKey="base" onPriceKey={vi.fn()} customPrice={null} onCustomPrice={onCustom} />);
+    await user.type(screen.getByTestId('lens-custom-price'), '2000');
+    expect(onCustom).toHaveBeenLastCalledWith(2000);
+    expect(screen.getByTestId('lens-calculator-table')).toHaveTextContent('592 500');
+  });
+
+  it('shows zero roubles for q = 0 and no sum at all for q = null', async () => {
+    const zero = await resultOf('ZERO_NON_POSITIVE');
+    const { unmount } = render(<ValueCalculator result={zero} priceKey="base" onPriceKey={vi.fn()} customPrice={null} onCustomPrice={vi.fn()} />);
+    expect(screen.getByTestId('lens-calculator-zero')).toBeVisible();
     unmount();
 
-    render(<PassportPanel result={result} />);
-    await userEvent.click(screen.getByTestId('lens-passport-verify'));
-    const mismatch = await screen.findByTestId('lens-passport-result');
-    expect(mismatch).toHaveTextContent('отличается');
-    expect(mismatch).toHaveTextContent('не диагноз');
-    expect(screen.getByTestId('lens-sources')).toHaveTextContent('Copernicus');
+    const none = await resultOf('UNAVAILABLE_COVERAGE');
+    render(<ValueCalculator result={none} priceKey="base" onPriceKey={vi.fn()} customPrice={null} onCustomPrice={vi.fn()} />);
+    expect(screen.getByTestId('lens-calculator-unavailable')).toBeVisible();
+    expect(screen.queryByTestId('lens-calculator-table')).toBeNull();
   });
 });
 
-describe('LensApp workspace', () => {
-  it('runs the full request → job → result path and keeps the fixture label visible', async () => {
-    render(<LensApp client={fastClient()} />);
-    expect(await screen.findByTestId('lens-request-panel')).toBeVisible();
-    await waitFor(() => expect(screen.getByTestId('lens-geometry-source')).toHaveTextContent('RU_TVER_01'));
-    await waitFor(() => expect(screen.getByTestId('lens-area')).toHaveTextContent('га'));
-    expect(screen.queryByTestId('lens-summary')).toBeNull();
-  }, 20_000);
+describe('projection and cells', () => {
+  it('separates observed years from the scenario baseline after them', async () => {
+    const result = await resultOf('RECOVERY_AFTER_LOSS', { aoi_id: 'RU_MORDOVIA_04' });
+    render(<ProjectionChart result={result} showProjection />);
+    const table = screen.getByTestId('lens-timeline-table');
+    expect(table).toHaveTextContent('наблюдение');
+    expect(table).toHaveTextContent('сценарий');
+    expect(screen.getByTestId('lens-projection-boundary')).toBeInTheDocument();
+    expect(screen.getByTestId('lens-timeline')).toHaveTextContent('не прогноз фактического запаса');
+  });
 
-  it('shows Q, badges, tabs and the claim comparison after a run', async () => {
-    const user = userEvent.setup();
-    render(<LensApp client={fastClient()} />);
-    await waitFor(() => expect(screen.getByTestId('lens-area')).toHaveTextContent('га'));
-    await user.click(screen.getByTestId('lens-run'));
-    expect(await screen.findByTestId('lens-q-value', {}, { timeout: 10_000 })).toHaveTextContent('395');
-    expect(screen.getByTestId('lens-fixture-note')).toHaveTextContent('Условный пример');
+  it('hides the projection when the reader did not ask for it', async () => {
+    const result = await resultOf('RECOVERY_AFTER_LOSS', { aoi_id: 'RU_MORDOVIA_04' });
+    render(<ProjectionChart result={result} showProjection={false} />);
+    expect(screen.queryByTestId('lens-projection-boundary')).toBeNull();
+  });
 
-    await user.click(screen.getByTestId('lens-tab-coverage'));
-    expect(screen.getByTestId('lens-coverage-BIOMASS_CCI')).toBeVisible();
-    await user.click(screen.getByTestId('lens-tab-zones'));
-    expect(screen.getByTestId('lens-zone-card')).toBeVisible();
-    await user.click(screen.getByTestId('lens-tab-passport'));
-    expect(screen.getByTestId('lens-passport')).toBeVisible();
-  }, 20_000);
-
-  it('explains NOT_COMPARABLE for a claim from another period and keeps Q unchanged', async () => {
-    const user = userEvent.setup();
-    render(<LensApp client={fastClient()} />);
-    await waitFor(() => expect(screen.getByTestId('lens-area')).toHaveTextContent('га'));
-    await user.type(screen.getByTestId('lens-claim-input'), '500');
-    await user.selectOptions(screen.getByTestId('lens-year-end'), '2024');
-    await user.click(screen.getByTestId('lens-run'));
-    expect(await screen.findByTestId('lens-status-claim', {}, { timeout: 10_000 })).toHaveTextContent('НЕСОПОСТАВИМО');
-    expect(screen.getByTestId('lens-claim-reasons')).toHaveTextContent('период');
-    expect(screen.getByTestId('lens-q-value')).toHaveTextContent('395');
-    expect(screen.getByTestId('lens-gap-value')).toHaveTextContent('—');
-  }, 20_000);
-
-  it('blocks an invalid period before sending the request', async () => {
-    const user = userEvent.setup();
-    render(<LensApp client={fastClient()} />);
-    await waitFor(() => expect(screen.getByTestId('lens-area')).toHaveTextContent('га'));
-    await user.selectOptions(screen.getByTestId('lens-year-start'), '2022');
-    await user.selectOptions(screen.getByTestId('lens-year-end'), '2020');
-    await user.click(screen.getByTestId('lens-run'));
-    expect(screen.getByTestId('lens-validation-error')).toHaveTextContent('Конечный год должен быть больше начального');
-    expect(screen.queryByTestId('lens-q-value')).toBeNull();
-  }, 20_000);
-
-  it('surfaces an adapter failure as an error state inside the workspace', async () => {
-    const user = userEvent.setup();
-    const client = fastClient();
-    const failing = {
-      ...client,
-      submitAnalysis: async () => {
-        throw new (await import('../src/lens/adapter')).LensError('SERVICE_UNAVAILABLE', 'Сервис расчёта недоступен');
-      },
-    };
+  it('shows one cell with both dates and the modelling caveat', async () => {
+    const result = await resultOf('FIRE_SUPPORTED_LOSS', { aoi_id: 'RU_MORDOVIA_03', year_start: 2020, year_end: 2022 });
     render(
-      <RootErrorBoundary>
-        <LensApp client={failing as never} />
-      </RootErrorBoundary>,
+      <CellCard
+        result={result}
+        cell={{ cell_id: 'RU_MORDOVIA_03:r0c0', zone_id: 'UNIT-ZONE-FIRE', valid: true, weight_ha: 12.5, carbon: { '2020': 47, '2022': 41.2 }, sd: { '2020': 3, '2022': 3 }, geometry: result.request.geometry }}
+      />,
     );
-    await waitFor(() => expect(screen.getByTestId('lens-area')).toHaveTextContent('га'));
-    await user.click(screen.getByTestId('lens-run'));
-    const error = await screen.findByTestId('lens-error');
-    expect(error).toHaveTextContent('SERVICE_UNAVAILABLE');
-    expect(screen.queryByTestId('root-error-boundary')).toBeNull();
-    expect(screen.getByTestId('lens-map')).toBeInTheDocument();
+    expect(screen.getByTestId('lens-cell-series')).toHaveTextContent('2020: 47');
+    expect(screen.getByTestId('lens-cell-series')).toHaveTextContent('2022: 41,2');
+    expect(screen.getByTestId('lens-cell-card')).toHaveTextContent('модельное допущение');
+  });
+});
+
+describe('workspaces and guards', () => {
+  it('signs in a demo owner and opens the owner workspace only', async () => {
+    resetSessionStore(null);
+    const user = userEvent.setup();
+    render(<LensApp client={createFixtureLensClient({ queuedMs: 0, runningMs: 0 })} config={offline} />);
+    await user.click(screen.getByTestId('lens-demo-account-owner'));
+    await waitFor(() => expect(screen.getByTestId('lens-role')).toHaveTextContent('Владелец'));
+    expect(screen.getByTestId('lens-request-form')).toBeVisible();
+    expect(screen.queryByTestId('lens-queue-list')).toBeNull();
+    expect(screen.queryByTestId('lens-run-analysis')).toBeNull();
+    resetSessionStore(null);
   }, 20_000);
+
+  it('keeps an investor out of the verifier screen with an explanation', async () => {
+    resetSessionStore(demoLogin('investor@demo.local', 'demo'));
+    window.location.hash = '#/verifier';
+    render(<LensApp client={createFixtureLensClient({ queuedMs: 0, runningMs: 0 })} config={offline} />);
+    await waitFor(() => expect(screen.getByTestId('lens-forbidden')).toBeVisible());
+    expect(screen.getByTestId('lens-forbidden')).toHaveTextContent('решение принимает сервис');
+    expect(screen.queryByTestId('lens-queue-list')).toBeNull();
+    window.location.hash = '';
+    resetSessionStore(null);
+  }, 20_000);
+
+  it('a verifier runs the analysis of a submitted request and finalises the passport', async () => {
+    // The queue is filled by an owner; a verifier never creates a request of their own.
+    const geometry = parsedAreas()[0]?.geometry;
+    if (!geometry) throw new Error('no supplied areas');
+    saveSubmissions([
+      newSubmission({ owner_email: 'owner@demo.local', title: 'RU_TVER_01', aoi_id: 'RU_TVER_01', geometry, year_start: 2019, year_end: 2024, claimed_units: 3000 }),
+    ]);
+    resetSessionStore(demoLogin('verifier@demo.local', 'demo'));
+    const user = userEvent.setup();
+    render(<LensApp client={createFixtureLensClient({ queuedMs: 0, runningMs: 0 })} config={offline} />);
+    await waitFor(() => expect(screen.getByTestId('lens-queue-list')).toBeVisible(), { timeout: 10_000 });
+    expect(screen.queryByTestId('lens-claim-input')).toBeNull();
+    await user.click(within(screen.getByTestId('lens-queue-list')).getAllByRole('button')[0] as HTMLElement);
+    await user.click(screen.getByTestId('lens-run-analysis'));
+    await waitFor(() => expect(screen.getByTestId('lens-q')).toBeVisible(), { timeout: 15_000 });
+    await user.click(screen.getByTestId('lens-finalize'));
+    expect(screen.getAllByTestId('lens-passport-status')[0]).toHaveTextContent('ФИНАЛИЗИРОВАН');
+    resetSessionStore(null);
+    sessionStorage.clear();
+  }, 30_000);
 });
