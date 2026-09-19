@@ -284,6 +284,39 @@ def test_an_investor_may_read_the_analysis_behind_a_finalized_request(harness):
     assert response.json()["result"]["passport"]["status"] == "FINALIZED"
 
 
+def test_an_owner_reads_the_analysis_of_their_own_request_before_it_is_finalized(harness):
+    """Starting a run belongs to the verifier; the work still belongs to the owner.
+
+    Reading the analysis through the actor who pressed run answers "verifier" for every
+    request, which shut an owner out of their own calculation until somebody finalized it.
+    """
+    request = _through_to_calculated(harness, key="ownread-key-00001")
+    response = harness.client.get(request["analysis_url"],
+                                  headers=_as(harness, "PROJECT_OWNER"))
+    assert response.status_code == 200, response.text
+    assert response.json()["result"]["passport"]["status"] == "DRAFT"
+    # The report and the value behind that analysis open for the owner as well.
+    assert harness.client.get(f"{request['analysis_url']}/report",
+                              headers=_as(harness, "PROJECT_OWNER")).status_code == 200
+    # An investor still waits for a finalization, and is told 404 rather than 403.
+    assert harness.client.get(request["analysis_url"],
+                              headers=_as(harness, "INVESTOR")).status_code == 404
+
+
+def test_an_owner_does_not_read_the_analysis_of_somebody_elses_request(harness):
+    from backend.app.v2 import auth
+
+    request = _through_to_calculated(harness, key="otherown-key-0001")
+    auth.create_user(harness.ctx, username="owner3", password="test-password-1234",
+                     role="PROJECT_OWNER")
+    token = harness.client.post("/api/v2/auth/login",
+                                json={"username": "owner3",
+                                      "password": "test-password-1234"}).json()["token"]
+    response = harness.client.get(request["analysis_url"],
+                                  headers={"Authorization": "Bearer " + token})
+    assert response.status_code == 404
+
+
 def test_an_owner_sees_only_their_own_requests(harness):
     from backend.app.v2 import auth
 

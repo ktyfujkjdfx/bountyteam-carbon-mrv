@@ -327,6 +327,24 @@ def finalize(ctx: Any, request_id: str, *, who: auth.Principal,
         return _public(conn, _row(conn, request_id), ctx)
 
 
+def owner_of(ctx: Any, analysis_id: str) -> str | None:
+    """Who is responsible for the request this analysis was run for.
+
+    An analysis records the person who *started* it, and starting one belongs to the
+    verifier, so that column never names the owner. Asking it who owns the work answers
+    "the verifier" for every request and closes an owner out of their own calculation
+    until somebody finalizes it. The request row is where responsibility lives.
+
+    An analysis nobody requested — the direct `/analyses` path — has no owner here, and
+    the caller falls back to the actor rather than inventing one.
+    """
+    with ctx.db.reader() as conn:
+        row = conn.execute(
+            "SELECT owner_id FROM lens_requests WHERE analysis_id = ?",
+            (analysis_id,)).fetchone()
+    return row["owner_id"] if row else None
+
+
 # -- the passport status an analysis is served with ------------------------------------
 def finalization_of(ctx: Any, analysis_id: str) -> dict | None:
     """The finalization pinned to this analysis, if a verifier made one.

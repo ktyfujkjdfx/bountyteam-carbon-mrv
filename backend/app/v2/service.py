@@ -381,7 +381,9 @@ def _readable(lens: LensContext, analysis_id: str, who: Any):
     row = lens.store.require(analysis_id)
     if who is None:
         return row
-    if not lens_auth.may_read_analysis(who, owner_id=row["actor"],
+    # The owner is the person the request belongs to, not the verifier who pressed run.
+    owner_id = verification.owner_of(lens.app, analysis_id) or row["actor"]
+    if not lens_auth.may_read_analysis(who, owner_id=owner_id,
                                        finalized=_is_finalized(lens, row)):
         raise not_found("Analysis")
     return row
