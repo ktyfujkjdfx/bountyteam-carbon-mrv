@@ -21,16 +21,18 @@ from rs.case2.payload import PayloadError
 from rs.contracts import digest
 
 ROOT = Path(__file__).resolve().parents[3]
-VENDORED_SCHEMA = (Path(__file__).parent / "fixtures" / "backend_g0"
-                   / "internal-models.v2.schema.json")
 LIVE_SCHEMA = ROOT / "contracts" / "v2" / "internal-models.v2.schema.json"
 
 
 def _schema_document():
-    """Backend's contract: the live one once it lands, the copy until then."""
-    path = LIVE_SCHEMA if LIVE_SCHEMA.is_file() else VENDORED_SCHEMA
-    with open(path, encoding="utf-8") as handle:
-        return path, json.load(handle)
+    """Load the repository's one authoritative RS/Backend boundary schema."""
+    if not LIVE_SCHEMA.is_file():
+        raise AssertionError(
+            "authoritative Carbon Lens schema is missing: "
+            "contracts/v2/internal-models.v2.schema.json"
+        )
+    with open(LIVE_SCHEMA, encoding="utf-8") as handle:
+        return LIVE_SCHEMA, json.load(handle)
 
 
 def _validator(model):
@@ -78,12 +80,11 @@ def test_the_manifest_validates_against_the_consumer_schema(tver):
     assert not _errors("ArtifactManifest", manifest)
 
 
-def test_the_schema_copy_is_the_one_backend_published():
-    """The vendored copy must not drift; a difference is a finding, not a fix."""
-    if not LIVE_SCHEMA.is_file():
-        pytest.skip("contracts/v2 has not landed in this branch yet")
-    assert json.loads(LIVE_SCHEMA.read_text(encoding="utf-8")) == \
-        json.loads(VENDORED_SCHEMA.read_text(encoding="utf-8"))
+def test_the_authoritative_backend_schema_is_available():
+    """RS tests fail clearly when the shared v2 contract is absent."""
+    path, document = _schema_document()
+    assert path == LIVE_SCHEMA
+    assert document["$id"].endswith("/contracts/v2/internal-models.v2.schema.json")
 
 
 # -- strict JSON ----------------------------------------------------------
