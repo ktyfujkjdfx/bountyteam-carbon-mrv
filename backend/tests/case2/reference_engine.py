@@ -1,11 +1,11 @@
-"""Temporary stand-in for the `carbon/` package, active only while that package is absent.
+"""Test double for the `carbon/` package, reachable only from this test directory.
 
-`carbon/` is owned by Trust and is the engine of record. `backend/app/v2/adapters/carbon.py`
-imports it whenever it is importable and only falls back here, so on a branch that has both
-this module is dead code. The fallback exists so that Backend, and the screens that consume
-Backend, can be built and tested before the engine lands, not so that Backend can keep a
-second opinion about the arithmetic. When `carbon/` is merged this file is deleted; the
-test `test_real_carbon_engine_wins_when_present` guards the precedence in the meantime.
+`carbon/` is owned by Trust and is the engine of record. Nothing under `backend/app/`
+imports this module or can reach it: the production carbon adapter loads `carbon` and
+nothing else, and fails closed when it is absent. This file exists so that the API, the
+jobs, the passports and the reports can be exercised before that package is merged, and
+it is injected explicitly by `conftest.engine_override`. When `carbon/` lands, the
+override stops firing and this file is deleted.
 
 The formulas are the ones written in the statement (`doc/Постановка задачи`, pp. 4-6) and
 the coefficients come from `data/methodology/*.csv`, never from a third-party repository:
@@ -16,13 +16,6 @@ the coefficients come from `data/methodology/*.csv`, never from a third-party re
     L = E - k sd(E);  U = E + k sd(E);  H = max(E - L, U - E)
     Ebase = -sum_parts(area x baseline_delta_tc_ha) x 44/12
     R = Ebase - E - LK
-    R <= 0            -> Q = 0, ratio is not computed
-    R > 0, H/R >= 1   -> Q = 0 by the stop rule
-    otherwise UNC = min(1, max(0, H/R - 0.10));  Radj = R (1 - UNC)
-                       Q = floor(Radj x 0.85);  B = Radj x 0.15;  V = Q x p
-
-Q uses the literal 0.85 of the statement. `floor(Radj - Radj x 0.15)` is a different
-integer for values next to a whole number and is not an allowed substitution.
 """
 from __future__ import annotations
 
@@ -31,7 +24,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .. import catalog
+from backend.app.v2 import catalog
 
 METHOD_VERSION = "backend-reference-carbon/0.1.0"
 

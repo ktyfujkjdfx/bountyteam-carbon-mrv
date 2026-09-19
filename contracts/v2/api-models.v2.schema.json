@@ -916,6 +916,11 @@
           "max_area_ha": {"type": "number"},
           "raster_adapter": {"type": "string"},
           "carbon_adapter": {"type": "string"},
+          "engine_mode": {
+            "type": "string",
+            "enum": ["REAL", "FIXTURE"],
+            "description": "REAL means the owning packages answered. FIXTURE means labelled vectors were replayed and every result carries a fixture label; a deployment must opt into it by name."
+          },
           "areas": {"type": "array", "items": {"$ref": "#/components/schemas/CatalogArea"}},
           "sample_requests": {"type": "array", "items": {"$ref": "#/components/schemas/CatalogSampleRequest"}},
           "prices": {"type": "array", "items": {"$ref": "#/components/schemas/PriceScenario"}},

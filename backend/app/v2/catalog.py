@@ -164,7 +164,8 @@ def source_manifest_hash(entries: list[dict]) -> str:
 
 
 def document(*, raster_adapter: str, carbon_adapter: str, schema_version: str,
-             method_version: str, root: Path = DATA_ROOT) -> dict[str, Any]:
+             method_version: str, engine_mode: str,
+             root: Path = DATA_ROOT) -> dict[str, Any]:
     from .geometry import MAX_AREA_HA, YEAR_MAX, YEAR_MIN
 
     return {
@@ -177,6 +178,9 @@ def document(*, raster_adapter: str, carbon_adapter: str, schema_version: str,
         "max_area_ha": MAX_AREA_HA,
         "raster_adapter": raster_adapter,
         "carbon_adapter": carbon_adapter,
+        # A consumer is entitled to know whether it is looking at measurements before it
+        # draws them, not only after it reads the fixture label on a result.
+        "engine_mode": engine_mode,
         "areas": [{
             "aoi_id": item.aoi_id, "name": item.name, "region": item.region,
             "area_ha": item.area_ha, "analysis_start_year": item.analysis_start_year,

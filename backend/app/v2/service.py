@@ -26,7 +26,8 @@ from ..errors import ApiError, invalid, not_found
 from ..operations import idempotent
 from . import assemble, catalog, geometry
 from .adapters import build_ports
-from .adapters.carbon import POOL
+from .adapters.carbon import POOL, CarbonEngineUnavailable
+from .adapters.raster import RasterCoreUnavailable
 from .contracts import BACKEND_METHOD_VERSION, SCHEMA_VERSION, api_validator, validate
 from .ports import CarbonRequest, RasterRequest, RasterUnavailable
 from .store import LensStore, artifact_record, new_id, scope_key
@@ -49,12 +50,22 @@ class LensContext:
         return {"raster": self.ports.raster.name, "carbon": self.ports.carbon.name}
 
 
-def create_lens_context(ctx: AppContext, *, prefer_real: bool = True) -> LensContext:
+def create_lens_context(ctx: AppContext, *, engine_mode: str | None = None,
+                        carbon_module_override: Any = None) -> LensContext:
+    """Build the Lens for this deployment.
+
+    If the engines this deployment needs are not installed, this raises. A deployment
+    that would rather be down than approximately right sets `BACKEND_LENS_REQUIRE_REAL`
+    and gets that failure at startup; otherwise the Lens is disabled and `/api/v1` keeps
+    serving, which is still not the same as answering with invented numbers.
+    """
     settings = ctx.settings
     return LensContext(
         app=ctx,
         store=LensStore(ctx, Path(settings.lens_artifact_store)),
-        ports=build_ports(Path(settings.lens_work_dir), prefer_real=prefer_real))
+        ports=build_ports(Path(settings.lens_work_dir),
+                          engine_mode=engine_mode or settings.lens_engine_mode,
+                          carbon_module_override=carbon_module_override))
 
 
 # -- request ---------------------------------------------------------------------------
@@ -225,6 +236,15 @@ def run_analysis(lens: LensContext, analysis_id: str) -> str:
     except ApiError as exc:
         lens.store.fail(analysis_id, {"code": exc.code, "message": exc.message,
                                       "details": exc.details})
+        return "FAILED"
+    except (CarbonEngineUnavailable, RasterCoreUnavailable) as exc:
+        # An engine that vanished mid-flight ends the job. It never ends in a number,
+        # and it never quietly becomes a fixture.
+        log.error("lens dependency unavailable: %s", exc)
+        lens.store.fail(analysis_id, {
+            "code": "DEPENDENCY_UNAVAILABLE",
+            "message": "Расчётный движок недоступен, результат не формировался.",
+            "details": {"dependency": type(exc).__name__}})
         return "FAILED"
     except Exception as exc:  # no stack traces, no local paths, no secrets
         log.exception("lens analysis failed")
@@ -401,7 +421,8 @@ def catalog_view(lens: LensContext) -> dict:
     document = catalog.document(raster_adapter=lens.ports.raster.name,
                                 carbon_adapter=lens.ports.carbon.name,
                                 schema_version=SCHEMA_VERSION,
-                                method_version=BACKEND_METHOD_VERSION)
+                                method_version=BACKEND_METHOD_VERSION,
+                                engine_mode=lens.app.settings.lens_engine_mode)
     return validate(api_validator("Catalog"), document, "Catalog")
 
 

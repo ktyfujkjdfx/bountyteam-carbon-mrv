@@ -9,6 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ROOT = REPO_ROOT / "backend"
 
 MODES = ("CONTRACT_FIXTURE", "LOCAL_DEMO")
+LENS_ENGINE_MODES = ("REAL", "FIXTURE")
 CHAIN_ADAPTERS = ("mock", "web3")
 ACTORS = ("issuer", "buyer", "recipient")
 SIGNER_ROLES = ("issuer", "buyer", "recipient", "oracle")
@@ -51,6 +52,12 @@ class Settings:
     lens_artifact_store: Path = BACKEND_ROOT / "runtime" / "lens-artifacts"
     lens_work_dir: Path = BACKEND_ROOT / "runtime" / "lens-runs"
     lens_enabled: bool = True
+    # REAL is the only mode that answers with measurements. FIXTURE replays labelled
+    # vectors and must be asked for by name; it is never reached by falling back.
+    lens_engine_mode: str = "REAL"
+    # Refuse to start at all unless the owning packages are installed, for a deployment
+    # that would rather be down than be approximately right.
+    lens_require_real: bool = False
     cors_origins: tuple[str, ...] = ()
     max_artifact_bytes: int = 64 * 1024 * 1024
     max_bundle_bytes: int = 512 * 1024 * 1024
@@ -69,6 +76,17 @@ class Settings:
             raise ConfigError("BACKEND_DEMO_SESSION must be set (>= 16 characters)")
         if self.rs_mode not in ("cached_bundle", "rs_cli"):
             raise ConfigError("BACKEND_RS_MODE must be cached_bundle or rs_cli")
+        if self.lens_engine_mode not in LENS_ENGINE_MODES:
+            raise ConfigError(f"BACKEND_LENS_ENGINE_MODE must be one of {LENS_ENGINE_MODES}")
+        # A deployment that says it demonstrates real data may not serve replayed vectors:
+        # the two are indistinguishable once they are on a screen.
+        if self.mode == "LOCAL_DEMO" and self.lens_engine_mode == "FIXTURE":
+            raise ConfigError(
+                "LOCAL_DEMO may not run the Carbon Lens in FIXTURE mode; replayed vectors "
+                "are not a demonstration of the supplied data")
+        if self.lens_require_real and self.lens_engine_mode == "FIXTURE":
+            raise ConfigError(
+                "BACKEND_LENS_REQUIRE_REAL=1 contradicts BACKEND_LENS_ENGINE_MODE=FIXTURE")
         return self
 
 
@@ -96,6 +114,9 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
                                   Settings.lens_artifact_store),
         lens_work_dir=_path(env.get("BACKEND_LENS_WORK_DIR"), Settings.lens_work_dir),
         lens_enabled=env.get("BACKEND_LENS_ENABLED", "1") not in ("0", "false", "False"),
+        lens_engine_mode=env.get("BACKEND_LENS_ENGINE_MODE", "REAL").upper(),
+        lens_require_real=env.get("BACKEND_LENS_REQUIRE_REAL", "0")
+        not in ("0", "false", "False", ""),
         cors_origins=_csv(env.get("BACKEND_CORS_ORIGINS")),
         worker_poll_seconds=float(env.get("BACKEND_WORKER_POLL_SECONDS", "1.0")),
     ).validate()

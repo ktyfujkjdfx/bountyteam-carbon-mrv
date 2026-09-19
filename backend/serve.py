@@ -32,14 +32,28 @@ def main(argv=None) -> int:
 
     lens_stop = lens_thread = None
     if settings.lens_enabled and not args.no_lens:
+        from .app.v2.adapters import EnginesUnavailable
         from .app.v2.api import compose, create_lens_app
         from .app.v2.service import create_lens_context
         from .app.v2.worker import start_worker_thread
 
-        lens = create_lens_context(ctx)
-        app = compose(app, create_lens_app(lens))
-        if not args.no_worker:
-            lens_thread, lens_stop = start_worker_thread(lens)
+        try:
+            lens = create_lens_context(ctx)
+        except EnginesUnavailable as exc:
+            # Fail closed. The alternative is a deployment that looks complete and
+            # answers with numbers nobody measured, which is worse than being down.
+            if settings.lens_require_real:
+                logging.getLogger("backend.serve").error(
+                    "refusing to start: %s (BACKEND_LENS_REQUIRE_REAL is set)", exc)
+                return 2
+            logging.getLogger("backend.serve").warning(
+                "Carbon Lens disabled: %s. /api/v1 continues to serve; /api/v2 is not "
+                "mounted and no stub answers in its place.", exc)
+            lens = None
+        if lens is not None:
+            app = compose(app, create_lens_app(lens))
+            if not args.no_worker:
+                lens_thread, lens_stop = start_worker_thread(lens)
 
     try:
         uvicorn.run(app, host=args.host, port=args.port, log_level="info")

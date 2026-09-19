@@ -63,21 +63,40 @@ Failures: 401 unauthenticated, 404 unknown analysis or artifact, 409 idempotency
 422 invalid geometry, period or claim, 503 source unavailable or artifact integrity
 failure. No error carries a stack trace, a secret or a local path.
 
-## What is real and what is a stand-in
+## Two engine modes, and no path between them
+
+A deployment is in one of them by configuration, never by accident.
+
+`BACKEND_LENS_ENGINE_MODE=REAL` is the default. `rs.case2` and `carbon` answer, or nothing
+does. There is no fallback: if either package is missing, `create_lens_context` raises,
+and the process either refuses to start (`BACKEND_LENS_REQUIRE_REAL=1`) or serves
+`/api/v1` with the Lens unmounted. An engine that disappears mid-flight fails the job with
+`DEPENDENCY_UNAVAILABLE` and no result. The one thing that never happens is a number
+nobody measured.
+
+`BACKEND_LENS_ENGINE_MODE=FIXTURE` has to be asked for by name. It replays labelled
+raster vectors, stamps every result `run.dataset_origin = "STUB_FIXTURE"` with a `fixture`
+label the UI must display, and adds a limitation saying in plain words that the biomass
+values were not measured. `BACKEND_MODE=LOCAL_DEMO` refuses it outright, because a
+replayed vector and a measurement are indistinguishable once they are on a screen. Note
+that fixture mode still needs the real carbon engine: the vectors replay a raster payload,
+never a recorded Q.
+
+`backend/app/` contains no second implementation of the method, and a test walks every
+module under `backend/app/v2/` to prove it: no `0.85`, no `44/12`, no `0.47`, no
+`math.floor`, and no import of a stand-in. The test double that lets this suite run before
+`carbon/` is merged lives at `backend/tests/case2/reference_engine.py`, inside the test
+tree, and is injected explicitly by `conftest.engine_override`. It is deleted when
+`carbon/` lands.
 
 | Piece | Today | Why |
 |---|---|---|
 | Areas, polygons, geodesic area, coverage arithmetic | real | read from `data/`, measured with `pyproj.Geod` |
 | Baseline, parameters, prices | real | read from `data/methodology/*.csv` |
-| Interval, baseline result, units, claim | real formulas, **temporary engine** | `carbon/` is not on this branch, so `adapters/reference_carbon.py` answers |
-| Biomass per cell, uncertainty per cell, zones, optical evidence | **stand-in** | `rs/case2/` is not on this branch, so `fixtures/v2/replay/` answers |
+| Interval, baseline result, units, claim | real formulas, **test double** | `carbon/` is not on this branch; the suite injects `tests/case2/reference_engine.py` and production refuses to run without the real engine |
+| Biomass per cell, uncertainty per cell, zones, optical evidence | **replayed vectors** | `rs/case2/` is not on this branch, so `fixtures/v2/replay/` answers in FIXTURE mode only |
 | Jobs, persistence, artifacts, passports, reports, proof | real | this module |
 | Chain anchor | not implemented | `anchor.status` is `NOT_REQUESTED` and says so |
-
-Both stand-ins announce themselves. Every result carries
-`run.dataset_origin = "STUB_FIXTURE"`, `run.raster_adapter = "backend-replay"`, a
-`fixture` label the UI must display, and a limitation saying in plain words that the
-biomass values were not measured.
 
 The replay adapter answers exactly four contour-and-period keys and nothing else. Every
 other request gets `RASTER_ANALYSIS_UNAVAILABLE`, which becomes a successful job with
@@ -95,17 +114,18 @@ other request gets `RASTER_ANALYSIS_UNAVAILABLE`, which becomes a successful job
 The order matters, and each step is small because the seam was built for it.
 
 **1. RS.** Merge `rs/case2/`. `adapters/raster.py` imports `rs.case2.analysis` at module
-load; if the import succeeds, `RasterCoreAdapter` replaces `ReplayRasterAdapter`
-automatically and `run.dataset_origin` becomes `COMPUTED_FROM_SUPPLIED_DATA`. The adapter
+load; once the import succeeds, `REAL` mode stops raising and `run.dataset_origin` becomes
+`COMPUTED_FROM_SUPPLIED_DATA`, with no call site changing. The adapter
 already calls `analyse`, `analysis_payload`, `cells_payload`, `write_cell_artifacts`,
 `write_change_artifacts` and `manifest.build` exactly as `rs/case2/cli.py` does, and
 validates the result against `internal-models.v2.schema.json` before anything else sees it.
 What RS must not change without a contract PR: the keys listed as required in that schema.
 Adding keys is always safe.
 
-**2. Trust.** Merge `carbon/`. `adapters/carbon.py` imports it at module load and the
-reference stand-in becomes dead code; delete `adapters/reference_carbon.py` in that same
-PR. The adapter calls `load_parameters`, `compute_interval`, `compute_baseline`,
+**2. Trust.** Merge `carbon/`. `adapters/carbon.py` imports it at module load and it
+becomes the only engine in play; `conftest.engine_override` stops firing, so the suite
+moves onto the production path by itself. Delete `backend/tests/case2/reference_engine.py`
+in that same PR. The adapter calls `load_parameters`, `compute_interval`, `compute_baseline`,
 `compute_units` and `compare_claim` and reads status strings through a small accessor that
 looks in `carbon.reasons`, so no call site changes. `test_zero_reasons_are_exactly_the_engine_vocabulary`
 stops skipping and pins the contract enumerations to `carbon.reasons`.

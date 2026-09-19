@@ -155,43 +155,15 @@ def coverage_block(raster: dict, baseline: dict) -> dict:
     }
 
 
-def _baseline_curve(parts: list[dict], years: list[int]) -> dict[int, float | None]:
-    """Area-weighted baseline stock per year, from the engine's own trajectory function."""
-    api = carbon_adapter.engine()
-    if not hasattr(api, "baseline_stock"):
-        return {year: None for year in years}
-    rows = _baseline_rows(api)
-    total = sum(part["area_ha"] for part in parts) or 0.0
-    if not rows or total <= 0.0:
-        return {year: None for year in years}
-    curve: dict[int, float | None] = {}
-    for year in years:
-        weighted, covered = 0.0, 0.0
-        for part in parts:
-            row = rows.get(part["aoi_id"])
-            if row is None:
-                continue
-            weighted += part["area_ha"] * api.baseline_stock(
-                reference_2019_tc_ha=row[0], rate_tc_ha_yr=row[1], year=year)
-            covered += part["area_ha"]
-        curve[year] = weighted / covered if covered > 0.0 else None
-    return curve
+def timeline_block(raster: dict, curve: dict) -> list[dict]:
+    """The observed stock per year, beside the baseline trajectory the engine supplied.
 
-
-def _baseline_rows(api: Any) -> dict[str, tuple[float, float]]:
-    if hasattr(api, "baseline_rows"):
-        return {aoi: (row.reference_mean_2019_tc_ha, row.historical_rate_tc_ha_yr)
-                for aoi, row in api.baseline_rows().items()}
-    table = api.load_baseline_table()
-    return {aoi: (rows[0].reference_mean_2019_tc_ha, rows[0].historical_rate_tc_ha_yr)
-            for aoi, rows in table.items() if rows}
-
-
-def timeline_block(raster: dict, parts: list[dict]) -> list[dict]:
+    The baseline line is the engine's own; this module places it on the timeline and does
+    not recompute its shape.
+    """
     cf = float(raster["parameters"].get("carbon_fraction") or 0.0)
     year_start, year_end = raster["request"]["year_start"], raster["request"]["year_end"]
     entries = list(raster["timeline"])
-    curve = _baseline_curve(parts, [entry["year"] for entry in entries])
     requested = raster["coverage"]["requested_ha"] or 0.0
     out = []
     for entry in entries:
@@ -203,7 +175,7 @@ def timeline_block(raster: dict, parts: list[dict]) -> list[dict]:
             "mean_agb_tdm_ha": mean_agb,
             "mean_carbon_tc_ha": entry["mean_tc_ha"],
             "total_carbon_tc": entry["total_tc"],
-            "baseline_carbon_tc_ha": curve.get(entry["year"]),
+            "baseline_carbon_tc_ha": curve.get(str(entry["year"])),
             "area_ha": entry["covered_ha"],
             "coverage": _fraction(entry["covered_ha"] / requested) if requested else 0.0,
             "in_period": year_start <= entry["year"] <= year_end,
@@ -613,7 +585,7 @@ def build_result(*, analysis_id: str, run_id: str, created_at: str, request_snap
         "evidence_status": "INSUFFICIENT",
         "areas": areas,
         "coverage": coverage,
-        "timeline": timeline_block(payload, areas["parent_parts"]),
+        "timeline": timeline_block(payload, baseline.get("curve_tc_ha") or {}),
         "change": change_block(payload, units["e_proj_tco2e"]),
         "uncertainty": uncertainty_block(interval),
         "baseline": baseline_block(baseline),

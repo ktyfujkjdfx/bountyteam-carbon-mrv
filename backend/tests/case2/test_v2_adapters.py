@@ -17,10 +17,27 @@ from backend.app.v2.contracts import fixture, internal_validator, schema_errors
 from backend.app.v2.ports import (CarbonAssessmentPort, CarbonRequest, RasterAnalysisPort,
                                   RasterRequest, RasterUnavailable)
 
-# The one module allowed to contain the method, and only until carbon/ is merged.
-REFERENCE = REPO_ROOT / "backend" / "app" / "v2" / "adapters" / "reference_carbon.py"
+# The test double that stands in for carbon/ until it is merged. It lives in the test
+# tree on purpose: nothing under backend/app/ can import it.
+REFERENCE = REPO_ROOT / "backend" / "tests" / "case2" / "reference_engine.py"
 METHOD_NUMBERS = (re.compile(r"0\.85"), re.compile(r"44\s*/\s*12"), re.compile(r"0\.47"),
                   re.compile(r"\bmath\.floor\b"), re.compile(r"0\.15\b"))
+
+
+def _code_only(source: str) -> str:
+    """The module with its comments and docstrings removed.
+
+    A docstring that explains that CO2/C is written as the ratio 44/12 is documentation;
+    a line that multiplies by it is the method. Only the second one matters here.
+    """
+    import ast
+
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                             ast.AsyncFunctionDef)) and ast.get_docstring(node):
+            node.body = node.body[1:] or [ast.Pass()]
+    return ast.unparse(ast.fix_missing_locations(tree))
 
 
 # -- the boundary -------------------------------------------------------------------------
@@ -33,10 +50,30 @@ def test_no_module_outside_the_reference_engine_contains_the_method(module):
         assert not pattern.search(source), f"{module.__name__} contains {pattern.pattern}"
 
 
-def test_the_reference_engine_is_the_only_stand_in_with_arithmetic():
+def test_no_scientific_stand_in_lives_under_the_application(harness):
+    """The application ships no second implementation of the method.
+
+    A stand-in that production code can import is a stand-in production can serve. The
+    test double is in the test tree, and this walks the application to prove nothing
+    there carries the arithmetic or reaches for it.
+    """
+    # The Lens application. The frozen P0 modules beside it are a different contract and
+    # are not in scope here.
+    application = REPO_ROOT / "backend" / "app" / "v2"
+    for path in sorted(application.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        for pattern in METHOD_NUMBERS:
+            # Prose may name a coefficient; executable code may not carry one.
+            assert not pattern.search(_code_only(source)), \
+                f"{path} contains {pattern.pattern}"
+        assert "reference_engine" not in source, path
+        assert "reference_carbon" not in source, path
+
+
+def test_the_test_double_is_labelled_and_reachable_only_from_the_tests():
     source = REFERENCE.read_text(encoding="utf-8")
     assert "floor(adjusted * UNIT_SHARE)" in source
-    assert "temporary stand-in" in source.lower()
+    assert "test double" in source.lower()
     assert "carbon/" in source
 
 
@@ -57,30 +94,73 @@ def test_the_ports_are_satisfied_by_the_running_adapters(harness):
 
 def test_the_registry_reports_what_is_actually_running():
     described = registry.describe()
-    assert set(described) == {"raster_core_available", "carbon_engine_available",
-                              "raster_adapter", "carbon_adapter"}
+    assert set(described) == {"engine_mode", "raster_core_available",
+                              "carbon_engine_available", "missing_engines"}
     assert described["raster_core_available"] is raster_adapter.RS_AVAILABLE
-    assert described["carbon_engine_available"] is not carbon_adapter.IS_REFERENCE_FALLBACK
+    assert described["carbon_engine_available"] is carbon_adapter.CARBON_AVAILABLE
 
 
-def test_the_real_raster_core_wins_when_present():
-    """Whenever rs.case2 is importable, the replay adapter must not be chosen."""
-    port = registry.raster_port(REPO_ROOT / "backend" / "runtime" / "lens-runs")
+# -- fail closed --------------------------------------------------------------------------
+def test_the_real_mode_refuses_to_build_without_the_real_engines(tmp_path):
+    """No number is better than a plausible one, so a missing engine is an error."""
+    if not registry.missing_engines():  # pragma: no cover - depends on the branch
+        pytest.skip("both engines are merged into this branch")
+    with pytest.raises(registry.EnginesUnavailable) as raised:
+        registry.build_ports(tmp_path, engine_mode=registry.REAL)
+    assert set(raised.value.missing) == set(registry.missing_engines())
+
+
+def test_the_real_mode_never_returns_a_replay_adapter(tmp_path):
+    if registry.missing_engines():
+        with pytest.raises(registry.EnginesUnavailable):
+            registry.build_ports(tmp_path, engine_mode=registry.REAL)
+        return
+    ports = registry.build_ports(tmp_path, engine_mode=registry.REAL)  # pragma: no cover
+    assert not isinstance(ports.raster, raster_adapter.ReplayRasterAdapter)
+
+
+def test_the_raster_port_does_not_fall_back_when_the_core_is_missing(tmp_path):
     if raster_adapter.RS_AVAILABLE:  # pragma: no cover - depends on the branch
-        assert isinstance(port, raster_adapter.RasterCoreAdapter)
-    else:
-        assert isinstance(port, raster_adapter.ReplayRasterAdapter)
+        pytest.skip("rs.case2 is merged into this branch")
+    with pytest.raises(raster_adapter.RasterCoreUnavailable):
+        raster_adapter.build(tmp_path, fixture_mode=False)
+    assert isinstance(raster_adapter.build(tmp_path, fixture_mode=True),
+                      raster_adapter.ReplayRasterAdapter)
 
 
-def test_the_real_carbon_engine_wins_when_present():
-    try:
-        import carbon  # noqa: F401
-    except ImportError:
-        assert carbon_adapter.IS_REFERENCE_FALLBACK
-        assert carbon_adapter.ENGINE_NAME.startswith("backend-reference/")
-    else:  # pragma: no cover - depends on the branch
-        assert not carbon_adapter.IS_REFERENCE_FALLBACK
-        assert carbon_adapter.ENGINE_NAME.startswith("carbon/")
+def test_the_carbon_port_does_not_fall_back_when_the_engine_is_missing():
+    if carbon_adapter.CARBON_AVAILABLE:  # pragma: no cover - depends on the branch
+        pytest.skip("carbon is merged into this branch")
+    with pytest.raises(carbon_adapter.CarbonEngineUnavailable):
+        carbon_adapter.engine()
+    with pytest.raises(carbon_adapter.CarbonEngineUnavailable):
+        carbon_adapter.CarbonAdapter()
+
+
+def test_fixture_mode_still_needs_a_real_carbon_engine(tmp_path):
+    """The vectors replay a raster payload, never a recorded Q."""
+    if carbon_adapter.CARBON_AVAILABLE:  # pragma: no cover - depends on the branch
+        pytest.skip("carbon is merged into this branch")
+    with pytest.raises(registry.EnginesUnavailable) as raised:
+        registry.build_ports(tmp_path, engine_mode=registry.FIXTURE)
+    assert raised.value.missing == ("carbon",)
+
+
+def test_an_unknown_engine_mode_is_refused(tmp_path):
+    with pytest.raises(ValueError):
+        registry.build_ports(tmp_path, engine_mode="ALMOST_REAL")
+
+
+def test_a_demo_deployment_may_not_run_the_lens_on_fixtures():
+    """Replayed vectors and measurements are indistinguishable once they are on a screen."""
+    from backend.app.config import ConfigError, Settings
+
+    with pytest.raises(ConfigError):
+        Settings(demo_session="x" * 16, mode="LOCAL_DEMO", chain_adapter="web3",
+                 lens_engine_mode="FIXTURE").validate()
+    with pytest.raises(ConfigError):
+        Settings(demo_session="x" * 16, lens_engine_mode="FIXTURE",
+                 lens_require_real=True).validate()
 
 
 def test_a_stand_in_can_never_be_reported_as_a_measurement(harness):
@@ -157,8 +237,19 @@ def test_a_payload_that_breaks_the_internal_contract_is_refused(harness, monkeyp
 
 
 # -- the carbon port ----------------------------------------------------------------------
+def _engine_under_test():
+    """The engine this branch actually runs: `carbon` once merged, the double until then."""
+    from .conftest import engine_override
+
+    module = engine_override().get("carbon_module_override")
+    return module if module is not None else carbon_adapter.engine()
+
+
 def _assess(raster: dict, cells: dict, year_start: int, year_end: int, **claim):
-    return carbon_adapter.CarbonAdapter().assess(CarbonRequest(
+    from .conftest import engine_override
+
+    module = engine_override().get("carbon_module_override")
+    return carbon_adapter.CarbonAdapter(module=module).assess(CarbonRequest(
         raster=raster, cells=cells, geometry_hash="0x" + "0" * 64, year_start=year_start,
         year_end=year_end, claimed_units=claim.get("claimed_units"),
         claim_origin=claim.get("claim_origin"), claim_scope=claim.get("claim_scope")))
@@ -174,7 +265,7 @@ def test_the_carbon_adapter_output_matches_the_internal_contract():
 
 def test_the_engine_reproduces_the_official_worked_example():
     """The number the statement itself prints: 100 ha, one year, 100 -> 104 t/ha, Q = 395."""
-    api = carbon_adapter.engine()
+    api = _engine_under_test()
     vector = fixture("doc_example_units.json")
     given, expected = vector["input"], vector["expected"]
     parameters = api.load_parameters()
@@ -286,3 +377,29 @@ def test_the_method_version_names_all_three_owners(harness):
     method = job["result"]["identity"]["method_version"]
     assert method.count("+") == 2
     assert method.startswith("carbon-lens-backend/")
+
+
+def test_the_catalog_says_which_engine_mode_answered(harness):
+    catalog_body = harness.api.get("/catalog", "Catalog")
+    assert catalog_body["engine_mode"] in ("REAL", "FIXTURE")
+    assert catalog_body["engine_mode"] == harness.settings.lens_engine_mode
+
+
+def test_an_engine_that_vanishes_mid_flight_fails_the_job_without_a_number(harness):
+    """A dependency that disappears ends the job. It never ends in a plausible value."""
+    analysis_id = harness.submit({"aoi_id": "RU_TVER_01", "year_start": 2019,
+                                  "year_end": 2024}, key="vanish-key-000001")
+
+    class Gone:
+        name = "gone"
+
+        def assess(self, request):
+            raise carbon_adapter.CarbonEngineUnavailable("engine removed")
+
+    harness.lens.ports.__dict__["carbon"] = Gone()
+    harness.run()
+
+    view = harness.api.get(f"/analyses/{analysis_id}", "Analysis")
+    assert view["job_state"] == "FAILED"
+    assert view["error"]["code"] == "DEPENDENCY_UNAVAILABLE"
+    assert view["result"] is None

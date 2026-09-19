@@ -1,14 +1,15 @@
 """The raster port: areas, annual stocks, the stock change, per-cell uncertainty and zones.
 
-The owner of these numbers is `rs/case2/`. When that package is importable this module
-calls it and copies its payload; when it is not, the replay adapter answers from a small
-set of labelled vectors so that the API, the jobs, the passports and the screens can be
-built and tested before the raster core lands.
+The owner of these numbers is `rs/case2/`, and in the default engine mode it is the only
+implementation this module will use. If it is absent the port reports itself unavailable
+and analyses fail closed. Nothing here chooses a stand-in to keep a deployment answering.
 
-The replay adapter never invents a result for a request it was not given. It answers only
-the exact contour-and-period keys in `fixtures/v2/replay/index.json`, and every other
-request gets `RASTER_ANALYSIS_UNAVAILABLE`, which the service turns into an honest
-`q = null` rather than into a plausible-looking number.
+A fixture mode exists and must be asked for by name. It replays a small set of labelled
+vectors so the API, the jobs, the passports and the screens can be exercised without the
+raster core, and everything it produces is stamped `STUB_FIXTURE` with a fixture label
+that the UI is required to show. Even then it never invents a result for a request it was
+not given: only the exact contour-and-period keys in `fixtures/v2/replay/index.json` are
+answered, and every other request gets `RASTER_ANALYSIS_UNAVAILABLE`.
 """
 from __future__ import annotations
 
@@ -136,7 +137,20 @@ def _result(payload: dict, cells: dict, manifest: dict, adapter: str, origin: st
                         dataset_origin=origin, fixture=fixture, artifact_files=files)
 
 
-def build(work_dir: Path, *, prefer_real: bool = True) -> Any:
-    if prefer_real and RS_AVAILABLE:  # pragma: no cover
-        return RasterCoreAdapter(work_dir)
-    return ReplayRasterAdapter()
+class RasterCoreUnavailable(RuntimeError):
+    """The raster core is not installed on this deployment. No number is invented."""
+
+
+def build(work_dir: Path, *, fixture_mode: bool = False) -> Any:
+    """The raster port for this deployment.
+
+    In the default mode there is exactly one answer: the raster core, or an error. The
+    fixture mode has to be selected explicitly in the settings; it is never reached by
+    falling back from a missing dependency.
+    """
+    if fixture_mode:
+        return ReplayRasterAdapter()
+    if not RS_AVAILABLE:
+        raise RasterCoreUnavailable(
+            "rs.case2 is not available on this deployment")
+    return RasterCoreAdapter(work_dir)  # pragma: no cover - needs rs.case2 on the branch

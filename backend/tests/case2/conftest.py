@@ -36,8 +36,33 @@ def assert_model(body, model: str):
     return body
 
 
+def _missing_engines() -> tuple:
+    from backend.app.v2.adapters import missing_engines
+
+    return missing_engines()
+
+
+def engine_override() -> dict:
+    """How this suite gets an engine before `carbon/` and `rs/case2/` are merged.
+
+    The real packages win whenever they are importable, so once they land the suite
+    exercises the production path without a line changing here. Until then the raster
+    side replays labelled vectors and the carbon side is handed `reference_engine`, a
+    test double that lives in this directory precisely so that nothing under
+    `backend/app/` can reach a second implementation of the formulas.
+    """
+    from backend.app.v2.adapters import FIXTURE, missing_engines
+
+    if not missing_engines():
+        return {}
+    from . import reference_engine
+
+    return {"engine_mode": FIXTURE, "carbon_module_override": reference_engine}
+
+
 def make_settings(tmp_path: Path, **overrides) -> Settings:
     base = Settings(demo_session=SESSION, db_path=tmp_path / "backend.sqlite",
+                    lens_engine_mode=("FIXTURE" if _missing_engines() else "REAL"),
                     artifact_store=tmp_path / "artifacts",
                     mock_chain_path=tmp_path / "mock-chain.sqlite",
                     rs_work_dir=tmp_path / "rs-runs",
@@ -94,7 +119,7 @@ class Harness:
 
     def _build(self) -> None:
         self.ctx = create_context(self.settings)
-        self.lens = create_lens_context(self.ctx, prefer_real=False)
+        self.lens = create_lens_context(self.ctx, **engine_override())
         self.app = compose(create_app(ctx=self.ctx), create_lens_app(self.lens))
         self.client = TestClient(self.app)
         self.api = LensApi(self.client)

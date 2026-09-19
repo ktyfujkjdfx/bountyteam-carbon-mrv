@@ -1,10 +1,14 @@
 """The carbon port: interval, baseline, potential units and the claim comparison.
 
-The engine of record is the `carbon/` package owned by Trust. It is imported here whenever
-it is importable, and only when it is absent does this module fall back to
-`reference_carbon`, which is labelled as a stand-in in the adapter name and in every
-result. Both paths run through exactly the same call sequence below, so the fallback
-cannot quietly acquire behaviour of its own.
+The engine of record is the `carbon/` package owned by Trust, and it is the only engine
+this module will load. There is no fallback: if `carbon` is not importable the port
+reports itself unavailable and every analysis fails closed, because a number produced by
+a stand-in and a number produced by the engine would be indistinguishable to the reader
+of a passport.
+
+A test may inject a different module through `CarbonAdapter(module=...)`. That is how the
+suite runs before `carbon/` is merged, and it is deliberately the only way: nothing in
+`backend/app/` can reach a second implementation of these formulas.
 """
 from __future__ import annotations
 
@@ -39,19 +43,25 @@ SPATIAL_NAMES = {
 CLAIM_NOT_APPLICABLE = "NOT_APPLICABLE"
 NO_POSITIVE_CLAIM = "NO_POSITIVE_CLAIM"
 
-try:  # pragma: no cover - which branch runs depends on what is merged into the branch
+try:  # pragma: no cover - depends on what is merged into the branch
     import carbon as _engine
 
+    CARBON_AVAILABLE = True
     ENGINE_NAME = f"carbon/{_engine.METHOD_VERSION}"
-    IS_REFERENCE_FALLBACK = False
 except ImportError:  # pragma: no cover
-    from . import reference_carbon as _engine
+    _engine = None
+    CARBON_AVAILABLE = False
+    ENGINE_NAME = ""
 
-    ENGINE_NAME = f"backend-reference/{_engine.METHOD_VERSION}"
-    IS_REFERENCE_FALLBACK = True
+
+class CarbonEngineUnavailable(RuntimeError):
+    """The carbon engine is not installed on this deployment. No number is invented."""
 
 
 def engine() -> Any:
+    if _engine is None:  # pragma: no cover - exercised by the fail-closed tests
+        raise CarbonEngineUnavailable(
+            "the carbon engine is not available on this deployment")
     return _engine
 
 
@@ -141,8 +151,9 @@ class CarbonAdapter:
     """Composes the engine's four pure functions; contains no arithmetic of its own."""
 
     def __init__(self, module: Any | None = None, name: str | None = None):
-        self._engine = module or _engine
-        self.name = name or ENGINE_NAME
+        self._engine = module if module is not None else engine()
+        self.name = name or ENGINE_NAME or getattr(
+            self._engine, "METHOD_VERSION", type(self._engine).__name__)
 
     def assess(self, request: CarbonRequest) -> CarbonResult:
         api = self._engine
@@ -195,7 +206,8 @@ class CarbonAdapter:
             "method_version": getattr(api, "METHOD_VERSION", self.name),
             "parameters": _plain(parameters),
             "interval": _interval_payload(api, interval),
-            "baseline": _baseline_payload(api, baseline),
+            "baseline": _baseline_payload(api, baseline, curve=baseline_curve(
+                api, parts, [entry["year"] for entry in raster["timeline"]])),
             "units": _units_payload(units),
             "claim": _claim_payload(claim),
             "notes": _notes(interval, baseline, units, claim),
@@ -257,8 +269,43 @@ def _interval_kind(api: Any, interval: Any) -> str:
     return "PROBABILISTIC" if kind.startswith("PROB") else "SCENARIO"
 
 
-def _baseline_payload(api: Any, baseline: Any) -> dict:
+def baseline_curve(api: Any, parts: list[tuple[str, float]],
+                   years: list[int]) -> dict[str, float | None]:
+    """The area-weighted baseline stock per year, from the engine's own trajectory.
+
+    The timeline draws a baseline line beside the observed one. The shape of that line is
+    the engine's, so it is asked for here rather than reconstructed while assembling the
+    response.
+    """
+    if not hasattr(api, "baseline_stock"):
+        return {str(year): None for year in years}
+    rows = _baseline_rows(api)
+    curve: dict[str, float | None] = {}
+    for year in years:
+        weighted, covered = 0.0, 0.0
+        for aoi_id, area_ha in parts:
+            row = rows.get(aoi_id)
+            if row is None:
+                continue
+            weighted += area_ha * api.baseline_stock(
+                reference_2019_tc_ha=row[0], rate_tc_ha_yr=row[1], year=year)
+            covered += area_ha
+        curve[str(year)] = weighted / covered if covered > 0.0 else None
+    return curve
+
+
+def _baseline_rows(api: Any) -> dict[str, tuple[float, float]]:
+    if hasattr(api, "baseline_rows"):
+        return {aoi: (row.reference_mean_2019_tc_ha, row.historical_rate_tc_ha_yr)
+                for aoi, row in api.baseline_rows().items()}
+    table = api.load_baseline_table()
+    return {aoi: (rows[0].reference_mean_2019_tc_ha, rows[0].historical_rate_tc_ha_yr)
+            for aoi, rows in table.items() if rows}
+
+
+def _baseline_payload(api: Any, baseline: Any, *, curve: dict) -> dict:
     return {
+        "curve_tc_ha": curve,
         "status": baseline.status,
         "unavailable_reason": baseline.unavailable_reason,
         "baseline_id": baseline.baseline_id,
