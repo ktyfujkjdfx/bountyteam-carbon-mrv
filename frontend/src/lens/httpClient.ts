@@ -19,6 +19,15 @@ export interface LensHttpConfig {
   getToken: () => string;
   fetchImpl?: typeof fetch | undefined;
   timeoutMs?: number | undefined;
+  /**
+   * Called when the service answers 401 to a call made with this session.
+   *
+   * 401 and 403 are different answers and deserve different behaviour. 403 says this role may not
+   * do that, and the rest of the screen keeps working. 401 says the session is gone, and every
+   * later call will fail the same way — so the session is ended rather than left in place behind
+   * an error message the user cannot act on.
+   */
+  onUnauthorized?: (() => void) | undefined;
 }
 
 const API_PATH = /^\/api\/v2\//;
@@ -68,6 +77,7 @@ export function createHttpLensClient(config: LensHttpConfig): LensApiClient {
       if (timeout.aborted) throw new LensError('TIMEOUT', `Сервис не ответил за ${Math.round(timeoutMs / 1000)} с`);
       throw new LensError('NETWORK', `Сервис недоступен: ${error instanceof Error ? error.message : String(error)}`);
     }
+    if (response.status === 401) config.onUnauthorized?.();
     if (!response.ok) throw await failure(response);
     return response;
   }

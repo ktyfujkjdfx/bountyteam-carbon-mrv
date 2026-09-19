@@ -42,6 +42,8 @@ export function resolveLensConfig(env: EnvLike, search: string): LensConfig {
 export interface ClientFactoryOptions {
   getToken: () => string;
   fetchImpl?: typeof fetch | undefined;
+  /** Invoked when the service refuses this session with 401. See `LensHttpConfig.onUnauthorized`. */
+  onUnauthorized?: (() => void) | undefined;
 }
 
 export function createLensClient(config: LensConfig, options: ClientFactoryOptions): LensApiClient {
@@ -50,6 +52,7 @@ export function createLensClient(config: LensConfig, options: ClientFactoryOptio
     baseUrl: config.baseUrl,
     getToken: options.getToken,
     fetchImpl: options.fetchImpl,
+    onUnauthorized: options.onUnauthorized,
   });
 }
 

@@ -30,7 +30,19 @@ export function LensApp({ client: injected, config: injectedConfig }: { client?:
   const [route, setRoute] = useState<Route | null>(() => (typeof window === 'undefined' ? null : routeFromHash(window.location.hash)));
   const methodologyRef = useRef<HTMLDialogElement | null>(null);
 
-  const client = useMemo(() => injected ?? createLensClient(config, { getToken }), [injected, config]);
+  // The session is ended where the service says it is over, so an expired one returns the person to
+  // the sign-in screen instead of leaving every panel failing with an error they cannot act on.
+  const client = useMemo(
+    () => injected ?? createLensClient(config, {
+      getToken,
+      onUnauthorized: () => {
+        if (getSession() === null) return;
+        setSession(null);
+        setLoginError('Сессия истекла, войдите снова.');
+      },
+    }),
+    [injected, config],
+  );
 
   // A stored service token is confirmed once; a rejected one signs out instead of showing stale data.
   useEffect(() => {
