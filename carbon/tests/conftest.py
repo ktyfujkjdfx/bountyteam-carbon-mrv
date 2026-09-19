@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,7 @@ from carbon import (
     analyse,
     build_provenance,
     from_fixture,
+    from_rs_payload,
 )
 from carbon.parameters import REPO_ROOT
 
@@ -30,6 +32,7 @@ GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 OFFICIAL_AOIS = ("RU_TVER_01", "RU_VOLOGDA_02", "RU_MORDOVIA_03", "RU_MORDOVIA_04")
 SAMPLE_REQUEST = "CHECK_TRANSFER_01"
 ALL_REQUESTS = (*OFFICIAL_AOIS, SAMPLE_REQUEST)
+_REAL_INPUT_CACHE: dict[str, tuple] = {}
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -112,6 +115,70 @@ def build_case(
         declared_e_tco2e=inputs.declared_e_tco2e,
     )
     provenance = build_provenance(relative_paths=list(inputs.source_files))
+    return request, inputs, analysis, provenance
+
+
+def build_real_case(
+    request_id: str,
+    areas: dict,
+    sample_requests: dict,
+    *,
+    claim=None,
+    options: MethodOptions = MethodOptions(),
+):
+    """Run the official contour through RS and feed its reviewed payload to Carbon."""
+    from rs.case2 import analysis as rs_analysis
+    from rs.case2 import payload as rs_payload
+    from rs.case2.catalog import Dataset
+
+    cached = _REAL_INPUT_CACHE.get(request_id)
+    if cached is None:
+        geometry = request_geometry(request_id, areas, sample_requests)
+        if request_id in sample_requests:
+            props = sample_requests[request_id]["properties"]
+            year_start, year_end = int(props["year_start"]), int(props["year_end"])
+        else:
+            year_start, year_end = 2019, 2024
+        raster = rs_analysis.analyse(
+            geometry, year_start, year_end, dataset=Dataset(), include_optical=True
+        )
+        wire = rs_payload.analysis_payload(raster)
+        cells = rs_payload.cells_payload(raster)
+        inputs = replace(
+            from_rs_payload(wire, cells),
+            source_files=tuple(
+                source.relative_path.removeprefix("data/").replace("\\", "/")
+                for source in raster.sources
+            ),
+        )
+        provenance = build_provenance(relative_paths=list(inputs.source_files))
+        _REAL_INPUT_CACHE[request_id] = (geometry, inputs, provenance)
+    else:
+        geometry, inputs, provenance = cached
+    request = AnalysisRequest(
+        request_id=request_id,
+        geometry=geometry,
+        year_start=inputs.year_start,
+        year_end=inputs.year_end,
+        parts=tuple(
+            BaselinePart(aoi_id=aoi_id, area_ha=area_ha)
+            for aoi_id, area_ha in inputs.parent_weights_ha
+        ),
+    )
+    analysis = analyse(
+        request,
+        inputs.cells,
+        claim=claim,
+        options=options,
+        coverage=inputs.coverage,
+        area=inputs.area,
+        timeline=inputs.timeline,
+        optical_quality=inputs.optical_quality,
+        input_status=inputs.input_status,
+        coverage_raw={name: report.raw for name, report in (inputs.coverage_raw or {}).items()},
+        excluded_cells=inputs.excluded_cells,
+        declared_e_tco2e=inputs.declared_e_tco2e,
+    )
     return request, inputs, analysis, provenance
 
 

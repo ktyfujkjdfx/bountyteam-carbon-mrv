@@ -9,8 +9,8 @@ Regenerate only when a change is intended, and read the diff before committing i
 
     python -m carbon.tests.golden.build_golden
 
-The numbers come from the provisional per-cell extraction under `carbon/tests/fixtures/`.
-They must be regenerated once the RS payload is available, and the golden file says so.
+The numbers come from the integrated `rs.case2` payload and its real `cells.geojson` view
+of the supplied official rasters. No provisional extraction is accepted here.
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from carbon.parameters import METHOD_VERSION, REPO_ROOT
 from carbon.tests.conftest import (
     ALL_REQUESTS,
     GOLDEN_DIR,
-    build_case,
+    build_real_case,
     load_json,
     read_csv,
 )
@@ -30,7 +30,7 @@ GOLDEN_FILE = GOLDEN_DIR / "results.json"
 
 
 def _row(request_id: str, areas: dict, sample_requests: dict) -> dict:
-    _, inputs, analysis, provenance = build_case(request_id, areas, sample_requests)
+    _, inputs, analysis, provenance = build_real_case(request_id, areas, sample_requests)
     passport = build_passport(analysis, provenance=provenance)
     interval, baseline, units = analysis.interval, analysis.baseline, analysis.units
     return {
@@ -75,9 +75,8 @@ def main() -> None:
     }
     payload = {
         "note": (
-            "Golden results of the carbon engine on the supplied data. Produced from the "
-            "provisional per-cell extraction in carbon/tests/fixtures/, not from an RS "
-            "payload; regenerate once RS is available."
+            "Golden results of the Carbon engine on the reviewed rs.case2 payload and "
+            "cells.geojson produced from the supplied official rasters."
         ),
         "method_version": METHOD_VERSION,
         "results": [_row(request_id, areas, sample_requests) for request_id in ALL_REQUESTS],
