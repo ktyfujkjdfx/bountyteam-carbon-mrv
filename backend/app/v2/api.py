@@ -145,7 +145,7 @@ def logout(lens: Lens, token: Token, who: Who):
 # -- verification requests ---------------------------------------------------------------
 @router.post("/requests", status_code=201)
 def create_request(lens: Lens, who: Who, body: CreateRequestBody):
-    auth.require(who, "analysis.create")
+    auth.require(who, "request.create")
     return service.create_request(lens, who=who, body=body.model_dump())
 
 
@@ -330,7 +330,7 @@ def create_lens_app(lens: LensContext) -> FastAPI:
     origins = lens.app.settings.cors_origins
     if origins:
         app.add_middleware(CORSMiddleware, allow_origins=list(origins), allow_credentials=False,
-                           allow_methods=["GET", "POST"],
+                           allow_methods=["GET", "POST", "PATCH"],
                            allow_headers=["Content-Type", "Idempotency-Key",
                                           "Authorization"],
                            expose_headers=["X-Request-ID"])

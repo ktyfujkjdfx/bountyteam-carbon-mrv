@@ -69,6 +69,29 @@ def test_an_investor_may_not_open_a_request(harness):
                                headers=_as(harness, "INVESTOR")).status_code == 403
 
 
+def test_only_an_owner_may_create_and_submit_a_request(harness):
+    assert harness.client.post("/api/v2/requests", json=BODY,
+                               headers=_as(harness, "VERIFIER")).status_code == 403
+    request = _create(harness)
+    assert _post(harness, f"/requests/{request['request_id']}/submit",
+                 "VERIFIER").status_code == 403
+    assert _post(harness, f"/requests/{request['request_id']}/submit",
+                 "PROJECT_OWNER").status_code == 200
+
+
+def test_only_a_verifier_may_start_request_analysis(harness):
+    request = _create(harness)
+    request_id = request["request_id"]
+    assert _post(harness, f"/requests/{request_id}/submit",
+                 "PROJECT_OWNER").status_code == 200
+    assert _post(harness, f"/requests/{request_id}/analysis", "PROJECT_OWNER",
+                 key="owner-cannot-run").status_code == 403
+    assert _post(harness, f"/requests/{request_id}/analysis", "INVESTOR",
+                 key="investor-cannot-run").status_code in (403, 404)
+    assert _post(harness, f"/requests/{request_id}/analysis", "VERIFIER",
+                 key="verifier-can-run").status_code == 202
+
+
 # -- the draft claim ----------------------------------------------------------------------
 def test_an_owner_may_change_the_stated_volume_while_it_is_a_draft(harness):
     request = _create(harness)

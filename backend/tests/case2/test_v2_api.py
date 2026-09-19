@@ -259,6 +259,21 @@ def test_cors_allows_only_the_configured_origin(tmp_path):
     assert "access-control-allow-origin" not in {k.lower() for k in refused.headers}
 
 
+def test_cors_preflight_allows_the_bearer_authorization_header(tmp_path):
+    from .conftest import Harness
+
+    origin = "http://127.0.0.1:4173"
+    harness = Harness(tmp_path, cors_origins=(origin,))
+    for method in ("GET", "POST", "PATCH"):
+        response = harness.client.options(
+            "/api/v2/catalog",
+            headers={"Origin": origin, "Access-Control-Request-Method": method,
+                     "Access-Control-Request-Headers": "authorization"})
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == origin
+        assert "authorization" in response.headers["access-control-allow-headers"].lower()
+
+
 # -- measuring a contour before anything is queued ----------------------------------------
 def _measure(harness, geometry, *, status: int = 200):
     response = harness.client.post("/api/v2/areas/measure", json={"geometry": geometry},

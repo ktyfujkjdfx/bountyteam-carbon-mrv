@@ -41,13 +41,6 @@ export function getToken(): string {
 }
 
 /** The legacy demo header needs an actor label; the calculation itself does not depend on it. */
-export function getActor(): string {
-  const role = getSession()?.role;
-  if (role === 'owner') return 'issuer';
-  if (role === 'investor') return 'buyer';
-  return 'recipient';
-}
-
 /** Tests and previews start from a known session without touching browser storage. */
 export function resetSessionStore(session: LensSession | null = null): void {
   loaded = true;

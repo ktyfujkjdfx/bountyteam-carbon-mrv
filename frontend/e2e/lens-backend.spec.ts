@@ -10,13 +10,9 @@ const SESSION = process.env.E2E_LENS_SESSION;
 
 test.skip(!BASE || !SESSION, 'set E2E_LENS_BACKEND_URL and E2E_LENS_SESSION to run the live check');
 
-// The service reviewed in PR #15 does not list Authorization in Access-Control-Allow-Headers, so the
-// live check runs with the session-header scheme until Backend allows the bearer header.
-const AUTH = process.env.E2E_LENS_AUTH ?? 'demo';
-
-async function signIn(page: Page, email: string) {
-  await page.goto(`/lens?demo=1&auth=${AUTH}`);
-  await page.getByTestId('lens-login-username').fill(email);
+async function signIn(page: Page, username: string) {
+  await page.goto('/lens');
+  await page.getByTestId('lens-login-username').fill(username);
   await page.getByTestId('lens-login-password').fill(SESSION as string);
   await page.getByTestId('lens-login-submit').click();
   await expect(page.getByTestId('lens-role')).toBeVisible({ timeout: 20_000 });
@@ -31,7 +27,7 @@ test('live service: the three roles run one analysis end to end', async ({ page 
     if (!['127.0.0.1', 'localhost'].includes(url.hostname) && !['data:', 'blob:'].includes(url.protocol)) external.push(req.url());
   });
 
-  await signIn(page, 'owner@demo.local');
+  await signIn(page, 'owner');
   await expect(page.getByTestId('lens-mode')).toContainText('СЕРВИС');
   await expect(page.getByTestId('lens-catalog-error')).toHaveCount(0);
 
@@ -48,7 +44,7 @@ test('live service: the three roles run one analysis end to end', async ({ page 
   await expect(page.getByTestId('lens-my-requests')).toContainText('RU_TVER_01');
 
   await page.getByTestId('lens-logout').click();
-  await signIn(page, 'verifier@demo.local');
+  await signIn(page, 'verifier');
   await page.getByTestId('lens-queue-list').locator('button').first().click();
   await page.getByTestId('lens-run-analysis').click();
   await expect(page.getByTestId('lens-q')).toBeVisible({ timeout: 180_000 });
@@ -72,7 +68,7 @@ test('live service: the three roles run one analysis end to end', async ({ page 
   await expect(page.getByTestId('lens-passport-status')).toContainText('ФИНАЛИЗИРОВАН');
 
   await page.getByTestId('lens-logout').click();
-  await signIn(page, 'investor@demo.local');
+  await signIn(page, 'investor');
   await page.getByTestId('lens-portfolio-list').locator('button').first().click();
   await expect(page.getByTestId('lens-q')).toBeVisible();
 
@@ -81,8 +77,8 @@ test('live service: the three roles run one analysis end to end', async ({ page 
 });
 
 test('live service: a wrong token is rejected and nothing is invented', async ({ page }) => {
-  await page.goto(`/lens?demo=1&auth=${AUTH}`);
-  await page.getByTestId('lens-login-username').fill('verifier@demo.local');
+  await page.goto('/lens');
+  await page.getByTestId('lens-login-username').fill('verifier');
   await page.getByTestId('lens-login-password').fill('not-the-session-token');
   await page.getByTestId('lens-login-submit').click();
   await expect(page.getByTestId('lens-catalog-error')).toContainText(/UNAUTHORIZED|401|session|сесси/i, { timeout: 20_000 });

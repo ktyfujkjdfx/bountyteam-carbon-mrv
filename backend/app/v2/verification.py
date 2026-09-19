@@ -210,12 +210,13 @@ def update_claim(ctx: Any, request_id: str, *, who: auth.Principal, body: dict) 
 
 
 def submit(ctx: Any, request_id: str, *, who: auth.Principal) -> dict:
+    auth.require(who, "request.submit")
     with ctx.db.transaction() as conn:
         row = _row(conn, request_id)
         if row is None or not _visible(row, who):
             raise not_found("Request")
-        if row["owner_id"] != who.user_id and not auth.allows(who, "analysis.read.any"):
-            raise forbidden("Подать заявку может её владелец или проверяющий.")
+        if row["owner_id"] != who.user_id:
+            raise forbidden("Подать заявку может только её владелец.")
         _require_transition(row["status"], SUBMITTED)
         _move(conn, row, SUBMITTED, who.user_id, "Заявка подана на проверку.")
         auth.audit(ctx, who.user_id, who.role, "REQUEST_SUBMITTED", request_id, conn=conn)
@@ -249,9 +250,7 @@ def start_analysis(ctx: Any, request_id: str, *, who: auth.Principal,
         row = _row(conn, request_id)
         if row is None or not _visible(row, who):
             raise not_found("Request")
-    auth.require(who, "analysis.create")
-    if row["owner_id"] != who.user_id and not auth.allows(who, "analysis.read.any"):
-        raise forbidden("Запустить расчёт может владелец заявки или проверяющий.")
+    auth.require(who, "analysis.run")
     _require_transition(row["status"], ANALYSING)
 
     analysis_id = queue({

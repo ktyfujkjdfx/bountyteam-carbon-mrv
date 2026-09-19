@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DEMO_ACCOUNTS, demoLogin, fetchMe, login, permissionsFor, readStoredSession, writeStoredSession } from '../src/lens/auth';
-import { getActor, getToken, resetSessionStore, setSession } from '../src/lens/sessionStore';
+import { DEMO_ACCOUNTS, demoLogin, fetchMe, login, logout, permissionsFor, readStoredSession, writeStoredSession } from '../src/lens/auth';
+import { getToken, resetSessionStore, setSession } from '../src/lens/sessionStore';
 import { lifecycleAvailability, loadSubmissions, newSubmission, passportStatusOf, recordStep, saveSubmissions, visibleTo, type Submission } from '../src/lens/workspace';
 import type { AnalysisResult, Geometry } from '../src/lens/types';
 
@@ -52,7 +52,7 @@ describe('sign-in', () => {
     const init = fetchImpl.mock.calls[0]?.[1] as RequestInit;
     expect(init.method).toBe('POST');
     expect(JSON.parse(String(init.body))).toEqual({ username: 'owner', password: 'correct horse battery staple' });
-    expect(session).toMatchObject({ role: 'owner', email: 'owner', display_name: 'Owner', source: 'SERVICE' });
+    expect(session).toMatchObject({ role: 'owner', username: 'owner', display_name: 'Owner', source: 'SERVICE' });
   });
 
   it('reports 401 without revealing whether the login or password was wrong', async () => {
@@ -74,12 +74,22 @@ describe('sign-in', () => {
   });
 
   it('restores a session from the service and signs out on a rejected token', async () => {
-    const ok = vi.fn(async () => new Response(JSON.stringify({ role: 'owner', email: 'o@x.y', display_name: 'O' }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    const ok = vi.fn(async () => new Response(JSON.stringify({ user_id: 'user-owner', username: 'owner', role: 'PROJECT_OWNER', display_name: 'O' }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     const restored = await fetchMe({ baseUrl: 'https://service.test/api/v2', fetchImpl: ok as unknown as typeof fetch }, 'tok');
-    expect(restored).toMatchObject({ role: 'owner', source: 'SERVICE' });
+    expect(restored).toMatchObject({ role: 'owner', username: 'owner', source: 'SERVICE' });
 
     const expired = vi.fn(async () => new Response('', { status: 401 }));
     await expect(fetchMe({ baseUrl: 'https://service.test/api/v2', fetchImpl: expired as unknown as typeof fetch }, 'tok')).rejects.toMatchObject({ code: 'AUTH_EXPIRED' });
+  });
+
+  it('revokes a service session with only the bearer token', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ revoked: true }), { status: 200 }));
+    await logout({ baseUrl: 'https://service.test/api/v2', fetchImpl }, 'opaque-token');
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://service.test/api/v2/auth/logout');
+    expect(init).toMatchObject({ method: 'POST', credentials: 'omit', cache: 'no-store' });
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer opaque-token' });
+    expect(JSON.stringify(init)).not.toContain('X-Demo');
   });
 
   it('keeps the token in the tab session only and clears it on sign-out', () => {
@@ -96,7 +106,6 @@ describe('sign-in', () => {
     expect(getToken()).toBe('');
     setSession(demoLogin('investor@demo.local', 'demo'), false);
     expect(getToken()).not.toBe('');
-    expect(getActor()).toBe('buyer');
     resetSessionStore(null);
   });
 });

@@ -91,7 +91,7 @@ test('roles: forbidden screen explains itself and a reload keeps the session', a
   await expect(page.getByTestId('lens-queue-list')).toHaveCount(0);
 
   await page.reload();
-  await expect(page.getByTestId('lens-session-email')).toContainText('investor@demo.local');
+  await expect(page.getByTestId('lens-session-username')).toContainText('investor@demo.local');
   await page.getByTestId('lens-logout').click();
   await expect(page.getByTestId('lens-login-submit')).toBeVisible();
   await page.reload();

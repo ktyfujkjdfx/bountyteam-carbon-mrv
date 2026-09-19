@@ -246,6 +246,9 @@ def logout(ctx: Any, token: str | None) -> dict:
 PERMISSIONS: dict[str, tuple[str, ...]] = {
     "catalog.read": ("PROJECT_OWNER", "VERIFIER", "INVESTOR"),
     "area.measure": ("PROJECT_OWNER", "VERIFIER"),
+    "request.create": ("PROJECT_OWNER",),
+    "request.submit": ("PROJECT_OWNER",),
+    "analysis.run": ("VERIFIER",),
     "analysis.create": ("PROJECT_OWNER", "VERIFIER"),
     "analysis.read.own": ("PROJECT_OWNER", "VERIFIER", "INVESTOR"),
     "analysis.read.any": ("VERIFIER",),

@@ -4,31 +4,17 @@
 // src/lens/auth.ts and passed in through a getter. Nothing here falls back to the offline set when
 // the service fails — a failure is reported as a failure.
 //
-// Two compatibility switches are documented in frontend/docs/LENS_INTEGRATION.md:
-//   * `legacyDemoHeaders` also sends X-Demo-Session / X-Demo-Actor while the deployed service still
-//     requires them. It is dropped in one line once the service accepts Authorization: Bearer alone.
-//   * `measureArea` calls POST /areas/measure and, on 404/405, falls back to the client's own
+// `measureArea` calls POST /areas/measure and, on 404/405, falls back to the client's own
 //     spherical estimate, clearly marked as an estimate rather than the authoritative area.
 
 import { LensError, normalizeAnalysis, normalizeResult, type ArtifactPayload, type LensApiClient, type SubmitOptions, asRecord } from './client';
 import { approximateAreaHa } from './geometry';
 import type { Analysis, AnalysisAccepted, AnalysisRequestBody, AreaMeasurement, Artifact, Catalog, Geometry, Proof, Report } from './types';
 
-export type LensAuthScheme = 'bearer' | 'demo-header';
-
 export interface LensHttpConfig {
   baseUrl: string;
   /** Runtime token; read at call time so a re-login is picked up without rebuilding the client. */
   getToken: () => string;
-  /** Actor label the demo header needs; the calculation itself does not depend on it. */
-  getActor?: (() => string) | undefined;
-  /**
-   * `bearer` sends Authorization: Bearer and is the target scheme. `demo-header` sends only
-   * X-Demo-Session / X-Demo-Actor, which is what the service deployed today allows through CORS —
-   * it does not list Authorization in Access-Control-Allow-Headers, so a bearer request never
-   * reaches it. The choice is explicit configuration, never a silent retry.
-   */
-  authScheme?: LensAuthScheme | undefined;
   fetchImpl?: typeof fetch | undefined;
   timeoutMs?: number | undefined;
 }
@@ -50,7 +36,6 @@ export function createHttpLensClient(config: LensHttpConfig): LensApiClient {
   const apiRoot = baseUrl.slice(0, -'/api/v2'.length);
   const timeoutMs = config.timeoutMs ?? 30_000;
   const fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
-  const scheme: LensAuthScheme = config.authScheme ?? 'bearer';
 
   async function send(
     path: string,
@@ -58,11 +43,7 @@ export function createHttpLensClient(config: LensHttpConfig): LensApiClient {
   ): Promise<Response> {
     const token = config.getToken();
     const headers: Record<string, string> = { Accept: init.accept ?? 'application/json' };
-    if (token) {
-      if (scheme === 'bearer') headers.Authorization = `Bearer ${token}`;
-      else headers['X-Demo-Session'] = token;
-    }
-    if (scheme === 'demo-header' && init.method === 'POST') headers['X-Demo-Actor'] = config.getActor?.() || 'issuer';
+    if (token) headers.Authorization = `Bearer ${token}`;
     if (init.idempotencyKey) headers['Idempotency-Key'] = init.idempotencyKey;
     if (init.body !== undefined) headers['Content-Type'] = 'application/json';
 

@@ -102,7 +102,7 @@ function MapArea({ workspace }: { workspace: WorkspaceState }) {
 
 /** Owner: my requests, a new request, the state of processing and the finalised passport. */
 export function OwnerWorkspace({ workspace, session }: { workspace: WorkspaceState; session: LensSession }) {
-  const mine = workspace.submissions.filter((item) => item.owner_email === session.email);
+  const mine = workspace.submissions.filter((item) => item.owner_email === session.username);
   const active = workspace.activeSubmission;
 
   return (
@@ -253,7 +253,7 @@ export function VerifierWorkspace({ workspace, session, offline }: { workspace: 
                 <button
                   type="button"
                   className="btn btn-small btn-secondary"
-                  onClick={() => workspace.finalize(active, session.email)}
+                  onClick={() => workspace.finalize(active, session.username)}
                   disabled={!active.result || active.status === 'FINALIZED'}
                   data-testid="lens-finalize"
                 >
@@ -270,7 +270,7 @@ export function VerifierWorkspace({ workspace, session, offline }: { workspace: 
                 className="btn btn-small btn-secondary"
                 onClick={() => {
                   if (note.trim() === '') return;
-                  workspace.addNote(active, session.email, note.trim());
+                  workspace.addNote(active, session.username, note.trim());
                   setNote('');
                 }}
                 data-testid="lens-note-add"
@@ -342,7 +342,7 @@ export function InvestorWorkspace({ workspace, session }: { workspace: Workspace
 
       <div className="center">
         <MapArea workspace={workspace} />
-        {active && <LifecyclePanel submission={active} canAct onStep={(step) => workspace.recordLifecycle(active, step, session.email)} />}
+        {active && <LifecyclePanel submission={active} canAct onStep={(step) => workspace.recordLifecycle(active, step, session.username)} />}
       </div>
 
       <div className="rail rail-right">

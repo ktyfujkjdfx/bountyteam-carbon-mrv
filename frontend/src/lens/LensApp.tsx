@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { MethodologyDialog } from '../components/MethodologyDialog';
 import { LensError, type LensApiClient } from './client';
 import { createLensClient, resolveLensConfig, switchModeHref, type LensConfig } from './config';
-import { FORBIDDEN_NOTE, ROLE_LABELS, demoLogin, fetchMe, login as serviceLogin, permissionsFor, sessionTokenLogin, type LensSession } from './auth';
-import { getActor, getSession, getToken, setSession, subscribeSession } from './sessionStore';
+import { FORBIDDEN_NOTE, ROLE_LABELS, demoLogin, fetchMe, login as serviceLogin, logout as serviceLogout, permissionsFor, type LensSession } from './auth';
+import { getSession, getToken, setSession, subscribeSession } from './sessionStore';
 import { LoginScreen } from './components/LoginScreen';
 import { InvestorWorkspace, OwnerWorkspace, VerifierWorkspace } from './components/Workspaces';
 import { useWorkspace } from './useWorkspace';
@@ -30,7 +30,7 @@ export function LensApp({ client: injected, config: injectedConfig }: { client?:
   const [route, setRoute] = useState<Route | null>(() => (typeof window === 'undefined' ? null : routeFromHash(window.location.hash)));
   const methodologyRef = useRef<HTMLDialogElement | null>(null);
 
-  const client = useMemo(() => injected ?? createLensClient(config, { getToken, getActor }), [injected, config]);
+  const client = useMemo(() => injected ?? createLensClient(config, { getToken }), [injected, config]);
 
   // A stored service token is confirmed once; a rejected one signs out instead of showing stale data.
   useEffect(() => {
@@ -76,30 +76,29 @@ export function LensApp({ client: injected, config: injectedConfig }: { client?:
         setSession(next);
         goTo(next.role);
       } catch (error) {
-        if (error instanceof LensError && error.code === 'AUTH_NOT_DEPLOYED' && config.demoAccounts) {
-          try {
-            const fallback = config.mode === 'http' ? sessionTokenLogin(username, password) : demoLogin(username, password);
-            setSession(fallback);
-            goTo(fallback.role);
-            return;
-          } catch (demoError) {
-            setLoginError(demoError instanceof LensError ? demoError.message : String(demoError));
-            return;
-          }
-        }
         setLoginError(error instanceof LensError ? error.message : String(error));
       } finally {
         setLoginBusy(false);
       }
     },
-    [config.baseUrl, config.demoAccounts, config.mode, goTo, loginBusy],
+    [config.baseUrl, config.mode, goTo, loginBusy],
   );
 
-  const signOut = useCallback(() => {
+  const signOut = useCallback(async () => {
+    const current = getSession();
+    let logoutError: string | null = null;
+    if (current?.source === 'SERVICE') {
+      try {
+        await serviceLogout({ baseUrl: config.baseUrl }, current.token);
+      } catch (error) {
+        logoutError = error instanceof LensError ? error.message : String(error);
+      }
+    }
     setSession(null);
     setRoute(null);
     window.location.hash = '';
-  }, []);
+    setLoginError(logoutError);
+  }, [config.baseUrl]);
 
   if (!session) {
     return (
@@ -152,7 +151,7 @@ function AuthenticatedShell({
   allowed: boolean;
   methodologyRef: React.RefObject<HTMLDialogElement | null>;
 }) {
-  const workspace = useWorkspace(client, session.email);
+  const workspace = useWorkspace(client, session.username);
   const offline = client.kind === 'fixture';
   const permissions = permissionsFor(session.role);
   const actions = [
@@ -198,7 +197,7 @@ function AuthenticatedShell({
 
       <div className={`source-bar ${offline ? 'tone-review-bar' : ''}`} role="note" data-testid="lens-source-bar">
         <span className="dot" aria-hidden="true" />
-        <strong data-testid="lens-session-email">{session.email}</strong>
+        <strong data-testid="lens-session-username">{session.username}</strong>
         <span>
           Доступно: {actions.join(', ')}.{' '}
           {offline
@@ -211,12 +210,6 @@ function AuthenticatedShell({
         <div className="state state-error" role="alert" data-testid="lens-catalog-error">
           <strong>Каталог недоступен</strong>
           <span>{workspace.catalogError}</span>
-          {config.authScheme === 'bearer' && /Failed to fetch|NetworkError|CORS|недоступен/i.test(workspace.catalogError) && (
-            <span className="muted small" data-testid="lens-auth-hint">
-              Если сервис ещё не пропускает заголовок Authorization через CORS, откройте адрес с <span className="mono">?auth=demo</span> —
-              тогда доступ передаётся заголовком сессии.
-            </span>
-          )}
           <span className="muted small">Офлайн-набор не подставляется автоматически: переключение режима — явное действие.</span>
         </div>
       )}

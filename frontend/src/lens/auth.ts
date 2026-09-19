@@ -1,9 +1,9 @@
 // Session and roles for the Carbon Lens workspaces.
 //
 // The token lives in memory and, for a reload, in sessionStorage of this tab only. It is never read
-// from a build variable, never written into the URL and never logged. When the service publishes
-// /auth/login and /auth/me the two functions below switch to it; until then DEMO mode signs in
-// against a labelled local account list and says so on screen.
+// from a build variable, never written into the URL and never logged. HTTP mode authenticates only
+// through /auth/login, /auth/me and /auth/logout. Fixture mode uses a labelled local account list
+// and says so on screen.
 
 import { LensError, asRecord } from './client';
 import type { components as LensApiComponents } from '../api/generated/openapi.v2';
@@ -22,7 +22,7 @@ export const ROLE_LABELS: Record<LensRole, string> = {
 export interface LensSession {
   token: string;
   role: LensRole;
-  email: string;
+  username: string;
   display_name: string;
   /** SERVICE — the service authenticated it; DEMO — a labelled local account of the offline mode. */
   source: 'SERVICE' | 'DEMO';
@@ -78,11 +78,11 @@ export function readStoredSession(storage: StorageLike | null = safeStorage()): 
     const raw = storage?.getItem(LENS_SESSION_STORAGE_KEY);
     if (!raw) return null;
     const parsed = asRecord(JSON.parse(raw));
-    if (typeof parsed.token !== 'string' || !isRole(parsed.role)) return null;
+    if (typeof parsed.token !== 'string' || typeof parsed.username !== 'string' || !isRole(parsed.role)) return null;
     return {
       token: parsed.token,
       role: parsed.role,
-      email: String(parsed.email ?? ''),
+      username: String(parsed.username ?? ''),
       display_name: String(parsed.display_name ?? ''),
       source: parsed.source === 'SERVICE' ? 'SERVICE' : 'DEMO',
     };
@@ -147,7 +147,7 @@ export async function login(transport: AuthTransport, username: string, password
   return {
     token,
     role,
-    email: user.username,
+    username: user.username,
     display_name: String(user.display_name ?? user.username),
     source: 'SERVICE',
   };
@@ -164,21 +164,26 @@ export async function fetchMe(transport: AuthTransport, token: string): Promise<
   if (response.status === 401 || response.status === 403) throw new LensError('AUTH_EXPIRED', 'Сессия истекла, войдите снова.', { status: response.status });
   if (!response.ok) return null;
   const payload = asRecord(await response.json().catch(() => null));
-  const role = payload.role;
-  if (!isRole(role)) return null;
-  return { token, role, email: String(payload.email ?? ''), display_name: String(payload.display_name ?? ''), source: 'SERVICE' };
+  const role = serviceRole(payload.role);
+  if (!role || typeof payload.username !== 'string') return null;
+  return { token, role, username: payload.username, display_name: String(payload.display_name ?? payload.username), source: 'SERVICE' };
 }
 
-/**
- * Sign in against a service that has no /auth/login yet: the role is picked from the labelled account
- * list and the typed password is used as the session token the service already accepts. Nothing is
- * stored in the build and nothing is written into the URL.
- */
-export function sessionTokenLogin(email: string, token: string): LensSession {
-  const account = DEMO_ACCOUNTS.find((item) => item.email.toLowerCase() === email.trim().toLowerCase());
-  if (!account) throw new LensError('AUTH_REJECTED', 'Роль определяется по перечисленным учётным записям; такой почты в списке нет.');
-  if (token.trim().length < 8) throw new LensError('AUTH_REJECTED', 'Введите токен сессии сервиса (не короче 8 символов) в поле пароля.');
-  return { token: token.trim(), role: account.role, email: account.email, display_name: account.display_name, source: 'SERVICE' };
+/** Revoke the current server session. The caller clears local state even if the service is unavailable. */
+export async function logout(transport: AuthTransport, token: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await call(transport, '/auth/logout', {
+      method: 'POST',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    });
+  } catch (error) {
+    throw new LensError('NETWORK', `Сервис недоступен: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (response.status === 401) return;
+  if (!response.ok) {
+    throw new LensError('AUTH_LOGOUT_FAILED', `Сервис не завершил сессию: HTTP ${response.status}.`, { status: response.status });
+  }
 }
 
 /** Sign in offline against a labelled demo account. */
@@ -190,7 +195,7 @@ export function demoLogin(email: string, password: string): LensSession {
   return {
     token: `demo-${account.role}-${Math.random().toString(36).slice(2, 10)}`,
     role: account.role,
-    email: account.email,
+    username: account.email,
     display_name: account.display_name,
     source: 'DEMO',
   };
