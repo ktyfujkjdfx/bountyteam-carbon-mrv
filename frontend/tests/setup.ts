@@ -6,7 +6,8 @@ afterEach(() => {
   cleanup();
   try {
     localStorage.clear();
+    sessionStorage.clear();
   } catch {
-    // jsdom always provides localStorage; guard only for exotic environments.
+    // jsdom always provides web storage; guard only for exotic environments.
   }
 });
