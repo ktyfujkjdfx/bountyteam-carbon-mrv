@@ -1,52 +1,31 @@
-// Carbon Lens v2 shapes, pinned by hand to contracts/v2/api-models.v2.schema.json as reviewed at
-// backend e9817d0144569731e3a98c7af6c916cf55a510cf. The file is regenerated with openapi-typescript
-// once contracts/v2 lands on main; until then this is the single place that names v2 fields.
-//
-// Unknown values from the service are never narrowed away: every enum is a union with `string`, and
-// the screens read them through the neutral UNKNOWN fallback in src/domain/status.ts.
+// Carbon Lens view types derive their closed vocabulary from the generated OpenAPI v2 module.
+// Runtime values remain forward-compatible: an enum added by a newer Backend reaches metaFor()
+// and renders as neutral UNKNOWN instead of crashing an older client.
+
+import type { components as LensApiComponents } from '../api/generated/openapi.v2';
+
+type ApiSchemas = LensApiComponents['schemas'];
 
 export type Unknowable<T extends string> = T | (string & {});
 
-export type JobState = Unknowable<'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'>;
-export type CalculationStatus = Unknowable<'AVAILABLE' | 'UNAVAILABLE'>;
-export type EvidenceStatus = Unknowable<'SUFFICIENT' | 'REVIEW_REQUIRED' | 'INSUFFICIENT'>;
-export type AnchorStatus = Unknowable<'NOT_REQUESTED' | 'PENDING' | 'CONFIRMED' | 'FAILED'>;
-
-export type ClaimStatus = Unknowable<
-  | 'NOT_PROVIDED'
-  | 'NOT_APPLICABLE'
-  | 'NOT_COMPARABLE'
-  | 'UNASSESSABLE'
-  | 'SUPPORTED_BY_CASE'
-  | 'PARTIALLY_SUPPORTED_BY_CASE'
-  | 'NOT_SUPPORTED_BY_CASE'
->;
-export type ClaimOrigin = Unknowable<'USER_INPUT' | 'DEMO_INPUT'>;
-export type ClaimMismatchReason = Unknowable<
-  'INVALID_CLAIM_VALUE' | 'NO_POSITIVE_CLAIM' | 'GEOMETRY_MISMATCH' | 'PERIOD_MISMATCH' | 'POOL_MISMATCH' | 'UNIT_MISMATCH'
->;
-
-export type UnavailableReason = Unknowable<
-  | 'MISSING_INPUT'
-  | 'NON_FINITE_INPUT'
-  | 'NON_POSITIVE_AREA'
-  | 'NON_POSITIVE_PERIOD'
-  | 'INVALID_UNCERTAINTY_INPUT'
-  | 'INVALID_INTERVAL'
-  | 'INCOMPLETE_COVERAGE'
-  | 'BASELINE_OUT_OF_COVERAGE'
-  | 'BASELINE_UNKNOWN_AREA'
-  | 'RASTER_ANALYSIS_UNAVAILABLE'
->;
-export type ZeroUnitsReason = Unknowable<'NON_POSITIVE_RELATIVE_RESULT' | 'UNCERTAINTY_TOO_HIGH' | 'ROUNDED_TO_ZERO'>;
-
-export type ZoneFact = Unknowable<'TREE_COVER_LOSS' | 'SPECTRAL_CHANGE_ONLY' | 'RECOVERY_INDICATION'>;
-export type ZoneCause = Unknowable<'FIRE_SUPPORTED' | 'UNKNOWN' | 'NOT_APPLICABLE'>;
-export type DatasetOrigin = Unknowable<'COMPUTED_FROM_SUPPLIED_DATA' | 'CACHED_REPLAY' | 'EXTERNAL_RETRIEVAL' | 'STUB_FIXTURE'>;
-export type FixtureKind = Unknowable<'DOC_EXAMPLE' | 'UNIT_TEST_VECTOR' | 'CONTRACT_FIXTURE'>;
-export type ComparisonResult = Unknowable<'FIRST_OBSERVATION' | 'NEW_OBSERVATION' | 'UNCHANGED' | 'UPGRADED' | 'DOWNGRADED'>;
-export type IntervalKind = Unknowable<'SCENARIO' | 'PROBABILISTIC'>;
-export type WarningSeverity = Unknowable<'INFO' | 'WARNING' | 'CRITICAL'>;
+export type JobState = Unknowable<ApiSchemas['JobState']>;
+export type CalculationStatus = Unknowable<ApiSchemas['CalculationStatus']>;
+export type EvidenceStatus = Unknowable<ApiSchemas['EvidenceStatus']>;
+export type AnchorStatus = Unknowable<ApiSchemas['AnchorStatus']>;
+export type ClaimStatus = Unknowable<ApiSchemas['ClaimStatus']>;
+export type ClaimOrigin = Unknowable<ApiSchemas['ClaimOrigin']>;
+export type ClaimReason = Unknowable<ApiSchemas['ClaimReason']>;
+export type ClaimMismatchReason = Unknowable<ApiSchemas['ClaimMismatchReason']>;
+export type UnavailableReason = Unknowable<ApiSchemas['UnavailableReason']>;
+export type ZeroUnitsReason = Unknowable<ApiSchemas['ZeroUnitsReason']>;
+export type ZoneFact = Unknowable<ApiSchemas['ZoneFact']>;
+export type ZoneCause = Unknowable<ApiSchemas['ZoneCause']>;
+export type DatasetOrigin = Unknowable<ApiSchemas['DatasetOrigin']>;
+export type FixtureKind = Unknowable<ApiSchemas['FixtureKind']>;
+export type ComparisonResult = Unknowable<ApiSchemas['ComparisonResult']>;
+export type ComparisonDirection = Unknowable<ApiSchemas['ComparisonDirection']>;
+export type IntervalKind = Unknowable<ApiSchemas['IntervalKind']>;
+export type WarningSeverity = Unknowable<ApiSchemas['WarningSeverity']>;
 
 export interface Geometry {
   type: 'Polygon' | 'MultiPolygon';
@@ -308,11 +287,12 @@ export interface ScenarioValues {
 
 export interface Claim {
   status: ClaimStatus;
+  reason: ClaimReason | null;
   origin: ClaimOrigin | null;
   comparable: boolean;
   claimed_units: number | null;
   q: number | null;
-  gap_units: number | null;
+  unsupported_gap: number | null;
   supported_share: number | null;
   mismatch_reasons: ClaimMismatchReason[];
   scope: ClaimScope;
@@ -371,11 +351,14 @@ export interface Evidence {
 }
 
 export interface Passport {
+  status: Unknowable<ApiSchemas['PassportStatus']>;
+  finalized_at: string | null;
   content_hash: string;
   report_hash: string | null;
   previous_hash: string | null;
   comparison_scope: string;
   comparison_result: ComparisonResult;
+  comparison_direction: ComparisonDirection;
   comparison_note: string;
   created_at: string;
 }

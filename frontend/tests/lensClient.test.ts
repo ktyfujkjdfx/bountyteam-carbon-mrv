@@ -124,8 +124,8 @@ describe('payload normalisation', () => {
   });
 
   it('accepts both the typed warning and the bare sentence of an older deployment', () => {
-    const warnings = normalizeWarnings([{ code: 'LOW_OPTICS', severity: 'CRITICAL', message: 'мало пригодной оптики', details: { fraction: 0.1 } }, 'строка']);
-    expect(warnings[0]).toMatchObject({ code: 'LOW_OPTICS', severity: 'CRITICAL', details: { fraction: 0.1 } });
+    const warnings = normalizeWarnings([{ code: 'LOW_OPTICS', severity: 'BLOCKING', message: 'мало пригодной оптики', details: { fraction: 0.1 } }, 'строка']);
+    expect(warnings[0]).toMatchObject({ code: 'LOW_OPTICS', severity: 'BLOCKING', details: { fraction: 0.1 } });
     expect(warnings[1]?.code).toBe('UNSTRUCTURED_WARNING');
   });
 });

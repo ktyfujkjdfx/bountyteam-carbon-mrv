@@ -117,16 +117,17 @@ describe('claim comparison follows the method freeze', () => {
   it('never calls a zero claim supported', () => {
     const claim = compareClaim(0, 'USER_INPUT', 400, scope, [2019, 2024]);
     expect(claim.status).toBe('NOT_APPLICABLE');
-    expect(claim.mismatch_reasons).toEqual(['NO_POSITIVE_CLAIM']);
+    expect(claim.reason).toBe('NO_POSITIVE_CLAIM');
+    expect(claim.mismatch_reasons).toEqual([]);
     expect(claim.supported_share).toBeNull();
-    expect(claim.gap_units).toBe(0);
+    expect(claim.unsupported_gap).toBe(0);
   });
 
   it('splits supported, partially supported and unsupported', () => {
     expect(compareClaim(100, 'USER_INPUT', 400, scope, [2019, 2024]).status).toBe('SUPPORTED_BY_CASE');
     const partial = compareClaim(1000, 'USER_INPUT', 400, scope, [2019, 2024]);
     expect(partial.status).toBe('PARTIALLY_SUPPORTED_BY_CASE');
-    expect(partial.gap_units).toBe(600);
+    expect(partial.unsupported_gap).toBe(600);
     expect(partial.supported_share).toBeCloseTo(0.4, 6);
     expect(compareClaim(1000, 'USER_INPUT', 0, scope, [2019, 2024]).status).toBe('NOT_SUPPORTED_BY_CASE');
   });

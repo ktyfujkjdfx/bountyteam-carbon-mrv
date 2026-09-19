@@ -53,15 +53,14 @@ export const ANCHOR_META: Record<string, StatusMeta> = {
 export const SEVERITY_META: Record<string, StatusMeta> = {
   INFO: { label: 'ПОЯСНЕНИЕ', tone: 'info', hint: 'Замечание, не влияющее на пригодность расчёта.' },
   WARNING: { label: 'ПРЕДУПРЕЖДЕНИЕ', tone: 'review', hint: 'Ограничение, которое влияет на интерпретацию.' },
-  CRITICAL: { label: 'КРИТИЧНО', tone: 'blocked', hint: 'Ограничение, из-за которого часть результата недоступна.' },
+  BLOCKING: { label: 'БЛОКИРУЕТ РАСЧЁТ', tone: 'blocked', hint: 'Ограничение, из-за которого часть результата недоступна.' },
 };
 
 export const COMPARISON_META: Record<string, StatusMeta> = {
-  FIRST_OBSERVATION: { label: 'ПЕРВОЕ НАБЛЮДЕНИЕ', tone: 'neutral', hint: 'Для этой области сравнения расчёт выполняется впервые.' },
+  INITIAL: { label: 'ПЕРВОЕ НАБЛЮДЕНИЕ', tone: 'neutral', hint: 'Для этой области сравнения расчёт выполняется впервые.' },
+  REVISION_OF_SAME_SCOPE: { label: 'ВЕРСИЯ ТОЙ ЖЕ ОБЛАСТИ', tone: 'info', hint: 'Повторный расчёт того же контура, периода, пула и метода.' },
   NEW_OBSERVATION: { label: 'НОВОЕ НАБЛЮДЕНИЕ', tone: 'review', hint: 'Другой период того же контура: это не списание прежних единиц.' },
-  UNCHANGED: { label: 'БЕЗ ИЗМЕНЕНИЙ', tone: 'ok', hint: 'Содержание совпадает с предыдущим расчётом.' },
-  UPGRADED: { label: 'ОЦЕНКА ВЫШЕ', tone: 'ok', hint: 'Сопоставимая оценка оказалась выше предыдущей.' },
-  DOWNGRADED: { label: 'ОЦЕНКА НИЖЕ', tone: 'review', hint: 'Сопоставимая оценка оказалась ниже предыдущей.' },
+  NOT_COMPARABLE: { label: 'НЕСОПОСТАВИМО', tone: 'neutral', hint: 'Область сравнения изменилась, поэтому версии нельзя сравнивать напрямую.' },
 };
 
 export const ZERO_REASON_TEXT: Record<string, string> = {

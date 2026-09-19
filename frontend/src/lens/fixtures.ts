@@ -406,7 +406,7 @@ const SCENARIOS: Record<FixtureScenarioId, ScenarioNumbers> = {
     warnings: [
       {
         code: 'INCOMPLETE_BIOMASS_COVERAGE',
-        severity: 'CRITICAL',
+        severity: 'BLOCKING',
         message: 'Числовые данные биомассы отсутствуют на 31 % площади запроса.',
         details: { missing_fraction: 0.31 },
       },
@@ -740,7 +740,7 @@ function scenarioValues(q: number | null): ScenarioValues {
  * supported claim, it is NOT_APPLICABLE with the reason NO_POSITIVE_CLAIM.
  */
 export function compareClaim(claimed: number | null, origin: ClaimOrigin | null, q: number | null, scope: Claim['scope'], scenarioYears: [number, number]): Claim {
-  const base: Omit<Claim, 'status' | 'comparable' | 'gap_units' | 'supported_share' | 'mismatch_reasons' | 'scenario_gap_values'> = {
+  const base: Omit<Claim, 'status' | 'reason' | 'comparable' | 'unsupported_gap' | 'supported_share' | 'mismatch_reasons' | 'scenario_gap_values'> = {
     origin,
     claimed_units: claimed,
     q,
@@ -748,16 +748,16 @@ export function compareClaim(claimed: number | null, origin: ClaimOrigin | null,
     scope_note:
       'Сравнение возможно только при совпадении контура, периода, пула и единиц. Заявленный объём — пользовательский или демонстрационный ввод, а не установленный факт.',
   };
-  const none = { gap_units: null, supported_share: null, scenario_gap_values: null, comparable: false };
-  if (claimed === null) return { ...base, ...none, status: 'NOT_PROVIDED', mismatch_reasons: [] };
-  if (!Number.isFinite(claimed) || claimed < 0) return { ...base, ...none, status: 'NOT_COMPARABLE', mismatch_reasons: ['INVALID_CLAIM_VALUE'] };
+  const none = { unsupported_gap: null, supported_share: null, scenario_gap_values: null, comparable: false };
+  if (claimed === null) return { ...base, ...none, status: 'NOT_PROVIDED', reason: null, mismatch_reasons: [] };
+  if (!Number.isFinite(claimed) || claimed < 0) return { ...base, ...none, status: 'NOT_COMPARABLE', reason: null, mismatch_reasons: ['INVALID_CLAIM_VALUE'] };
   if (scope.year_start !== scenarioYears[0] || scope.year_end !== scenarioYears[1]) {
-    return { ...base, ...none, status: 'NOT_COMPARABLE', mismatch_reasons: ['PERIOD_MISMATCH'] };
+    return { ...base, ...none, status: 'NOT_COMPARABLE', reason: null, mismatch_reasons: ['PERIOD_MISMATCH'] };
   }
   if (claimed === 0) {
-    return { ...base, comparable: false, gap_units: 0, supported_share: null, scenario_gap_values: null, status: 'NOT_APPLICABLE', mismatch_reasons: ['NO_POSITIVE_CLAIM'] };
+    return { ...base, comparable: false, unsupported_gap: 0, supported_share: null, scenario_gap_values: null, status: 'NOT_APPLICABLE', reason: 'NO_POSITIVE_CLAIM', mismatch_reasons: [] };
   }
-  if (q === null) return { ...base, ...none, status: 'UNASSESSABLE', mismatch_reasons: [] };
+  if (q === null) return { ...base, ...none, status: 'UNASSESSABLE', reason: null, mismatch_reasons: [] };
   const gap = Math.max(claimed - q, 0);
   const share = Math.min(q / claimed, 1);
   const status = q >= claimed ? 'SUPPORTED_BY_CASE' : q > 0 ? 'PARTIALLY_SUPPORTED_BY_CASE' : 'NOT_SUPPORTED_BY_CASE';
@@ -766,8 +766,9 @@ export function compareClaim(claimed: number | null, origin: ClaimOrigin | null,
   return {
     ...base,
     status,
+    reason: null,
     comparable: true,
-    gap_units: gap,
+    unsupported_gap: gap,
     supported_share: share,
     mismatch_reasons: [],
     scenario_gap_values: {

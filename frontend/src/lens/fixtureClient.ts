@@ -223,11 +223,14 @@ export function createFixtureLensClient(options: FixtureClientOptions = {}): Len
       const result: AnalysisResult = {
         ...withoutPassport,
         passport: {
+          status: 'DRAFT',
+          finalized_at: null,
           content_hash: contentHash,
           report_hash: null,
           previous_hash: null,
           comparison_scope: 'geometry_hash+year_start+year_end+pool+method_version',
-          comparison_result: 'FIRST_OBSERVATION',
+          comparison_result: 'INITIAL',
+          comparison_direction: 'NOT_COMPARED',
           comparison_note: 'Первое наблюдение в этой области сравнения.',
           created_at: createdAt,
         },

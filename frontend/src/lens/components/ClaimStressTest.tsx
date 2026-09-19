@@ -68,7 +68,7 @@ export function ClaimStressTest({ result, priceKey }: { result: AnalysisResult; 
         </div>
         <div className="lens-metric" data-testid="lens-claim-gap">
           <span className="lens-metric-label">Неподтверждённый разрыв</span>
-          <span className="lens-metric-value">{claim.gap_units === null ? '—' : claim.gap_units.toLocaleString('ru-RU')}</span>
+          <span className="lens-metric-value">{claim.unsupported_gap === null ? '—' : claim.unsupported_gap.toLocaleString('ru-RU')}</span>
           <span className="lens-metric-note">{gapValue === null ? 'сценарная стоимость не вычисляется' : `сценарная стоимость ${money(gapValue)}`}</span>
         </div>
       </div>
@@ -79,8 +79,9 @@ export function ClaimStressTest({ result, priceKey }: { result: AnalysisResult; 
         </div>
       )}
 
-      {claim.mismatch_reasons.length > 0 && (
+      {(claim.reason !== null || claim.mismatch_reasons.length > 0) && (
         <ul className="limitations small" data-testid="lens-claim-reasons">
+          {claim.reason !== null && <li>{CLAIM_REASON_TEXT[String(claim.reason)] ?? String(claim.reason)}</li>}
           {claim.mismatch_reasons.map((reason) => (
             <li key={String(reason)}>{CLAIM_REASON_TEXT[String(reason)] ?? String(reason)}</li>
           ))}
