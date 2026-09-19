@@ -1,0 +1,46 @@
+{
+  "schema": "rs.case2.manifest/1",
+  "method_version": "backend-replay-vector/0.1.0",
+  "code_commit": null,
+  "dataset": {
+    "root": "data",
+    "files": [
+      {
+        "path": "RU_MORDOVIA_03/CCI_Biomass_2020.tif",
+        "sha256": "988d2f9aa64a4902d9cb4b68894ed8531864b14bce563b8355355b02be6a30b2",
+        "size_bytes": 9790,
+        "role": "biomass"
+      },
+      {
+        "path": "RU_MORDOVIA_03/CCI_Biomass_2021.tif",
+        "sha256": "3336f365c2023dafa5a97511f3f0e5befa6c4a83f824c5b36ed80283ee6c8737",
+        "size_bytes": 9806,
+        "role": "biomass"
+      },
+      {
+        "path": "RU_MORDOVIA_03/CCI_Biomass_2022.tif",
+        "sha256": "4e302dc7aa590f32441f731ba183102f55eb46a5ad10947c1effd9048f5e410e",
+        "size_bytes": 8978,
+        "role": "biomass"
+      }
+    ]
+  },
+  "parameters": {
+    "carbon_fraction": 0.47,
+    "co2_per_c": 3.6666666666666665,
+    "pool": "living above-ground woody biomass",
+    "method": "stock-difference",
+    "method_version": "backend-replay-vector/0.1.0"
+  },
+  "request": {
+    "area_ha": 1829.5983677452086,
+    "year_start": 2020,
+    "year_end": 2022,
+    "years": 2,
+    "parents": [
+      "RU_MORDOVIA_03"
+    ]
+  },
+  "content_sha256": "0xbebc84095ea94efbe9c4ea9e39210044e6a321870b952382ccaa780e02ad595c",
+  "artifacts": []
+}

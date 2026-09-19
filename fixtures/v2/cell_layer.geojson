@@ -1,0 +1,99 @@
+{
+  "type": "FeatureCollection",
+  "name": "cci_cells",
+  "note": "Клетки нативной сетки CCI; weight_ha — геодезическая площадь пересечения с запросом, а не площадь всей клетки. CONTRACT_FIXTURE: значения иллюстрируют формат, а не реальный участок.",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              32.91,
+              56.59
+            ],
+            [
+              32.9182,
+              56.59
+            ],
+            [
+              32.9182,
+              56.5945
+            ],
+            [
+              32.91,
+              56.5945
+            ],
+            [
+              32.91,
+              56.59
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "cell_id": "r0c0",
+        "parent_aoi_id": "DOC_EXAMPLE_AREA",
+        "row": 0,
+        "col": 0,
+        "weight_ha": 50.0,
+        "agb_t_ha": {
+          "2019": 100.0,
+          "2020": 104.0
+        },
+        "agb_sd_t_ha": {
+          "2019": 12.0,
+          "2020": 13.0
+        },
+        "valid": true
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              32.9182,
+              56.59
+            ],
+            [
+              32.9264,
+              56.59
+            ],
+            [
+              32.9264,
+              56.5945
+            ],
+            [
+              32.9182,
+              56.5945
+            ],
+            [
+              32.9182,
+              56.59
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "cell_id": "r0c1",
+        "parent_aoi_id": "DOC_EXAMPLE_AREA",
+        "row": 0,
+        "col": 1,
+        "weight_ha": 50.0,
+        "agb_t_ha": {
+          "2019": 100.0,
+          "2020": 104.0
+        },
+        "agb_sd_t_ha": {
+          "2019": 12.0,
+          "2020": 13.0
+        },
+        "valid": true
+      }
+    }
+  ]
+}

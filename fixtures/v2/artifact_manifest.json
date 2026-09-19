@@ -1,0 +1,70 @@
+{
+  "schema": "rs.case2.manifest/1",
+  "method_version": "rs-case2-raster-core/1.0.0",
+  "code_commit": null,
+  "dataset": {
+    "root": "data",
+    "files": [
+      {
+        "path": "DOC_EXAMPLE_AREA/CCI_Biomass_2019.tif",
+        "sha256": "f3d88228c1cb93f5c677b528f77cd2d665ba9116ac5cccac83ff9686132eb00c",
+        "size_bytes": 13456,
+        "role": "biomass"
+      },
+      {
+        "path": "DOC_EXAMPLE_AREA/CCI_Biomass_2020.tif",
+        "sha256": "da977acdecc6a9effe2b217a0ad6e5a29633358cd502311aeee4c1ab3d638461",
+        "size_bytes": 13456,
+        "role": "biomass"
+      }
+    ]
+  },
+  "parameters": {
+    "carbon_fraction": 0.47,
+    "co2_per_c": 3.6666666666666665,
+    "pool": "living above-ground woody biomass",
+    "method": "stock-difference",
+    "method_version": "rs-case2-raster-core/1.0.0"
+  },
+  "request": {
+    "area_ha": 100.0,
+    "year_start": 2019,
+    "year_end": 2020,
+    "years": 1,
+    "parents": [
+      "DOC_EXAMPLE_AREA"
+    ]
+  },
+  "content_sha256": "0x92ea64bdf309a99bec78fad55ad3bc0aec3f36d7ca41137631c974af3da3315a",
+  "artifacts": [
+    {
+      "id": "DOC_EXAMPLE_AREA:2019-2020:cells",
+      "role": "cells",
+      "media_type": "application/geo+json",
+      "path": "cells.geojson",
+      "api_url": "artifacts/DOC_EXAMPLE_AREA:2019-2020:cells",
+      "sha256": "5ae4fc2bb39246d855b3f0bd3f536447ba321bd61ebbb58f13270d0fe4fad33a",
+      "size_bytes": 1024,
+      "crs": "EPSG:4326",
+      "resolution": [
+        0.0008888888888888889,
+        0.0008888888888888889
+      ],
+      "resolution_units": "degree",
+      "bbox_native": [
+        32.91,
+        56.59,
+        32.9264,
+        56.5945
+      ],
+      "bbox_wgs84": [
+        32.91,
+        56.59,
+        32.9264,
+        56.5945
+      ],
+      "unit": "t/ha",
+      "provenance": "CONTRACT_FIXTURE"
+    }
+  ]
+}

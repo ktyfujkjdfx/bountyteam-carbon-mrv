@@ -172,6 +172,208 @@ CREATE TABLE worker_leases (
     heartbeat_at REAL NOT NULL
 );
 """),
+    (2, "carbon lens v2 analyses", """
+-- /api/v2 lives in its own tables. The v1 schema above is not read, written or
+-- reinterpreted by the Lens code; a P0 credit state is not a passport status.
+CREATE TABLE lens_analyses (
+    analysis_id TEXT PRIMARY KEY,
+    job_state TEXT NOT NULL CHECK (job_state IN ('QUEUED','RUNNING','SUCCEEDED','FAILED')),
+    actor TEXT NOT NULL,
+    request_json TEXT NOT NULL,
+    geometry_hash TEXT NOT NULL,
+    input_hash TEXT NOT NULL,
+    year_start INTEGER NOT NULL,
+    year_end INTEGER NOT NULL,
+    -- Comparison scope: two analyses may be compared only when this key matches.
+    scope_key TEXT NOT NULL,
+    result_json TEXT,
+    content_hash TEXT,
+    report_hash TEXT,
+    units_q INTEGER,
+    error_json TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK ((job_state = 'SUCCEEDED') = (result_json IS NOT NULL)),
+    CHECK ((job_state = 'FAILED') = (error_json IS NOT NULL))
+);
+CREATE INDEX lens_analyses_pending ON lens_analyses(job_state, created_at);
+CREATE INDEX lens_analyses_scope ON lens_analyses(scope_key, created_at);
+
+-- Once a result is published it is the passport. A worker that wakes up late and
+-- finds the job finished must not overwrite it.
+CREATE TRIGGER lens_analyses_result_immutable BEFORE UPDATE ON lens_analyses
+WHEN OLD.result_json IS NOT NULL
+BEGIN SELECT RAISE(ABORT, 'a published analysis result is immutable'); END;
+
+-- Allowlist for GET /analyses/{id}/artifacts/{id}: only files whose bytes were
+-- hash-verified when they were stored.
+CREATE TABLE lens_artifacts (
+    analysis_id TEXT NOT NULL REFERENCES lens_analyses(analysis_id),
+    artifact_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    media_type TEXT NOT NULL,
+    sha256 TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    storage_name TEXT NOT NULL,
+    metadata_json TEXT NOT NULL,
+    PRIMARY KEY (analysis_id, artifact_id)
+);
+
+CREATE TABLE lens_reports (
+    analysis_id TEXT PRIMARY KEY REFERENCES lens_analyses(analysis_id),
+    report_hash TEXT NOT NULL,
+    json_bytes BLOB NOT NULL,
+    html_bytes BLOB NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TRIGGER lens_reports_immutable BEFORE UPDATE ON lens_reports
+BEGIN SELECT RAISE(ABORT, 'a stored passport is immutable'); END;
+
+CREATE TABLE lens_events (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    occurred_at TEXT NOT NULL,
+    analysis_id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('ANALYSIS_QUEUED','ANALYSIS_COMPLETED',
+        'ANALYSIS_FAILED','EVIDENCE_REVIEW_REQUIRED','PASSPORT_SUPERSEDED',
+        'PASSPORT_TAMPER_DETECTED')),
+    message TEXT NOT NULL,
+    dedupe_key TEXT UNIQUE
+);
+CREATE INDEX lens_events_analysis ON lens_events(analysis_id, seq);
+"""),
+    (3, "carbon lens roles, sessions and audit", """
+-- Who may do what. The role lives here and is read from the session on every
+-- request; it is never taken from anything the client sends.
+CREATE TABLE lens_users (
+    user_id TEXT PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    display_name TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('PROJECT_OWNER','VERIFIER','INVESTOR')),
+    -- scrypt$n$r$p$salt$hash. The password itself is never stored or logged.
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    disabled_at TEXT
+);
+
+-- Only the hash of a session token is stored, so a copy of this database does
+-- not hand anyone a working session.
+CREATE TABLE lens_sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES lens_users(user_id),
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    revoked_at TEXT
+);
+CREATE INDEX lens_sessions_user ON lens_sessions(user_id, expires_at);
+
+-- Failed sign-ins, for rate limiting. Successful ones are not kept here.
+CREATE TABLE lens_login_failures (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL COLLATE NOCASE,
+    occurred_at TEXT NOT NULL
+);
+CREATE INDEX lens_login_failures_window ON lens_login_failures(username, occurred_at);
+
+-- What people did. Deliberately outside the scientific content hash: who read a
+-- report cannot change what the report says.
+CREATE TABLE lens_audit (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    occurred_at TEXT NOT NULL,
+    user_id TEXT,
+    role TEXT,
+    action TEXT NOT NULL,
+    subject TEXT,
+    details_json TEXT NOT NULL
+);
+CREATE INDEX lens_audit_user ON lens_audit(user_id, seq);
+CREATE INDEX lens_audit_subject ON lens_audit(subject, seq);
+"""),
+    (4, "carbon lens verification requests", """
+-- What a person actually works with: a contour, a period and a stated volume,
+-- followed from a draft to a finalized passport. The calculation lives in
+-- lens_analyses; this table is the workflow around it and holds no numbers.
+CREATE TABLE lens_requests (
+    request_id TEXT PRIMARY KEY,
+    owner_id TEXT NOT NULL REFERENCES lens_users(user_id),
+    status TEXT NOT NULL CHECK (status IN
+        ('DRAFT','SUBMITTED','ANALYSING','CALCULATED','FINALIZED')),
+    aoi_id TEXT,
+    geometry_json TEXT NOT NULL,
+    geometry_hash TEXT NOT NULL,
+    area_ha REAL NOT NULL CHECK (area_ha > 0),
+    year_start INTEGER NOT NULL,
+    year_end INTEGER NOT NULL,
+    claimed_units REAL,
+    claim_pool TEXT NOT NULL,
+    claim_unit TEXT NOT NULL,
+    analysis_id TEXT REFERENCES lens_analyses(analysis_id),
+    -- The passport content hash a verifier pinned. A later recalculation makes a
+    -- new passport and never rewrites this one.
+    passport_hash TEXT,
+    finalized_by TEXT REFERENCES lens_users(user_id),
+    finalized_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    -- Finalized means a verifier pinned something. The three must arrive together.
+    CHECK ((status = 'FINALIZED') = (passport_hash IS NOT NULL)),
+    CHECK ((passport_hash IS NULL) = (finalized_at IS NULL)),
+    CHECK ((passport_hash IS NULL) = (finalized_by IS NULL))
+);
+CREATE INDEX lens_requests_owner ON lens_requests(owner_id, created_at);
+CREATE INDEX lens_requests_status ON lens_requests(status, created_at);
+CREATE INDEX lens_requests_analysis ON lens_requests(analysis_id);
+
+-- Append-only history. A request cannot quietly acquire a status nobody moved it to.
+CREATE TABLE lens_request_events (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id TEXT NOT NULL REFERENCES lens_requests(request_id),
+    occurred_at TEXT NOT NULL,
+    from_status TEXT,
+    to_status TEXT NOT NULL,
+    user_id TEXT,
+    note TEXT NOT NULL
+);
+CREATE INDEX lens_request_events_request ON lens_request_events(request_id, seq);
+CREATE TRIGGER lens_request_events_append_only BEFORE UPDATE ON lens_request_events
+BEGIN SELECT RAISE(ABORT, 'the request history is append-only'); END;
+"""),
+    (5, "carbon lens demonstration unit lifecycle", """
+-- A demonstration of what issuing, transferring and retiring would look like.
+-- It is not a registry, it issues nothing that exists, and it is deliberately in
+-- its own table so that nothing here can be mistaken for a P0 credit.
+CREATE TABLE lens_demo_units (
+    request_id TEXT PRIMARY KEY REFERENCES lens_requests(request_id),
+    status TEXT NOT NULL CHECK (status IN
+        ('ISSUED_DEMO','TRANSFERRED_DEMO','RETIRED_DEMO')),
+    -- The quantity is copied from the passport that was finalized, so a later
+    -- recalculation cannot change what was demonstrated.
+    units INTEGER NOT NULL CHECK (units > 0),
+    passport_hash TEXT NOT NULL,
+    issued_by TEXT NOT NULL REFERENCES lens_users(user_id),
+    issued_at TEXT NOT NULL,
+    held_by TEXT REFERENCES lens_users(user_id),
+    transferred_at TEXT,
+    retired_by TEXT REFERENCES lens_users(user_id),
+    retired_at TEXT,
+    CHECK ((status = 'ISSUED_DEMO') OR (held_by IS NOT NULL)),
+    CHECK ((status = 'RETIRED_DEMO') = (retired_at IS NOT NULL))
+);
+
+CREATE TABLE lens_demo_events (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id TEXT NOT NULL REFERENCES lens_demo_units(request_id),
+    occurred_at TEXT NOT NULL,
+    from_status TEXT,
+    to_status TEXT NOT NULL,
+    user_id TEXT,
+    note TEXT NOT NULL
+);
+CREATE INDEX lens_demo_events_request ON lens_demo_events(request_id, seq);
+CREATE TRIGGER lens_demo_events_append_only BEFORE UPDATE ON lens_demo_events
+BEGIN SELECT RAISE(ABORT, 'the demonstration history is append-only'); END;
+"""),
 ]
 
 

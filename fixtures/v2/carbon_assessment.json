@@ -1,0 +1,104 @@
+{
+  "schema": "carbon.case2.assessment/1",
+  "method_version": "carbon-lens-trust-1.0.0",
+  "parameters": {
+    "cf_agb": 0.47,
+    "co2_per_c": 3.6666666666666665,
+    "unc_allowance": 0.1,
+    "unc_stop_ratio": 1.0,
+    "buffer_share": 0.15,
+    "leakage_tco2e": 0.0,
+    "prices_rub": [
+      500.0,
+      1500.0,
+      4000.0
+    ]
+  },
+  "interval": {
+    "status": "AVAILABLE",
+    "unavailable_reason": null,
+    "lower_tco2e": -792.7333333333332,
+    "upper_tco2e": -585.9333333333333,
+    "sd_tco2e": 103.4,
+    "interval_kind": "SCENARIO",
+    "method_version": "carbon-lens-trust-1.0.0",
+    "assumptions": {
+      "spatial_dependence": "INDEPENDENT_CELLS",
+      "temporal_correlation": 0.0,
+      "coverage_factor": 1.0,
+      "cells": 2,
+      "pool": "AGB",
+      "empirically_calibrated": false
+    },
+    "sensitivity": []
+  },
+  "baseline": {
+    "status": "AVAILABLE",
+    "unavailable_reason": null,
+    "baseline_id": "HIST-AGB-2015-2019-v1",
+    "area_ha": 100.0,
+    "delta_tc": 46.999999999999886,
+    "delta_tc_ha": 0.46999999999999886,
+    "e_base_tco2e": -172.33333333333292,
+    "parts": [
+      {
+        "aoi_id": "DOC_EXAMPLE_AREA",
+        "area_ha": 100.0,
+        "stock_start_tc_ha": 47.0,
+        "stock_end_tc_ha": 47.47,
+        "delta_tc_ha": 0.46999999999999886,
+        "delta_tc": 46.999999999999886,
+        "clipped_at_zero": false
+      }
+    ]
+  },
+  "units": {
+    "status": "AVAILABLE",
+    "unavailable_reason": null,
+    "zero_reason": null,
+    "e_proj_tco2e": -689.3333333333333,
+    "e_base_tco2e": -172.33333333333292,
+    "leakage_tco2e": 0.0,
+    "lower_tco2e": -792.7333333333332,
+    "upper_tco2e": -585.9333333333333,
+    "h_tco2e": 103.4,
+    "r_tco2e": 517.0000000000003,
+    "ratio": 0.19999999999999987,
+    "uncertainty_share": 0.09999999999999987,
+    "uncertainty_deduction_tco2e": 51.69999999999997,
+    "r_adj_tco2e": 465.30000000000035,
+    "buffer_tco2e": 69.79500000000004,
+    "units": 395,
+    "rounding_residual_tco2e": 0.5050000000002797,
+    "scenario_values": [
+      {
+        "price_rub": 500.0,
+        "value_rub": 197500.0
+      },
+      {
+        "price_rub": 1500.0,
+        "value_rub": 592500.0
+      },
+      {
+        "price_rub": 4000.0,
+        "value_rub": 1580000.0
+      }
+    ],
+    "method_version": "carbon-lens-trust-1.0.0"
+  },
+  "claim": {
+    "status": "NOT_PROVIDED",
+    "mismatch_reasons": [],
+    "claimed_units": null,
+    "source": null,
+    "units": 395,
+    "unsupported_gap": null,
+    "supported_share": null,
+    "gap_values": [],
+    "reason": null
+  },
+  "notes": [
+    "Интервал сценарный при заявленных допущениях.",
+    "Учитывается только живая надземная древесная биомасса."
+  ]
+}

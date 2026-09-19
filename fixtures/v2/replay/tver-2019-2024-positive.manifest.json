@@ -1,0 +1,64 @@
+{
+  "schema": "rs.case2.manifest/1",
+  "method_version": "backend-replay-vector/0.1.0",
+  "code_commit": null,
+  "dataset": {
+    "root": "data",
+    "files": [
+      {
+        "path": "RU_TVER_01/CCI_Biomass_2019.tif",
+        "sha256": "2226de3d3e138074e782fa02b7c56ee5ec9008d6bd3def9bad929ef9fdabf33d",
+        "size_bytes": 10150,
+        "role": "biomass"
+      },
+      {
+        "path": "RU_TVER_01/CCI_Biomass_2020.tif",
+        "sha256": "d387372ca2358e532665f9a5049d36e5c309d174f6fd2bf732ca581d5be26df6",
+        "size_bytes": 10402,
+        "role": "biomass"
+      },
+      {
+        "path": "RU_TVER_01/CCI_Biomass_2021.tif",
+        "sha256": "a5fb6e8b750d7fd4fd391a743fdd89bba9160b9c4ad4676ae4b70556e67794e0",
+        "size_bytes": 10126,
+        "role": "biomass"
+      },
+      {
+        "path": "RU_TVER_01/CCI_Biomass_2022.tif",
+        "sha256": "96ebfa4682b7dd4c9321a7fedc7387458d22977bdf65a0dc3c2c0a1c7db13776",
+        "size_bytes": 10312,
+        "role": "biomass"
+      },
+      {
+        "path": "RU_TVER_01/CCI_Biomass_2023.tif",
+        "sha256": "804615f21add3e8eed99a91b44969b2562cef40f962ea0ae4df65b22f029db0b",
+        "size_bytes": 10280,
+        "role": "biomass"
+      },
+      {
+        "path": "RU_TVER_01/CCI_Biomass_2024.tif",
+        "sha256": "ae14905cdc2a22e0f3b0bb84a3f79c127cf551c47a361b695218759e53998224",
+        "size_bytes": 10058,
+        "role": "biomass"
+      }
+    ]
+  },
+  "parameters": {
+    "carbon_fraction": 0.47,
+    "co2_per_c": 3.6666666666666665,
+    "pool": "living above-ground woody biomass",
+    "method": "stock-difference",
+    "method_version": "backend-replay-vector/0.1.0"
+  },
+  "request": {
+    "area_ha": 1750.4731237457274,
+    "year_start": 2019,
+    "year_end": 2024,
+    "years": 5,
+    "parents": [
+      "RU_TVER_01"
+    ]
+  },
+  "content_sha256": "0x4ac408ea3fde099c67fd33114d448eb904eadeccd9a54edb284cc66b71f72d05",
+  "artifacts": []
+}
