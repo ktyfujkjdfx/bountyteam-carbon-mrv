@@ -1,0 +1,97 @@
+"""Stable status and reason codes of the carbon engine.
+
+Consumers (Backend API, report builder, UI) rely on these strings, so they are the
+single source of truth for the v2 contract enumerations.
+"""
+from __future__ import annotations
+
+AVAILABLE = "AVAILABLE"
+UNAVAILABLE = "UNAVAILABLE"
+
+# Mandatory input is missing or unusable: the quantity is null, never zero.
+MISSING_INPUT = "MISSING_INPUT"
+NON_FINITE_INPUT = "NON_FINITE_INPUT"
+NON_POSITIVE_AREA = "NON_POSITIVE_AREA"
+NON_POSITIVE_PERIOD = "NON_POSITIVE_PERIOD"
+INVALID_UNCERTAINTY_INPUT = "INVALID_UNCERTAINTY_INPUT"
+INVALID_INTERVAL = "INVALID_INTERVAL"
+INCOMPLETE_COVERAGE = "INCOMPLETE_COVERAGE"
+BASELINE_OUT_OF_COVERAGE = "BASELINE_OUT_OF_COVERAGE"
+BASELINE_UNKNOWN_AREA = "BASELINE_UNKNOWN_AREA"
+
+UNAVAILABLE_REASONS = frozenset({
+    MISSING_INPUT,
+    NON_FINITE_INPUT,
+    NON_POSITIVE_AREA,
+    NON_POSITIVE_PERIOD,
+    INVALID_UNCERTAINTY_INPUT,
+    INVALID_INTERVAL,
+    INCOMPLETE_COVERAGE,
+    BASELINE_OUT_OF_COVERAGE,
+    BASELINE_UNKNOWN_AREA,
+})
+
+# Inputs are valid and the rules of the case give exactly zero units.
+NON_POSITIVE_RELATIVE_RESULT = "NON_POSITIVE_RELATIVE_RESULT"
+UNCERTAINTY_TOO_HIGH = "UNCERTAINTY_TOO_HIGH"
+ROUNDED_TO_ZERO = "ROUNDED_TO_ZERO"
+
+ZERO_UNIT_REASONS = frozenset({
+    NON_POSITIVE_RELATIVE_RESULT,
+    UNCERTAINTY_TOO_HIGH,
+    ROUNDED_TO_ZERO,
+})
+
+# The pool and the unit a result speaks about. They are part of comparability: a claim
+# stated in other units is not a smaller or larger claim, it is a different one.
+POOL_AGB_LIVE_WOODY = "AGB_LIVE_WOODY"
+UNIT_POTENTIAL_CASE = "POTENTIAL_UNIT_OF_THE_CASE"
+
+# Spatial scenarios of the interval, named as the method freeze names them.
+INDEPENDENT_NATIVE_CELLS = "INDEPENDENT_NATIVE_CELLS"
+FULL_SPATIAL_CORRELATION = "FULL_SPATIAL_CORRELATION"
+SPATIAL_SCENARIOS = frozenset({INDEPENDENT_NATIVE_CELLS, FULL_SPATIAL_CORRELATION})
+
+# Claim comparison statuses.
+CLAIM_NOT_PROVIDED = "NOT_PROVIDED"
+CLAIM_NOT_APPLICABLE = "NOT_APPLICABLE"
+CLAIM_NOT_COMPARABLE = "NOT_COMPARABLE"
+CLAIM_UNASSESSABLE = "UNASSESSABLE"
+CLAIM_SUPPORTED = "SUPPORTED_BY_CASE"
+CLAIM_PARTIALLY_SUPPORTED = "PARTIALLY_SUPPORTED_BY_CASE"
+CLAIM_NOT_SUPPORTED = "NOT_SUPPORTED_BY_CASE"
+
+CLAIM_STATUSES = frozenset({
+    CLAIM_NOT_PROVIDED,
+    CLAIM_NOT_APPLICABLE,
+    CLAIM_NOT_COMPARABLE,
+    CLAIM_UNASSESSABLE,
+    CLAIM_SUPPORTED,
+    CLAIM_PARTIALLY_SUPPORTED,
+    CLAIM_NOT_SUPPORTED,
+})
+
+# Why a comparison did not produce a share. A zero claim is not a supported claim: there
+# is nothing to support, and saying otherwise would read as an endorsement.
+NO_POSITIVE_CLAIM = "NO_POSITIVE_CLAIM"
+CLAIM_REASONS = frozenset({NO_POSITIVE_CLAIM})
+
+# Why a provided claim cannot be compared with the calculation.
+INVALID_CLAIM_VALUE = "INVALID_CLAIM_VALUE"
+GEOMETRY_MISMATCH = "GEOMETRY_MISMATCH"
+PERIOD_MISMATCH = "PERIOD_MISMATCH"
+POOL_MISMATCH = "POOL_MISMATCH"
+UNIT_MISMATCH = "UNIT_MISMATCH"
+
+CLAIM_MISMATCH_REASONS = frozenset({
+    INVALID_CLAIM_VALUE,
+    GEOMETRY_MISMATCH,
+    PERIOD_MISMATCH,
+    POOL_MISMATCH,
+    UNIT_MISMATCH,
+})
+
+# Where a claimed quantity came from. It is an input label, not a calculated result.
+CLAIM_SOURCE_USER = "USER_INPUT"
+CLAIM_SOURCE_DEMO = "DEMO_INPUT"
+CLAIM_SOURCES = frozenset({CLAIM_SOURCE_USER, CLAIM_SOURCE_DEMO})
