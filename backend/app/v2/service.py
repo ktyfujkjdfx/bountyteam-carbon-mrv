@@ -541,3 +541,45 @@ def finalize_request(lens: LensContext, request_id: str, *, who: Any) -> dict:
     document = verification.finalize(lens.app, request_id, who=who,
                                      passport_of=passport_of)
     return validate(api_validator("VerificationRequest"), document, "VerificationRequest")
+
+
+# -- scenario value -----------------------------------------------------------------------
+VALUE_NOTE = (
+    "Сценарная стоимость — это Q, умноженное на цену, и ничего больше. Это не рыночная "
+    "котировка, не прогноз выручки и не гарантированная сумма. Цена, заданная "
+    "пользователем, помечена как USER_SCENARIO и остаётся его допущением."
+)
+
+
+def value_view(lens: LensContext, analysis_id: str, *, who: Any,
+               price_rub: float | None = None) -> dict:
+    """q multiplied by each price. Nothing is stored and no hash moves.
+
+    A price the caller supplies is an input, not a quotation this system stands behind,
+    so it is labelled `USER_SCENARIO` and deliberately kept out of the analysis: a stated
+    price must never be able to change a passport.
+    """
+    _readable(lens, analysis_id, who)
+    result = lens.store.result(analysis_id)
+    if result is None:
+        raise not_found("Result")
+    q = result["units"]["q"]
+    scenarios = [{"id": name, "origin": "CASE_PARAMETER", "price_rub": price,
+                  "value_rub": None if q is None else q * price}
+                 for name, price in catalog.prices()]
+    if price_rub is not None:
+        if not isinstance(price_rub, (int, float)) or isinstance(price_rub, bool) \
+                or price_rub < 0 or price_rub != price_rub:
+            raise invalid("INVALID_PRICE", "price_rub must be a non-negative number")
+        scenarios.append({"id": "user", "origin": "USER_SCENARIO",
+                          "price_rub": float(price_rub),
+                          "value_rub": None if q is None else q * float(price_rub)})
+    document = {
+        "analysis_id": analysis_id,
+        "q": q,
+        "unit": "RUB",
+        "price_parameters_ref": assemble.PRICE_REF,
+        "scenarios": scenarios,
+        "note": VALUE_NOTE,
+    }
+    return validate(api_validator("ValueScenarios"), document, "ValueScenarios")

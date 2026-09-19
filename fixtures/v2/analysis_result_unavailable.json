@@ -215,6 +215,105 @@
     "scope_note": "Сравнение возможно только при совпадении контура, периода, пула и единиц. Заявленный объём — пользовательский ввод, а не установленный факт."
   },
   "zones": [],
+  "risks": [
+    {
+      "code": "FIRE",
+      "observed": false,
+      "basis": {},
+      "source_ref": null,
+      "note": "Признак горения по внешнему продукту гарей. Точный контур пожара и наземные измерения отсутствуют. Риск показан рядом с расчётом и не входит в Q. Он не переоценивается на стороне Backend и не является вероятностью."
+    },
+    {
+      "code": "FOREST_LOSS",
+      "observed": false,
+      "basis": {
+        "zones": 0,
+        "detected_area_ha": 0.0,
+        "fire_supported_zones": 0,
+        "cause_unknown_zones": 0
+      },
+      "source_ref": null,
+      "note": "Потеря древесного покрова по продукту года потери. Факт потери и её причина — разные утверждения. Риск показан рядом с расчётом и не входит в Q. Он не переоценивается на стороне Backend и не является вероятностью."
+    },
+    {
+      "code": "DATA_QUALITY",
+      "observed": true,
+      "basis": {
+        "biomass_fraction": 0.625,
+        "baseline_fraction": 0.625,
+        "optical_paired_valid_fraction": 0.0,
+        "evidence_status": "INSUFFICIENT",
+        "blocking_warnings": 0
+      },
+      "source_ref": null,
+      "note": "Полнота данных и качество объяснения изменения. Риск показан рядом с расчётом и не входит в Q. Он не переоценивается на стороне Backend и не является вероятностью."
+    }
+  ],
+  "projection": {
+    "status": "AVAILABLE",
+    "unavailable_reason": null,
+    "horizon_year": 2029,
+    "points": [
+      {
+        "year": 2019,
+        "series_kind": "FACT",
+        "baseline_carbon_tc_ha": 47.0
+      },
+      {
+        "year": 2020,
+        "series_kind": "FACT",
+        "baseline_carbon_tc_ha": 47.47
+      },
+      {
+        "year": 2021,
+        "series_kind": "PROJECTION",
+        "baseline_carbon_tc_ha": 47.94
+      },
+      {
+        "year": 2022,
+        "series_kind": "PROJECTION",
+        "baseline_carbon_tc_ha": 48.41
+      },
+      {
+        "year": 2023,
+        "series_kind": "PROJECTION",
+        "baseline_carbon_tc_ha": 48.88
+      },
+      {
+        "year": 2024,
+        "series_kind": "PROJECTION",
+        "baseline_carbon_tc_ha": 49.35
+      },
+      {
+        "year": 2025,
+        "series_kind": "PROJECTION",
+        "baseline_carbon_tc_ha": 49.82
+      },
+      {
+        "year": 2026,
+        "series_kind": "PROJECTION",
+        "baseline_carbon_tc_ha": 50.29
+      },
+      {
+        "year": 2027,
+        "series_kind": "PROJECTION",
+        "baseline_carbon_tc_ha": 50.76
+      },
+      {
+        "year": 2028,
+        "series_kind": "PROJECTION",
+        "baseline_carbon_tc_ha": 51.23
+      },
+      {
+        "year": 2029,
+        "series_kind": "PROJECTION",
+        "baseline_carbon_tc_ha": 51.7
+      }
+    ],
+    "q_projection": null,
+    "q_projection_note": "Прогноз потенциальных единиц не строится: предоставленные данные не дают основания для утверждения о будущем состоянии участка.",
+    "note": "Продолжение базовой линии по правилам кейса. Это сценарное допущение, а не прогноз состояния участка."
+  },
   "evidence": {
     "status": "INSUFFICIENT",
     "optical_paired_valid_fraction": 0.0,

@@ -486,6 +486,8 @@ def content_view(result: dict) -> dict:
         "scenario_values": result["scenario_values"],
         "claim": result["claim"],
         "zones": result["zones"],
+        "risks": result["risks"],
+        "projection": result["projection"],
         "evidence": result["evidence"],
         "sources": result["sources"],
         "artifacts": [{key: item[key] for key in
@@ -596,6 +598,8 @@ def build_result(*, analysis_id: str, run_id: str, created_at: str, request_snap
                              year_end=request_snapshot["year_end"],
                              scope=claim_scope),
         "zones": zones_block(payload, artifacts),
+        "risks": [],
+        "projection": projection_block(baseline, []),
         "evidence": evidence_block(payload, coverage),
         "passport": {},
         "sources": sources_block(manifest),
@@ -603,6 +607,8 @@ def build_result(*, analysis_id: str, run_id: str, created_at: str, request_snap
         "limitations": _unique(limitations),
         "notes": list(carbon.get("notes") or ()),
     }
+    result["projection"] = projection_block(baseline, result["timeline"])
+    result["risks"] = risks_block(payload, result["zones"], coverage, result["evidence"])
     disagreement = eproj_disagreement(payload, units["e_proj_tco2e"])
     if disagreement is not None:
         result["evidence"]["warnings"].append(disagreement)
@@ -696,6 +702,13 @@ def unavailable_result(*, analysis_id: str, run_id: str, created_at: str,
         "claim": claim_block(claim, geometry_hash=geometry_hash, year_start=year_start,
                              year_end=year_end, scope=claim_scope),
         "zones": [],
+        # Data quality is knowable even when nothing else is, and it is exactly what a
+        # reader of an empty result needs to see.
+        "risks": [],
+        "projection": {"status": "UNAVAILABLE", "unavailable_reason": reason,
+                       "horizon_year": PROJECTION_HORIZON, "points": [],
+                       "q_projection": None, "q_projection_note": PROJECTION_Q_NOTE,
+                       "note": "Расчёт недоступен, продолжать нечего."},
         "evidence": {"status": "INSUFFICIENT", "optical_paired_valid_fraction": 0.0,
                      "analysed_parent": None, "scenes": [], "reconciliation": None,
                      "warnings": [warning(reason, message, "BLOCKING")]},
@@ -707,6 +720,7 @@ def unavailable_result(*, analysis_id: str, run_id: str, created_at: str,
                                 limitation(reason, message)]),
         "notes": [],
     }
+    result["risks"] = risks_block({}, [], result["coverage"], result["evidence"])
     content_hash = digest(content_view(result))
     report_hash = digest({"report": REPORT_SCHEMA_VERSION, "content": content_view(result)})
     result["passport"] = passport_block(content_hash=content_hash, report_hash=report_hash,
@@ -721,3 +735,130 @@ def _unique(values: list[dict]) -> list[dict]:
         if value not in seen:
             seen.append(value)
     return seen
+
+
+# -- risks, kept beside q rather than inside it -------------------------------------------
+RISK_NOTE = (
+    "Риск показан рядом с расчётом и не входит в Q. Он не переоценивается на стороне "
+    "Backend и не является вероятностью."
+)
+PROJECTION_HORIZON = 2029
+
+
+def risks_block(raster: dict, zones: list[dict], coverage: dict,
+                evidence: dict) -> list[dict]:
+    """What the supplied products say about three risks, and nothing more.
+
+    There is no aggregate score. Adding a fire indication to an optical coverage fraction
+    would produce a number that means nothing, and a reader who is handed one tends to
+    stop asking what it was made of.
+    """
+    parent = (raster.get("change_evidence") or {}).get("analysed_parent")
+    event = next((row for row in catalog.events() if row["aoi_id"] == parent), None)
+    fire_basis: dict[str, Any] = {}
+    if event is not None:
+        burned = float(event["burned_pixel_centers_in_aoi"] or 0.0)
+        total = float(event["all_pixel_centers_in_aoi"] or 0.0)
+        fire_basis = {
+            "event_id": event["event_id"],
+            "burned_pixel_centers": burned,
+            "all_pixel_centers": total,
+            "burned_share": round(burned / total, 6) if total else None,
+            "date_min_product": event["date_min_product"],
+            "date_max_product": event["date_max_product"],
+            "date_uncertainty_days_min": int(event["date_uncertainty_days_min"] or 0),
+            "date_uncertainty_days_max": int(event["date_uncertainty_days_max"] or 0),
+        }
+
+    loss_zones = [zone for zone in zones if zone["fact"] == "TREE_COVER_LOSS"]
+    loss_basis = {
+        "zones": len(loss_zones),
+        "detected_area_ha": round(sum(zone["area_ha"] for zone in loss_zones), 6),
+        "fire_supported_zones": sum(1 for zone in loss_zones
+                                    if zone["cause"] == "FIRE_SUPPORTED"),
+        "cause_unknown_zones": sum(1 for zone in loss_zones
+                                   if zone["cause"] == "UNKNOWN"),
+    }
+
+    quality_basis = {
+        "biomass_fraction": coverage["biomass_fraction"],
+        "baseline_fraction": coverage["baseline_fraction"],
+        "optical_paired_valid_fraction": coverage["optical_paired_valid_fraction"],
+        "evidence_status": evidence["status"],
+        "blocking_warnings": sum(1 for item in evidence["warnings"]
+                                 if item["severity"] == "BLOCKING"),
+    }
+    return [
+        {"code": "FIRE", "observed": event is not None, "basis": fire_basis,
+         "source_ref": "MODIS_MCD64A1_061" if event is not None else None,
+         "note": "Признак горения по внешнему продукту гарей. Точный контур пожара и "
+                 "наземные измерения отсутствуют. " + RISK_NOTE},
+        {"code": "FOREST_LOSS", "observed": bool(loss_zones), "basis": loss_basis,
+         "source_ref": "GFC_2025_V113" if loss_zones else None,
+         "note": "Потеря древесного покрова по продукту года потери. Факт потери и её "
+                 "причина — разные утверждения. " + RISK_NOTE},
+        {"code": "DATA_QUALITY", "observed": True, "basis": quality_basis,
+         "source_ref": None,
+         "note": "Полнота данных и качество объяснения изменения. " + RISK_NOTE},
+    ]
+
+
+def projection_block(baseline: dict, timeline: list[dict],
+                     horizon: int = PROJECTION_HORIZON) -> dict:
+    """The baseline of the case continued to the horizon year.
+
+    Only the baseline is continued, and only because the rules of the case define it for
+    any year. The observed stock is not extrapolated: nothing in the supplied data
+    supports a statement about what this plot will actually do, and `q_projection` is
+    permanently null for the same reason.
+    """
+    curve = baseline.get("curve_tc_ha") or {}
+    if baseline["status"] != "AVAILABLE" or not curve:
+        return {
+            "status": "UNAVAILABLE",
+            "unavailable_reason": baseline["unavailable_reason"] or "MISSING_INPUT",
+            "horizon_year": horizon, "points": [], "q_projection": None,
+            "q_projection_note": PROJECTION_Q_NOTE,
+            "note": "Базовая линия недоступна, поэтому продолжать нечего.",
+        }
+    observed = {entry["year"] for entry in timeline}
+    last_fact = max(observed) if observed else 0
+    points = []
+    for year in sorted({*observed, *range(last_fact + 1, horizon + 1)}):
+        value = curve.get(str(year))
+        if value is None and year > last_fact:
+            value = _extend(curve, year)
+        points.append({
+            "year": year,
+            "series_kind": "FACT" if year <= last_fact else "PROJECTION",
+            "baseline_carbon_tc_ha": value,
+        })
+    return {
+        "status": "AVAILABLE", "unavailable_reason": None, "horizon_year": horizon,
+        "points": points, "q_projection": None,
+        "q_projection_note": PROJECTION_Q_NOTE,
+        "note": "Продолжение базовой линии по правилам кейса. Это сценарное допущение, "
+                "а не прогноз состояния участка.",
+    }
+
+
+PROJECTION_Q_NOTE = (
+    "Прогноз потенциальных единиц не строится: предоставленные данные не дают основания "
+    "для утверждения о будущем состоянии участка."
+)
+
+
+def _extend(curve: dict, year: int) -> float | None:
+    """Continue the baseline line at the rate it already has.
+
+    The trajectory the engine supplied is linear in the year, so two of its own points
+    fix the rate. This places a point on a line the engine drew; it does not choose one.
+    """
+    known = sorted((int(key), value) for key, value in curve.items() if value is not None)
+    if len(known) < 2:
+        return known[0][1] if known else None
+    (year_a, value_a), (year_b, value_b) = known[0], known[-1]
+    if year_b == year_a:
+        return value_b
+    rate = (value_b - value_a) / (year_b - year_a)
+    return value_b + rate * (year - year_b)

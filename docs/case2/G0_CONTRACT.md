@@ -215,6 +215,31 @@ Three deliberate separations:
   artifact whose features carry `zone_id`, so a map can draw them without a second
   contract.
 
+## Risk, the projection and money stay outside the number
+
+Each of these is a place where a tool like this usually starts lying, so each is a block
+of its own and none of them touches `units`.
+
+`risks[]` reports three codes — `FIRE`, `FOREST_LOSS`, `DATA_QUALITY` — each with the
+measured `basis` it rests on, its `source_ref` and a note. There is no score and no
+probability, and there is deliberately no aggregate: adding a fire indication to a
+coverage fraction produces a number that means nothing, and a reader handed one tends to
+stop asking what it was made of. `observed: false` means nothing was found in the
+supplied products, which is not the same as an established absence.
+
+`projection` continues the **baseline** of the case to 2029, because the rules of the
+case define that line for any year. The observed stock is not extrapolated, and
+`q_projection` is permanently `null`: nothing in the supplied data supports a statement
+about what this plot will actually do. Points carry `series_kind` of `FACT` or
+`PROJECTION`, every fact precedes every projection, and a chart must not join them into
+one line.
+
+`GET /analyses/{id}/value?price_rub=…` multiplies q by each price. The three official
+prices are `CASE_PARAMETER`; a price the caller supplies comes back as `USER_SCENARIO`
+and is their assumption, not a quotation this system stands behind. Nothing is stored and
+no hash moves — a stated price must never be able to change a passport. When q is null
+every value is null.
+
 ## Language the contract will not carry
 
 No public `INVESTABLE`, no "approved for purchase", no "proven fraud". A gap value is the

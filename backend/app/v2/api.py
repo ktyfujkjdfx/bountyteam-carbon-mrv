@@ -222,6 +222,12 @@ def get_report(lens: Lens, who: Who, analysis_id: AnalysisId,
     return service.report_view(lens, identifier, who=who)
 
 
+@router.get("/analyses/{analysis_id}/value")
+def get_value(lens: Lens, who: Who, analysis_id: AnalysisId,
+              price_rub: Annotated[float | None, Query(ge=0)] = None):
+    return service.value_view(lens, _uuid(analysis_id), who=who, price_rub=price_rub)
+
+
 @router.get("/analyses/{analysis_id}/proof")
 def get_proof(lens: Lens, who: Who, analysis_id: AnalysisId):
     return service.proof_view(lens, _uuid(analysis_id), who=who)

@@ -473,6 +473,42 @@ paths:
         '422': {$ref: '#/components/responses/Failure'}
         '503': {$ref: '#/components/responses/Failure'}
 
+  /analyses/{analysis_id}/value:
+    get:
+      tags: [analyses]
+      operationId: getAnalysisValue
+      summary: q multiplied by each price, with an optional price of the caller's own
+      description: |
+        Nothing here is stored and no hash moves. A price the caller supplies
+        is an input, not a quotation this system stands behind: it comes back
+        labelled USER_SCENARIO and is deliberately kept out of the analysis,
+        because a stated price must never be able to change a passport.
+
+        When q is null every value is null. There is no scenario value for an
+        answer that does not exist.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/AnalysisId'
+        - name: price_rub
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: 0
+          description: A price of the caller's own, labelled USER_SCENARIO in the answer.
+      responses:
+        '200':
+          description: Scenario values
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/ValueScenarios'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
   /analyses/{analysis_id}/proof:
     get:
       tags: [analyses]

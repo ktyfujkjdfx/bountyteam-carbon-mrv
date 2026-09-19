@@ -80,6 +80,7 @@ def test_openapi_v2_describes_exactly_the_agreed_routes():
         ("/analyses/{analysis_id}", "get"),
         ("/analyses/{analysis_id}/artifacts/{artifact_id}", "get"),
         ("/analyses/{analysis_id}/report", "get"),
+        ("/analyses/{analysis_id}/value", "get"),
         ("/analyses/{analysis_id}/proof", "get"),
     }
 

@@ -164,6 +164,17 @@ class ReportBuilder:
         sources = "".join(
             f"<li>{_e(item['product'])} ({_e(item['version'])}) — {_e(item['attribution'])}</li>"
             for item in result["sources"])
+        risks = "".join(
+            f"<tr><td>{_e(item['code'])}</td>"
+            f"<td>{'есть основание' if item['observed'] else 'не обнаружено'}</td>"
+            f"<td>{_e(item['source_ref'] or '—')}</td>"
+            f"<td>{_e(item['note'])}</td></tr>"
+            for item in result["risks"])
+        projection = result["projection"]
+        projected = "".join(
+            f"<tr><td>{point['year']}</td><td>{_e(point['series_kind'])}</td>"
+            f"<td>{_number(point['baseline_carbon_tc_ha'])}</td></tr>"
+            for point in projection["points"])
         limitations = "".join(f"<li>{_e(item['message'])}</li>"
                               for item in result["limitations"])
         warnings = "".join(
@@ -206,6 +217,14 @@ class ReportBuilder:
 {('<h2>Зоны изменения</h2><table><tr><th>Зона</th><th>Факт</th><th>Причина</th>'
   '<th>Площадь, га</th><th>Вклад, т CO₂-экв.</th></tr>' + zones + '</table>') if zones else ''}
 <h2>Источники</h2><ul>{sources}</ul>
+{('<h2>Риски</h2><p>Риски показаны рядом с расчётом и не входят в Q.</p>'
+  '<table><tr><th>Риск</th><th>Основание</th><th>Источник</th><th>Пояснение</th></tr>'
+  + risks + '</table>') if risks else ''}
+{('<h2>Базовая линия до ' + str(projection['horizon_year']) + '</h2>'
+  '<p>Продолжение базовой линии по правилам кейса. Факт и продолжение помечены разным '
+  'видом ряда и не образуют одну линию. ' + _e(projection['q_projection_note']) + '</p>'
+  '<table><tr><th>Год</th><th>Вид ряда</th><th>Базовая линия, т C/га</th></tr>'
+  + projected + '</table>') if projected else ''}
 {('<h2>Замечания к свидетельствам</h2><ul>' + warnings + '</ul>') if warnings else ''}
 <h2>Ограничения</h2><ul>{limitations}</ul>
 {('<h2>Примечания метода</h2><ul>' + notes + '</ul>') if notes else ''}

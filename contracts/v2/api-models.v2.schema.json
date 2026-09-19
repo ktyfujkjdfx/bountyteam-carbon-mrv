@@ -98,6 +98,93 @@
         "required": ["token", "expires_at", "user"],
         "additionalProperties": false
       },
+      "RiskCode": {
+        "type": "string",
+        "enum": ["FIRE", "FOREST_LOSS", "DATA_QUALITY"],
+        "description": "The three risks the supplied data can say something about. There is no aggregate risk score: adding them up would invent a number nobody measured."
+      },
+      "Risk": {
+        "type": "object",
+        "description": "An observed basis for a risk, kept apart from q. A risk never adjusts the calculated units; it is shown beside them so a reader can weigh it themselves.",
+        "properties": {
+          "code": {"$ref": "#/components/schemas/RiskCode"},
+          "observed": {
+            "type": "boolean",
+            "description": "Whether the supplied products show the basis at all. False means nothing was found, which is not the same as an established absence."
+          },
+          "basis": {
+            "type": "object",
+            "description": "The measured quantities this rests on, copied from the owning product. No score and no probability."
+          },
+          "source_ref": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "note": {"type": "string"}
+        },
+        "required": ["code", "observed", "basis", "source_ref", "note"],
+        "additionalProperties": false
+      },
+      "SeriesKind": {
+        "type": "string",
+        "enum": ["FACT", "PROJECTION"],
+        "description": "A measured year and a projected year are never the same kind of point, and a chart must not join them into one line."
+      },
+      "ProjectionPoint": {
+        "type": "object",
+        "properties": {
+          "year": {"type": "integer"},
+          "series_kind": {"$ref": "#/components/schemas/SeriesKind"},
+          "baseline_carbon_tc_ha": {"oneOf": [{"type": "number"}, {"type": "null"}]}
+        },
+        "required": ["year", "series_kind", "baseline_carbon_tc_ha"],
+        "additionalProperties": false
+      },
+      "Projection": {
+        "type": "object",
+        "description": "The baseline trajectory of the case continued to the horizon year. It is a scenario assumption, not a forecast of what the plot will do, and it does not touch the current q.",
+        "properties": {
+          "status": {"$ref": "#/components/schemas/CalculationStatus"},
+          "unavailable_reason": {"oneOf": [{"$ref": "#/components/schemas/UnavailableReason"}, {"type": "null"}]},
+          "horizon_year": {"type": "integer"},
+          "points": {"type": "array", "items": {"$ref": "#/components/schemas/ProjectionPoint"}},
+          "q_projection": {
+            "type": "null",
+            "description": "Always null. No projection of potential units is made, because nothing in the supplied data supports one."
+          },
+          "q_projection_note": {"type": "string"},
+          "note": {"type": "string"}
+        },
+        "required": ["status", "unavailable_reason", "horizon_year", "points",
+                     "q_projection", "q_projection_note", "note"],
+        "additionalProperties": false
+      },
+      "ValueScenario": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "origin": {
+            "type": "string",
+            "enum": ["CASE_PARAMETER", "USER_SCENARIO"],
+            "description": "USER_SCENARIO marks a price the caller supplied. It is an input, never a quotation this system stands behind."
+          },
+          "price_rub": {"type": "number", "minimum": 0},
+          "value_rub": {"oneOf": [{"type": "number"}, {"type": "null"}]}
+        },
+        "required": ["id", "origin", "price_rub", "value_rub"],
+        "additionalProperties": false
+      },
+      "ValueScenarios": {
+        "type": "object",
+        "description": "q multiplied by a price, and nothing else. Not a market quote, not a revenue forecast, not a guaranteed sum.",
+        "properties": {
+          "analysis_id": {"$ref": "#/components/schemas/Uuid"},
+          "q": {"oneOf": [{"type": "integer"}, {"type": "null"}]},
+          "unit": {"const": "RUB"},
+          "price_parameters_ref": {"type": "string"},
+          "scenarios": {"type": "array", "items": {"$ref": "#/components/schemas/ValueScenario"}},
+          "note": {"type": "string"}
+        },
+        "required": ["analysis_id", "q", "unit", "price_parameters_ref", "scenarios", "note"],
+        "additionalProperties": false
+      },
       "RequestStatus": {
         "type": "string",
         "enum": ["DRAFT", "SUBMITTED", "ANALYSING", "CALCULATED", "FINALIZED"],
@@ -962,6 +1049,8 @@
           "scenario_values": {"$ref": "#/components/schemas/ScenarioValues"},
           "claim": {"$ref": "#/components/schemas/Claim"},
           "zones": {"type": "array", "items": {"$ref": "#/components/schemas/Zone"}},
+          "risks": {"type": "array", "items": {"$ref": "#/components/schemas/Risk"}},
+          "projection": {"$ref": "#/components/schemas/Projection"},
           "evidence": {"$ref": "#/components/schemas/Evidence"},
           "passport": {"$ref": "#/components/schemas/Passport"},
           "sources": {"type": "array", "items": {"$ref": "#/components/schemas/Source"}},
@@ -971,7 +1060,8 @@
         },
         "required": ["fixture", "identity", "run", "request", "calculation_status", "evidence_status",
                      "areas", "coverage", "timeline", "change", "uncertainty", "baseline", "units",
-                     "scenario_values", "claim", "zones", "evidence", "passport", "sources",
+                     "scenario_values", "claim", "zones", "risks", "projection",
+                     "evidence", "passport", "sources",
                      "artifacts", "limitations", "notes"],
         "additionalProperties": false
       },
