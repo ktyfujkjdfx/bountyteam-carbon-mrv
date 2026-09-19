@@ -11,6 +11,7 @@ export default defineConfig({
   workers: 1,
   reporter: [['list']],
   outputDir: 'test-results',
+  globalSetup: './e2e/global-setup.ts',
   use: {
     baseURL: process.env.E2E_BASE_URL ?? `http://127.0.0.1:${port}`,
     channel,
@@ -18,14 +19,4 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },
-  ...(process.env.E2E_BASE_URL
-    ? {}
-    : {
-        webServer: {
-          command: `npx vite preview --host 127.0.0.1 --port ${port} --strictPort`,
-          url: `http://127.0.0.1:${port}`,
-          reuseExistingServer: false,
-          timeout: 60_000,
-        },
-      }),
 });

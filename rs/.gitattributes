@@ -2,3 +2,8 @@
 # is recorded in firms.source_refs and re-checked by rs.verify, so any EOL
 # normalisation on checkout would break offline reproducibility on Windows.
 sources/*/firms/*.csv -text
+
+# The retrieval fixture is a real cache entry: the GeoTIFF is upstream bytes and
+# the sidecar records its SHA-256, so newline normalisation on checkout would
+# make offline replay fail on Windows only.
+tests/case2/fixtures/** -text

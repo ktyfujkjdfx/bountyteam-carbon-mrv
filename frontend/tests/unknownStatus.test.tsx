@@ -76,7 +76,7 @@ const unknownBatch = drift(batch, (raw) => {
 function expectUnknownBadge(element: HTMLElement, received: string) {
   expect(element).toHaveAttribute('data-tone', 'neutral');
   expect(element).toHaveAttribute('data-unknown', 'true');
-  expect(element).toHaveTextContent(`UNKNOWN: ${received}`);
+  expect(element).toHaveTextContent(`Неизвестное значение: ${received}`);
   expect(element).toHaveAttribute('title', UNKNOWN_VALUE_HINT);
 }
 
@@ -87,14 +87,14 @@ describe('safe status accessor', () => {
   });
 
   it.each([
-    ['unknown string', 'SUSPENDED', 'UNKNOWN: SUSPENDED'],
-    ['null', null, 'UNKNOWN: —'],
-    ['undefined', undefined, 'UNKNOWN: —'],
-    ['empty string', '', 'UNKNOWN: —'],
-    ['number', 42, 'UNKNOWN: 42'],
-    ['object', { state: 'FROZEN' }, 'UNKNOWN: UNKNOWN'],
-    ['prototype key', 'toString', 'UNKNOWN: toString'],
-    ['__proto__', '__proto__', 'UNKNOWN: __proto__'],
+    ['unknown string', 'SUSPENDED', 'Неизвестное значение: SUSPENDED'],
+    ['null', null, 'Неизвестное значение: —'],
+    ['undefined', undefined, 'Неизвестное значение: —'],
+    ['empty string', '', 'Неизвестное значение: —'],
+    ['number', 42, 'Неизвестное значение: 42'],
+    ['object', { state: 'FROZEN' }, 'Неизвестное значение: UNKNOWN'],
+    ['prototype key', 'toString', 'Неизвестное значение: toString'],
+    ['__proto__', '__proto__', 'Неизвестное значение: __proto__'],
   ])('%s → neutral fallback, never undefined', (_name, value, label) => {
     const meta = metaFor(CREDIT_META, value);
     expect(meta).toEqual({ label, tone: 'neutral', hint: UNKNOWN_VALUE_HINT, unknown: true });
@@ -105,7 +105,7 @@ describe('safe status accessor', () => {
     for (const value of ['ACTIVE ', 'frozen', 'FAILED_V2', 'VERIFIED']) {
       const meta = metaFor(CREDIT_META, value);
       expect(meta.tone).toBe('neutral');
-      expect(meta.label.startsWith('UNKNOWN: ')).toBe(true);
+      expect(meta.label.startsWith('Неизвестное значение: ')).toBe(true);
     }
   });
 
@@ -142,8 +142,8 @@ describe('components with contract drift', () => {
   it('EvidencePanel renders with unknown outcome, decision, reason, FIRMS support and modes', () => {
     render(<EvidencePanel verification={unknownFire} />);
     const panel = screen.getByTestId('evidence-panel');
-    expect(panel).toHaveTextContent('UNKNOWN: WILDFIRE_V2');
-    expect(panel).toHaveTextContent('UNKNOWN: ESCALATE_TO_AUDITOR');
+    expect(panel).toHaveTextContent('Неизвестное значение: WILDFIRE_V2');
+    expect(panel).toHaveTextContent('Неизвестное значение: ESCALATE_TO_AUDITOR');
     expect(panel).toHaveTextContent('Неизвестное значение: NEW_REASON_CODE');
     expectUnknownBadge(screen.getByTestId('firms-support'), 'PENDING_ARCHIVE');
     expectUnknownBadge(screen.getByTestId('evidence-dataset-kind'), 'SIMULATED');
@@ -205,8 +205,8 @@ describe('components with contract drift', () => {
       />,
     );
     const list = screen.getByTestId('history');
-    expect(list).toHaveTextContent('UNKNOWN: WILDFIRE_V2');
-    expect(within(list).getAllByText('UNKNOWN: —')).toHaveLength(2);
+    expect(list).toHaveTextContent('Неизвестное значение: WILDFIRE_V2');
+    expect(within(list).getAllByText('Неизвестное значение: —')).toHaveLength(2);
     expect(list.textContent).not.toMatch(/undefined|null/);
   });
 });
@@ -245,7 +245,7 @@ describe('App with a drifted Backend', () => {
     expectUnknownBadge(screen.getByTestId('health-mode'), 'STAGING_V2');
     expect(screen.getByTestId('evidence-map')).toBeInTheDocument();
     expect(screen.getByTestId('journal')).toBeInTheDocument();
-    expect(screen.getByTestId('history')).toHaveTextContent('UNKNOWN: ESCALATE_TO_AUDITOR');
+    expect(screen.getByTestId('history')).toHaveTextContent('Неизвестное значение: ESCALATE_TO_AUDITOR');
 
     await userEvent.click(screen.getByTestId('tab-credits'));
     expect(await screen.findByTestId('actor-balance')).toHaveTextContent('10');

@@ -26,6 +26,22 @@ receipt, the expected decoded event and contract readback. Frontend reaches ever
 | `tools/seed.py`, `tools/import_bundle.py` | Plot seed command and the RS bundle import command |
 | `migrate.py`, `worker.py`, `serve.py` | `python -m backend.migrate`, `python -m backend.worker`, `python -m backend.serve` |
 | `tests/` | Role tests (unit, API, persistence, reconciliation, E2E) |
+| `app/v2/`, `lens_worker.py`, `tests/case2/` | Carbon Lens `/api/v2`, additive and separate from everything above |
+
+## Carbon Lens `/api/v2`
+
+The Lens is a second contract served beside the frozen one, not a change to it.
+`create_app` still builds exactly the v1 routes and `/openapi.json` is still byte-for-byte
+`contracts/openapi.yaml`; `backend/serve.py` composes the two applications and routes
+`/api/v2` to the Lens one. `python -m backend.serve --no-lens` serves only v1.
+
+The Lens needs no chain, no deployment and no private key. Its schemas live in
+`contracts/v2/`, its examples in `fixtures/v2/`, its tables come from migration 2, and its
+worker runs under its own lease as `python -m backend.lens_worker`.
+
+`docs/case2/BACKEND_MVP.md` is the integration document: endpoints, what is real and what
+is a labelled stand-in, and the order in which the raster core and the carbon engine are
+connected. `docs/case2/G0_CONTRACT.md` is the shared contract itself.
 
 ## Setup
 
@@ -63,6 +79,48 @@ curl -s -H "$H" http://127.0.0.1:8000/api/v1/jobs/<job_id>                # SUCC
 In CONTRACT_FIXTURE mode, `/health` reports `mode: CONTRACT_FIXTURE`. Its `chain`/`deployment_id`
 describe the **mock ledger**, which is not a blockchain. Mock receipts and anchors are never
 on-chain proof. The mock uses chain ID `0` and refuses to run in LOCAL_DEMO.
+
+## Cold start: Carbon Lens with the three roles
+
+The Lens needs no chain and no seed. What it does need is a password per demo account, chosen
+here and stored nowhere else — there is no default, so an account exists only because somebody
+turned it on. `BACKEND_LENS_REQUIRE_REAL=1` makes the service refuse to start rather than serve
+replayed vectors: a deployment that looks complete and answers with numbers nobody measured is
+worse than one that is down.
+
+```bash
+export PYTHONUTF8=1
+export BACKEND_DEMO_SESSION=<at least 16 characters>
+export BACKEND_LENS_DEMO_ACCOUNTS=1
+export BACKEND_LENS_DEMO_PASSWORD_OWNER=<at least 12 characters>
+export BACKEND_LENS_DEMO_PASSWORD_VERIFIER=<at least 12 characters>
+export BACKEND_LENS_DEMO_PASSWORD_INVESTOR=<at least 12 characters>
+export BACKEND_LENS_ENGINE_MODE=REAL
+export BACKEND_LENS_REQUIRE_REAL=1
+# Only needed when the interface is served from another origin, e.g. the Vite preview:
+export BACKEND_CORS_ORIGINS=http://127.0.0.1:4173
+
+./.venv/bin/python -m backend.migrate
+./.venv/bin/python -m backend.serve --host 127.0.0.1 --port 8031
+```
+
+The three accounts are `owner` (PROJECT_OWNER), `verifier` (VERIFIER) and `investor` (INVESTOR).
+Sign in with the **username**, not an email. An account that already exists is left alone, so a
+restart never resets a password somebody changed.
+
+The whole pipeline can be walked once, for real, without a browser:
+
+```bash
+LIVE_REQUIRED=1 ./.venv/bin/python -m backend.tools.live_composition
+```
+
+It builds the real ports, carries a request from sign-in to a finalized passport, and fails rather
+than substituting anything if `rs.case2` or `carbon` is missing. `LIVE_REQUIRED=1` turns a missing
+package from a statement into a failure; CI sets it on `main`.
+
+The request lifecycle is `DRAFT -> SUBMITTED -> ANALYSING -> CALCULATED -> FINALIZED`. A run that
+fails returns the request to `SUBMITTED`; a run that finishes without a usable number still reaches
+`CALCULATED`, because the calculation did finish. Only a verifier moves a request to `FINALIZED`.
 
 ## LOCAL_DEMO: real local Anvil (Blockchain module deployment)
 
@@ -231,3 +289,7 @@ The runner:
   until reconciled. It is never promoted to `CONFIRMED`, and it is not auto-failed either.
 - `config/scenarios.json` has `real_scenes_configured: false`. Real RS bundles need that
   configuration update from the RS owner and the Team Lead.
+- No Carbon Lens result on this branch is a measurement: `rs/case2/` and `carbon/` are not
+  merged here, so a labelled stand-in answers and every response says so in
+  `run.dataset_origin`, in `fixture` and in its limitations.
+- The Lens has no chain anchor. Every proof reports `anchor.status: NOT_REQUESTED`.

@@ -1,0 +1,54 @@
+{
+  "fixture": {
+    "kind": "DOC_EXAMPLE",
+    "label": "Официальный числовой пример постановки задачи",
+    "note": "Числа взяты из doc/Постановка_задачи (пример на 100 га за один год) и служат эталоном арифметики. Это не результат по реальному участку: контур условный, площади и запасы заданы примером, а не измерены по растрам."
+  },
+  "source": "doc/Постановка_задачи_—_Верификация_углеродных_кредитов.pdf, с. 4–6",
+  "input": {
+    "area_ha": 100.0,
+    "year_start": 2019,
+    "year_end": 2020,
+    "mean_agb_start_tdm_ha": 100.0,
+    "mean_agb_end_tdm_ha": 104.0,
+    "cf_agb": 0.47,
+    "co2_per_c": 3.6666666666666665,
+    "baseline_stock_start_tc_ha": 47.0,
+    "baseline_stock_end_tc_ha": 47.47,
+    "half_width_tco2e": 103.4,
+    "leakage_tco2e": 0.0,
+    "unc_allowance": 0.1,
+    "unc_stop_ratio": 1.0,
+    "buffer_share": 0.15,
+    "prices_rub": [
+      500.0,
+      1500.0,
+      4000.0
+    ]
+  },
+  "expected": {
+    "mean_carbon_start_tc_ha": 47.0,
+    "mean_carbon_end_tc_ha": 48.88,
+    "total_carbon_start_tc": 4700.0,
+    "total_carbon_end_tc": 4888.0,
+    "delta_carbon_tc": 188.0,
+    "eproj_tco2e": -689.3333333333333,
+    "eproj_tco2e_ha_year": -6.893333333333333,
+    "ebase_tco2e": -172.33333333333292,
+    "r_tco2e": 517.0000000000003,
+    "h_tco2e": 103.39999999999998,
+    "ratio": 0.19999999999999982,
+    "unc": 0.09999999999999981,
+    "radj_tco2e": 465.30000000000035,
+    "buffer_tco2e": 69.79500000000004,
+    "q": 395,
+    "rounding_residual_tco2e": 0.5050000000003365,
+    "scenario_values_rub": {
+      "low": 197500.0,
+      "base": 592500.0,
+      "high": 1580000.0
+    }
+  },
+  "tolerance": 1e-09,
+  "note": "Q = floor(Radj × 0.85) ровно как в постановке. Замена на floor(Radj − B) даёт другое число и запрещена."
+}

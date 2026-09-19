@@ -1,0 +1,1292 @@
+{
+  "areas": {
+    "area_difference_ha": 0.00019848900001306902,
+    "calculated_ha": 1750.473322233,
+    "complete": true,
+    "missing_ha": 0.0,
+    "parent_parts": [
+      {
+        "aoi_id": "RU_TVER_01",
+        "area_ha": 1750.4733223459907
+      }
+    ],
+    "requested_ha": 1750.473123744
+  },
+  "artifacts": [
+    {
+      "artifact_id": "RU_TVER_01_2019-2024_cells.geojson",
+      "bbox_wgs84": [
+        32.909333333333336,
+        56.589333333333336,
+        32.974222222222224,
+        56.63022222222222
+      ],
+      "crs": "EPSG:4326",
+      "media_type": "application/geo+json",
+      "provenance": "native ESA CCI model cells, not a resampled surface; the resolution recorded here is the product's own, in degrees",
+      "resolution": [
+        0.0008888888888888889,
+        0.0008888888888888889
+      ],
+      "resolution_units": "degree",
+      "role": "cci_cell_layer",
+      "sha256": "0x4743047a1e2e2fe099c13eccfaa53bca2c9d68a565c718d1c7e6714056d7bff2",
+      "size_bytes": 1973149,
+      "unit": "t/ha for AGB and AGB_SD; ha for weight",
+      "url": "/api/v2/analyses/5270dde0-8013-4050-ae16-8784f0dad560/artifacts/RU_TVER_01_2019-2024_cells.geojson"
+    },
+    {
+      "artifact_id": "RU_TVER_01_2019-2024_before.png",
+      "bbox_wgs84": [
+        32.9096973,
+        56.5898941,
+        32.9742732,
+        56.6301727
+      ],
+      "crs": "EPSG:32636",
+      "media_type": "image/png",
+      "provenance": "RU_TVER_01__S2B_36VVH_20190727_1_L2A",
+      "resolution": [
+        20.0,
+        20.0
+      ],
+      "resolution_units": "metre",
+      "role": "optical_preview_before",
+      "sha256": "0x933d6719c54c332b7be745ebb05a40c9cbb23ce9fca7d5667a2f559b5bc25d6e",
+      "size_bytes": 133392,
+      "unit": null,
+      "url": "/api/v2/analyses/5270dde0-8013-4050-ae16-8784f0dad560/artifacts/RU_TVER_01_2019-2024_before.png"
+    },
+    {
+      "artifact_id": "RU_TVER_01_2019-2024_after.png",
+      "bbox_wgs84": [
+        32.9096973,
+        56.5898941,
+        32.9742732,
+        56.6301727
+      ],
+      "crs": "EPSG:32636",
+      "media_type": "image/png",
+      "provenance": "RU_TVER_01__S2A_36VVH_20240708_0_L2A",
+      "resolution": [
+        20.0,
+        20.0
+      ],
+      "resolution_units": "metre",
+      "role": "optical_preview_after",
+      "sha256": "0x9a8d6a7c6eb12824f6aa7c78f8b123b8702b65fbdf9b30e2ab2b6214c7171bdc",
+      "size_bytes": 133392,
+      "unit": null,
+      "url": "/api/v2/analyses/5270dde0-8013-4050-ae16-8784f0dad560/artifacts/RU_TVER_01_2019-2024_after.png"
+    },
+    {
+      "artifact_id": "RU_TVER_01_2019-2024_dnbr_preview.png",
+      "bbox_wgs84": [
+        32.9096973,
+        56.5898941,
+        32.9742732,
+        56.6301727
+      ],
+      "crs": "EPSG:32636",
+      "media_type": "image/png",
+      "provenance": "Key & Benson severity classes",
+      "resolution": [
+        20.0,
+        20.0
+      ],
+      "resolution_units": "metre",
+      "role": "dnbr_preview",
+      "sha256": "0xe9b87bec87e01f63bece4e3a8459cf3f95351eb9becfe2fb83d794eb40566ce3",
+      "size_bytes": 133392,
+      "unit": "dNBR class",
+      "url": "/api/v2/analyses/5270dde0-8013-4050-ae16-8784f0dad560/artifacts/RU_TVER_01_2019-2024_dnbr_preview.png"
+    },
+    {
+      "artifact_id": "RU_TVER_01_2019-2024_paired_valid_mask.png",
+      "bbox_wgs84": [
+        32.9096973,
+        56.5898941,
+        32.9742732,
+        56.6301727
+      ],
+      "crs": "EPSG:32636",
+      "media_type": "image/png",
+      "provenance": "scene classification 4 and 5 on both dates",
+      "resolution": [
+        20.0,
+        20.0
+      ],
+      "resolution_units": "metre",
+      "role": "paired_valid_mask",
+      "sha256": "0x233c7828d49b87ca505c584af54e1c5e0d56920c250f5f59cfabe8ff4d10f8b0",
+      "size_bytes": 44649,
+      "unit": null,
+      "url": "/api/v2/analyses/5270dde0-8013-4050-ae16-8784f0dad560/artifacts/RU_TVER_01_2019-2024_paired_valid_mask.png"
+    },
+    {
+      "artifact_id": "RU_TVER_01_2019-2024_zone_mask.png",
+      "bbox_wgs84": [
+        32.9096973,
+        56.5898941,
+        32.9742732,
+        56.6301727
+      ],
+      "crs": "EPSG:32636",
+      "media_type": "image/png",
+      "provenance": "detected change zones after the minimum mapping unit",
+      "resolution": [
+        20.0,
+        20.0
+      ],
+      "resolution_units": "metre",
+      "role": "zone_mask",
+      "sha256": "0x8b8874876e5fb6ade27eb43d0b1194872572eb907e4b09feb6cea356d77f5de1",
+      "size_bytes": 44649,
+      "unit": null,
+      "url": "/api/v2/analyses/5270dde0-8013-4050-ae16-8784f0dad560/artifacts/RU_TVER_01_2019-2024_zone_mask.png"
+    },
+    {
+      "artifact_id": "RU_TVER_01_2019-2024_zones.geojson",
+      "bbox_wgs84": [
+        32.9096973,
+        56.5898941,
+        32.9742732,
+        56.6301727
+      ],
+      "crs": "EPSG:32636",
+      "media_type": "application/geo+json",
+      "provenance": "WGS84 outlines detected on the 20 m grid; fact and cause are separate properties and a zone with no established cause names no event",
+      "resolution": [
+        20.0,
+        20.0
+      ],
+      "resolution_units": "metre",
+      "role": "change_zones",
+      "sha256": "0x122b825bd6f253c97fbff50ae71c2b9271d6e25dffac4f1d81300d4826672ff3",
+      "size_bytes": 189510,
+      "unit": "ha for areas; t CO2e for contributions",
+      "url": "/api/v2/analyses/5270dde0-8013-4050-ae16-8784f0dad560/artifacts/RU_TVER_01_2019-2024_zones.geojson"
+    },
+    {
+      "artifact_id": "RU_TVER_01_2019-2024_observation_gaps.geojson",
+      "bbox_wgs84": [
+        32.9096973,
+        56.5898941,
+        32.9742732,
+        56.6301727
+      ],
+      "crs": "EPSG:32636",
+      "media_type": "application/geo+json",
+      "provenance": "WGS84 outlines of the request the two dates could not be compared over, split by reason; not areas where nothing happened",
+      "resolution": [
+        20.0,
+        20.0
+      ],
+      "resolution_units": "metre",
+      "role": "observation_gap_zones",
+      "sha256": "0xbd10d7e86a41bad8c5a9f20744474281871430f74022dd64574612e6de17ba3c",
+      "size_bytes": 26358,
+      "unit": "ha for areas; t CO2e for contributions",
+      "url": "/api/v2/analyses/5270dde0-8013-4050-ae16-8784f0dad560/artifacts/RU_TVER_01_2019-2024_observation_gaps.geojson"
+    }
+  ],
+  "baseline": {
+    "area_ha": 1750.4733223459907,
+    "baseline_id": "HIST-AGB-2015-2019-v1",
+    "delta_tc": 3008.6240902596132,
+    "delta_tc_ha": 1.7187488959999941,
+    "ebase_tco2e": -11031.621664285249,
+    "kind": "сценарное допущение кейса по истории 2015–2019",
+    "parts": [
+      {
+        "aoi_id": "RU_TVER_01",
+        "area_ha": 1750.4733223459907,
+        "clipped_at_zero": false,
+        "delta_tc": 3008.6240902596132,
+        "delta_tc_ha": 1.718748895999994,
+        "stock_end_tc_ha": 86.845862594,
+        "stock_start_tc_ha": 85.127113698
+      }
+    ],
+    "status": "AVAILABLE",
+    "unavailable_reason": null
+  },
+  "calculation_status": "AVAILABLE",
+  "change": {
+    "delta_carbon_tc": 1768.561821904,
+    "eproj_ref": "units.eproj_tco2e",
+    "eproj_tco2e_ha_year": -0.7409112265782084,
+    "mean_carbon_end_tc_ha": 86.13744718863015,
+    "mean_carbon_start_tc_ha": 85.1271136980015,
+    "normalisation_area_ha": 1750.473322233,
+    "pool": "AGB_LIVE_WOODY",
+    "sign_convention": "POSITIVE_E_MEANS_POOL_LOSS",
+    "total_carbon_end_tc": 150781.303348951,
+    "total_carbon_start_tc": 149012.741527047,
+    "year_end": 2024,
+    "year_start": 2019
+  },
+  "claim": {
+    "claimed_units": 1000.0,
+    "comparable": true,
+    "mismatch_reasons": [],
+    "origin": "USER_INPUT",
+    "q": 0,
+    "reason": null,
+    "scenario_gap_values": {
+      "base": {
+        "price_rub": 1500.0,
+        "value_rub": 1500000.0
+      },
+      "high": {
+        "price_rub": 4000.0,
+        "value_rub": 4000000.0
+      },
+      "low": {
+        "price_rub": 500.0,
+        "value_rub": 500000.0
+      },
+      "price_parameters_ref": "data/methodology/parameters.csv#price_low,price_base,price_high",
+      "unit": "RUB"
+    },
+    "scope": {
+      "geometry_hash": "0xe413e4dced17ad0685b839ee2a779bf2d43f0adf8fc3c38a29a54354522193dd",
+      "pool": "AGB_LIVE_WOODY",
+      "unit": "POTENTIAL_UNIT_OF_THE_CASE",
+      "year_end": 2024,
+      "year_start": 2019
+    },
+    "scope_note": "Сравнение возможно только при совпадении контура, периода, пула и единиц. Заявленный объём — пользовательский или демонстрационный ввод, а не установленный факт.",
+    "status": "NOT_SUPPORTED_BY_CASE",
+    "supported_share": 0.0,
+    "unsupported_gap": 1000.0
+  },
+  "coverage": {
+    "baseline_fraction": 1.0,
+    "biomass_fraction": 1.0,
+    "coverage_fraction_raw": {
+      "baseline": 1.0000001134561782,
+      "biomass": 1.0,
+      "optical_paired_valid": 0.993234678,
+      "uncertainty": 1.0
+    },
+    "optical_paired_valid_fraction": 0.993234678,
+    "uncertainty_fraction": 1.0
+  },
+  "evidence": {
+    "analysed_parent": "RU_TVER_01",
+    "optical_paired_valid_fraction": 0.993234678,
+    "reconciliation": {
+      "accounted_delta_tc": 1768.56182191,
+      "balanced": true,
+      "note": "zone contributions and the remainder are parts of one stock difference; they are never added to a separately computed fire emission, which would count the same loss twice",
+      "remainder_delta_tc": 421.85257939,
+      "residual_tc": -6e-09,
+      "tolerance_tc": 0.001,
+      "total_delta_tc": 1768.561821904,
+      "zone_delta_tc": 1346.70924252
+    },
+    "scenes": [
+      {
+        "aoi_id": "RU_TVER_01",
+        "datetime_utc": "2019-07-02T09:04:45.946000Z",
+        "note": "доля пригодных пикселей по SCL в пределах запроса",
+        "scene_key": "RU_TVER_01__S2A_36VVH_20190702_0_L2A",
+        "usable_fraction": 0.993234566,
+        "year": 2019
+      },
+      {
+        "aoi_id": "RU_TVER_01",
+        "datetime_utc": "2019-07-27T09:04:49.421000Z",
+        "note": "доля пригодных пикселей по SCL в пределах запроса",
+        "scene_key": "RU_TVER_01__S2B_36VVH_20190727_1_L2A",
+        "usable_fraction": 0.869255114,
+        "year": 2019
+      },
+      {
+        "aoi_id": "RU_TVER_01",
+        "datetime_utc": "2024-07-08T09:14:42.054000Z",
+        "note": "доля пригодных пикселей по SCL в пределах запроса",
+        "scene_key": "RU_TVER_01__S2A_36VVH_20240708_0_L2A",
+        "usable_fraction": 1.0,
+        "year": 2024
+      },
+      {
+        "aoi_id": "RU_TVER_01",
+        "datetime_utc": "2024-08-24T09:04:38.721000Z",
+        "note": "доля пригодных пикселей по SCL в пределах запроса",
+        "scene_key": "RU_TVER_01__S2A_36VVH_20240824_0_L2A",
+        "usable_fraction": 1.0,
+        "year": 2024
+      }
+    ],
+    "status": "REVIEW_REQUIRED",
+    "warnings": [
+      {
+        "code": "ZONE_CAUSE_UNKNOWN",
+        "details": {
+          "zones": 14
+        },
+        "message": "Для части зон причина изменения не установлена и остаётся UNKNOWN.",
+        "severity": "INFO"
+      }
+    ]
+  },
+  "evidence_status": "REVIEW_REQUIRED",
+  "fixture": null,
+  "identity": {
+    "analysis_id": "5270dde0-8013-4050-ae16-8784f0dad560",
+    "code_sha": "83fa6e869788425842e29f014169803f8a56705c",
+    "dataset_hash": "0xc466734e505e16bf71f052290c633b22e809d042fed381ffc200913403d45435",
+    "dataset_version": "sr-data-case2/2026-09-16",
+    "geometry_hash": "0xe413e4dced17ad0685b839ee2a779bf2d43f0adf8fc3c38a29a54354522193dd",
+    "input_hash": "0x40edfdb2f46582f0a5c151021bc4ad0c5ecbbc4c6c813dd32b9041ac490c11f4",
+    "method_version": "carbon-lens-backend/2.0.0+rs-case2-raster-core/1.0.0+carbon-lens-trust-1.0.0",
+    "parameters_hash": "0x2bca8c22e73231f4b7ae256657fba5e8e8ec4916cd934a0c4e6b92000da37ec6",
+    "schema_version": "carbon-lens-api/2.0.0",
+    "source_manifest_hash": "0xbb9ad726c8429da079edad7e08aa1147689aad65cda52c6d320d3f5dd42fe1e5"
+  },
+  "limitations": [
+    {
+      "code": "POOL_SCOPE",
+      "message": "Учитывается только живая надземная древесная биомасса; это не полный баланс экосистемы."
+    },
+    {
+      "code": "SIGN_CONVENTION",
+      "message": "Положительное E — потеря учитываемого пула за период, а не мгновенный выброс всего углерода в атмосферу."
+    },
+    {
+      "code": "BASELINE_IS_A_SCENARIO",
+      "message": "Базовая линия задана сценарными правилами кейса по истории 2015–2019; она не доказывает дополнительность и не описывает действия владельца участка."
+    },
+    {
+      "code": "SCENARIO_VALUE_ONLY",
+      "message": "Сценарная стоимость использует заданные кейсом цены. Это не рыночная котировка, не установленный ущерб и не гарантированная выручка."
+    },
+    {
+      "code": "RASTER_LIMITATION",
+      "message": "5 of 3358 cells carry a published AGB of zero on at least one date; zero is a value in this product and is summed as zero, not dropped"
+    },
+    {
+      "code": "RASTER_LIMITATION",
+      "message": "CCI years are annual model estimates, not observations on a date; the Sentinel acquisition dates are reported separately"
+    },
+    {
+      "code": "RASTER_LIMITATION",
+      "message": "timeline covers 2015-2024 on the support of the requested period, so every year is comparable to every other"
+    },
+    {
+      "code": "RASTER_LIMITATION",
+      "message": "MODIS MCD64A1 was not supplied for RU_TVER_01; this is an absence of the product, not evidence that nothing burned"
+    },
+    {
+      "code": "RASTER_LIMITATION",
+      "message": "14 of 14 disturbance zones have no established cause and are reported as UNKNOWN"
+    },
+    {
+      "code": "RASTER_LIMITATION",
+      "message": "recovery zones are a spectral indication of regrowth, not evidence that carbon has been recovered"
+    },
+    {
+      "code": "RASTER_LIMITATION",
+      "message": "change zones cover 78% of the request; a change this uniform is more often a difference between the two observations than a disturbance on the ground"
+    },
+    {
+      "code": "RASTER_LIMITATION",
+      "message": "the two scenes come from different processing baselines on the same radiometric offset convention; part of any uniform index difference is a processor difference rather than a change on the ground, though the large offset artefact does not apply"
+    },
+    {
+      "code": "RASTER_LIMITATION",
+      "message": "zones are detected on the 20 m Sentinel grid; carbon is attributed from CCI cells about 100 m across, assuming the cell's change is distributed evenly within the cell"
+    }
+  ],
+  "notes": [
+    "Интервал сценарный: он получен из явно заданных допущений о пространственной и временной зависимости ошибок входных данных. Вероятностное покрытие не заявляется, эмпирическая калибровка по независимым наземным измерениям не выполнялась.",
+    "Учитывается только живая надземная древесная биомасса. Корни, мёртвая древесина, подстилка, почва и продукция в расчёт не входят; их запасы не равны нулю.",
+    "Базовая линия и вычет за утечку зафиксированы условиями кейса и не входят в интервал результата. Их сценарная неопределённость показывается отдельно.",
+    "Результат относительно базовой линии не положителен, поэтому Q = 0, а отношение H/R не вычисляется.",
+    "Потенциальные единицы рассчитаны по условиям кейса. Это не единицы официального реестра и не подтверждение права на выпуск.",
+    "Заявленный объём — пользовательский или демонстрационный ввод. Он не влияет на расчёт запаса, интервала, базовой линии и Q.",
+    "Разрыв заявления пересчитан в сценарные цены кейса. Это сравнение расчёта с заявлением, а не установленный финансовый результат и не оценка риска.",
+    "Оптическое качество снимков показано отдельно и относится к наглядности свидетельств. Оно не уменьшает число потенциальных единиц: облачность снимка не меняет модельную оценку запаса биомассы."
+  ],
+  "passport": {
+    "comparison_direction": "UNCHANGED",
+    "comparison_note": "Содержание расчёта совпадает с предыдущим наблюдением той же области.",
+    "comparison_result": "REVISION_OF_SAME_SCOPE",
+    "comparison_scope": "geometry_hash+year_start+year_end+pool+method_version",
+    "content_hash": "0x64e1b40bcb3b52c1aa95976a6e3de0f237525be853a6b8963c7cb9a5a39e3a2c",
+    "created_at": "2026-09-19T11:01:00Z",
+    "finalized_at": null,
+    "previous_hash": "0x64e1b40bcb3b52c1aa95976a6e3de0f237525be853a6b8963c7cb9a5a39e3a2c",
+    "report_hash": "0xd542d7d180f5ed33c7fa7ac64218ba82e3d3a8ce077a6276ab91121dd0141684",
+    "status": "DRAFT"
+  },
+  "projection": {
+    "horizon_year": 2029,
+    "note": "Продолжение базовой линии по правилам кейса. Это сценарное допущение, а не прогноз состояния участка.",
+    "points": [
+      {
+        "baseline_carbon_tc_ha": 83.752114582,
+        "series_kind": "FACT",
+        "year": 2015
+      },
+      {
+        "baseline_carbon_tc_ha": 84.095864361,
+        "series_kind": "FACT",
+        "year": 2016
+      },
+      {
+        "baseline_carbon_tc_ha": 84.43961414,
+        "series_kind": "FACT",
+        "year": 2017
+      },
+      {
+        "baseline_carbon_tc_ha": 84.783363919,
+        "series_kind": "FACT",
+        "year": 2018
+      },
+      {
+        "baseline_carbon_tc_ha": 85.12711369800002,
+        "series_kind": "FACT",
+        "year": 2019
+      },
+      {
+        "baseline_carbon_tc_ha": 85.47086347700001,
+        "series_kind": "FACT",
+        "year": 2020
+      },
+      {
+        "baseline_carbon_tc_ha": 85.814613256,
+        "series_kind": "FACT",
+        "year": 2021
+      },
+      {
+        "baseline_carbon_tc_ha": 86.15836303500001,
+        "series_kind": "FACT",
+        "year": 2022
+      },
+      {
+        "baseline_carbon_tc_ha": 86.502112814,
+        "series_kind": "FACT",
+        "year": 2023
+      },
+      {
+        "baseline_carbon_tc_ha": 86.845862593,
+        "series_kind": "FACT",
+        "year": 2024
+      },
+      {
+        "baseline_carbon_tc_ha": 87.18961237200001,
+        "series_kind": "PROJECTION",
+        "year": 2025
+      },
+      {
+        "baseline_carbon_tc_ha": 87.533362151,
+        "series_kind": "PROJECTION",
+        "year": 2026
+      },
+      {
+        "baseline_carbon_tc_ha": 87.87711193000001,
+        "series_kind": "PROJECTION",
+        "year": 2027
+      },
+      {
+        "baseline_carbon_tc_ha": 88.220861709,
+        "series_kind": "PROJECTION",
+        "year": 2028
+      },
+      {
+        "baseline_carbon_tc_ha": 88.56461148800001,
+        "series_kind": "PROJECTION",
+        "year": 2029
+      }
+    ],
+    "q_projection": null,
+    "q_projection_note": "Прогноз потенциальных единиц не строится: предоставленные данные не дают основания для утверждения о будущем состоянии участка.",
+    "status": "AVAILABLE",
+    "unavailable_reason": null
+  },
+  "request": {
+    "aoi_id": "RU_TVER_01",
+    "claim_origin": "USER_INPUT",
+    "claimed_units": 1000.0,
+    "geometry": {
+      "coordinates": [
+        [
+          [
+            32.974,
+            56.59
+          ],
+          [
+            32.974,
+            56.63
+          ],
+          [
+            32.91,
+            56.63
+          ],
+          [
+            32.91,
+            56.59
+          ],
+          [
+            32.974,
+            56.59
+          ]
+        ]
+      ],
+      "type": "Polygon"
+    },
+    "include_optical": true,
+    "year_end": 2024,
+    "year_start": 2019
+  },
+  "risks": [
+    {
+      "basis": {},
+      "code": "FIRE",
+      "note": "Признак горения по внешнему продукту гарей. Точный контур пожара и наземные измерения отсутствуют. Риск показан рядом с расчётом и не входит в Q. Он не переоценивается на стороне Backend и не является вероятностью.",
+      "observed": false,
+      "source_ref": null
+    },
+    {
+      "basis": {
+        "cause_unknown_zones": 0,
+        "detected_area_ha": 0,
+        "fire_supported_zones": 0,
+        "zones": 0
+      },
+      "code": "FOREST_LOSS",
+      "note": "Потеря древесного покрова по продукту года потери. Факт потери и её причина — разные утверждения. Риск показан рядом с расчётом и не входит в Q. Он не переоценивается на стороне Backend и не является вероятностью.",
+      "observed": false,
+      "source_ref": null
+    },
+    {
+      "basis": {
+        "baseline_fraction": 1.0,
+        "biomass_fraction": 1.0,
+        "blocking_warnings": 0,
+        "evidence_status": "REVIEW_REQUIRED",
+        "optical_paired_valid_fraction": 0.993234678
+      },
+      "code": "DATA_QUALITY",
+      "note": "Полнота данных и качество объяснения изменения. Риск показан рядом с расчётом и не входит в Q. Он не переоценивается на стороне Backend и не является вероятностью.",
+      "observed": true,
+      "source_ref": null
+    }
+  ],
+  "run": {
+    "carbon_adapter": "carbon/carbon-lens-trust-1.0.0",
+    "created_at": "2026-09-19T11:01:00Z",
+    "dataset_origin": "COMPUTED_FROM_SUPPLIED_DATA",
+    "raster_adapter": "rs.case2/rs-case2-raster-core/1.0.0",
+    "run_id": "5419362b-7614-41ad-adea-1593f2520643"
+  },
+  "scenario_values": {
+    "base": {
+      "price_rub": 1500.0,
+      "value_rub": 0.0
+    },
+    "high": {
+      "price_rub": 4000.0,
+      "value_rub": 0.0
+    },
+    "low": {
+      "price_rub": 500.0,
+      "value_rub": 0.0
+    },
+    "price_parameters_ref": "data/methodology/parameters.csv#price_low,price_base,price_high",
+    "unit": "RUB"
+  },
+  "sources": [
+    {
+      "access_date": "2026-09-16",
+      "attribution": "Santoro M.; Cartus O. (2026), ESA Biomass CCI, v7.0, NERC EDS CEDA. Acknowledge ESA Climate Change Initiative and Biomass CCI team; cite DOI.",
+      "license_url": "https://artefacts.ceda.ac.uk/licences/specific_licences/esacci_biomass_terms_and_conditions_v2.pdf",
+      "product": "ESA CCI Biomass — биомасса, неопределённость и изменение",
+      "role": "внешняя модельная оценка",
+      "source_id": "CCI_V7",
+      "version": "7.0; выпуск 21.05.2026"
+    },
+    {
+      "access_date": "2026-09-16",
+      "attribution": "Hansen et al. (2013), High-Resolution Global Maps of 21st-Century Forest Cover Change; data update 2025 v1.13, University of Maryland / GLAD. Native-grid crops and band stack.",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "product": "Hansen Global Forest Change — изменения древесного покрова",
+      "role": "внешний продукт изменений",
+      "source_id": "GFC_2025_V113",
+      "version": "2025 v1.13"
+    },
+    {
+      "access_date": "2026-09-16",
+      "attribution": "Contains modified Copernicus Sentinel data 2019–2024. Access via Element 84 Earth Search.",
+      "license_url": "https://sentinels.copernicus.eu/documents/247904/690755/Sentinel_Data_Legal_Notice",
+      "product": "Copernicus Sentinel-2 L2A через каталог Earth Search",
+      "role": "спутниковое наблюдение отражения поверхности",
+      "source_id": "S2_L2A",
+      "version": "Версия обработки каждой сцены указана в scenes.csv"
+    },
+    {
+      "access_date": "2026-09-16",
+      "attribution": "Космохакатон, кейс SR Data. Базовая линия и параметры являются условиями сценарного расчёта.",
+      "license_url": "",
+      "product": "Правила углеродного расчёта для кейса SR Data",
+      "role": "сценарные правила кейса",
+      "source_id": "CASE_RULES_V1",
+      "version": "1.0; 16.09.2026"
+    },
+    {
+      "access_date": "2026-09-16",
+      "attribution": "IPCC (2006), Guidelines for National Greenhouse Gas Inventories, Volume 4, Chapter 4, Table 4.3.",
+      "license_url": "https://www.ipcc.ch/copyright/",
+      "product": "Руководящие принципы МГЭИК 2006 — лесные земли",
+      "role": "справочный коэффициент",
+      "source_id": "IPCC_FOREST_2006",
+      "version": "Том 4, глава 4, таблица 4.3"
+    },
+    {
+      "access_date": "2026-09-16",
+      "attribution": "IPCC (2006), Guidelines for National Greenhouse Gas Inventories, Volume 4, Chapter 2.",
+      "license_url": "https://www.ipcc.ch/copyright/",
+      "product": "Руководящие принципы МГЭИК 2006 — общие методы",
+      "role": "метод углеродного учёта",
+      "source_id": "IPCC_GENERIC_2006",
+      "version": "Том 4, глава 2, уравнение 2.8"
+    }
+  ],
+  "timeline": [
+    {
+      "area_ha": 1750.473322233,
+      "baseline_carbon_tc_ha": 83.752114582,
+      "coverage": 1.0,
+      "in_period": false,
+      "mean_agb_tdm_ha": 178.195988471,
+      "mean_carbon_tc_ha": 83.752114581,
+      "source_ref": "CCI_V7",
+      "total_carbon_tc": 146605.842254937,
+      "year": 2015
+    },
+    {
+      "area_ha": 1750.473322233,
+      "baseline_carbon_tc_ha": 84.095864361,
+      "coverage": 1.0,
+      "in_period": false,
+      "mean_agb_tdm_ha": 177.88104591,
+      "mean_carbon_tc_ha": 83.604091577,
+      "source_ref": "CCI_V7",
+      "total_carbon_tc": 146346.731935883,
+      "year": 2016
+    },
+    {
+      "area_ha": 1750.473322233,
+      "baseline_carbon_tc_ha": 84.43961414,
+      "coverage": 1.0,
+      "in_period": false,
+      "mean_agb_tdm_ha": 179.968234608,
+      "mean_carbon_tc_ha": 84.585070266,
+      "source_ref": "CCI_V7",
+      "total_carbon_tc": 148063.908959705,
+      "year": 2017
+    },
+    {
+      "area_ha": 1750.473322233,
+      "baseline_carbon_tc_ha": 84.783363919,
+      "coverage": 1.0,
+      "in_period": false,
+      "mean_agb_tdm_ha": 180.241804187,
+      "mean_carbon_tc_ha": 84.713647968,
+      "source_ref": "CCI_V7",
+      "total_carbon_tc": 148288.98079656,
+      "year": 2018
+    },
+    {
+      "area_ha": 1750.473322233,
+      "baseline_carbon_tc_ha": 85.12711369800002,
+      "coverage": 1.0,
+      "in_period": true,
+      "mean_agb_tdm_ha": 181.121518506,
+      "mean_carbon_tc_ha": 85.127113698,
+      "source_ref": "CCI_V7",
+      "total_carbon_tc": 149012.741527047,
+      "year": 2019
+    },
+    {
+      "area_ha": 1750.473322233,
+      "baseline_carbon_tc_ha": 85.47086347700001,
+      "coverage": 1.0,
+      "in_period": true,
+      "mean_agb_tdm_ha": 183.36228823,
+      "mean_carbon_tc_ha": 86.180275468,
+      "source_ref": "CCI_V7",
+      "total_carbon_tc": 150856.273109627,
+      "year": 2020
+    },
+    {
+      "area_ha": 1750.473322233,
+      "baseline_carbon_tc_ha": 85.814613256,
+      "coverage": 1.0,
+      "in_period": true,
+      "mean_agb_tdm_ha": 181.547024399,
+      "mean_carbon_tc_ha": 85.327101468,
+      "source_ref": "CCI_V7",
+      "total_carbon_tc": 149362.81478255,
+      "year": 2021
+    },
+    {
+      "area_ha": 1750.473322233,
+      "baseline_carbon_tc_ha": 86.15836303500001,
+      "coverage": 1.0,
+      "in_period": true,
+      "mean_agb_tdm_ha": 180.983068238,
+      "mean_carbon_tc_ha": 85.062042072,
+      "source_ref": "CCI_V7",
+      "total_carbon_tc": 148898.835381485,
+      "year": 2022
+    },
+    {
+      "area_ha": 1750.473322233,
+      "baseline_carbon_tc_ha": 86.502112814,
+      "coverage": 1.0,
+      "in_period": true,
+      "mean_agb_tdm_ha": 182.448877824,
+      "mean_carbon_tc_ha": 85.750972577,
+      "source_ref": "CCI_V7",
+      "total_carbon_tc": 150104.789852048,
+      "year": 2023
+    },
+    {
+      "area_ha": 1750.473322233,
+      "baseline_carbon_tc_ha": 86.845862593,
+      "coverage": 1.0,
+      "in_period": true,
+      "mean_agb_tdm_ha": 183.271164231,
+      "mean_carbon_tc_ha": 86.137447189,
+      "source_ref": "CCI_V7",
+      "total_carbon_tc": 150781.303348951,
+      "year": 2024
+    }
+  ],
+  "uncertainty": {
+    "assumptions": {
+      "cells": 3358,
+      "cf_agb": 0.47,
+      "co2_per_c": 3.6666666666666665,
+      "coverage_factor": 1.0,
+      "empirically_calibrated": false,
+      "grid": "native CCI cells",
+      "pool": "AGB",
+      "spatial_dependence": "INDEPENDENT_NATIVE_CELLS",
+      "temporal_correlation": 0.0
+    },
+    "interval_kind": "SCENARIO",
+    "lower_tco2e": -13174.667084209346,
+    "method": "INDEPENDENT_NATIVE_CELLS",
+    "sd_tco2e": 6689.940402868929,
+    "sensitivity": [
+      {
+        "half_width_tco2e": 6689.940402868929,
+        "label": "INDEPENDENT_NATIVE_CELLS_RHO_0",
+        "lower_tco2e": -13174.667084209346,
+        "sd_tco2e": 6689.940402868929,
+        "spatial_dependence": "INDEPENDENT_NATIVE_CELLS",
+        "temporal_correlation": 0.0,
+        "upper_tco2e": 205.2137215285111
+      },
+      {
+        "half_width_tco2e": 909.1884622261464,
+        "label": "INDEPENDENT_NATIVE_CELLS_RHO_1",
+        "lower_tco2e": -7393.915143566564,
+        "sd_tco2e": 909.1884622261464,
+        "spatial_dependence": "INDEPENDENT_NATIVE_CELLS",
+        "temporal_correlation": 1.0,
+        "upper_tco2e": -5575.538219114271
+      },
+      {
+        "half_width_tco2e": 378271.12616128416,
+        "label": "FULL_SPATIAL_CORRELATION_RHO_0",
+        "lower_tco2e": -384755.8528426246,
+        "sd_tco2e": 378271.12616128416,
+        "spatial_dependence": "FULL_SPATIAL_CORRELATION",
+        "temporal_correlation": 0.0,
+        "upper_tco2e": 371786.39947994374
+      },
+      {
+        "half_width_tco2e": 34272.439926631756,
+        "label": "FULL_SPATIAL_CORRELATION_RHO_1",
+        "lower_tco2e": -40757.166607972176,
+        "sd_tco2e": 34272.439926631756,
+        "spatial_dependence": "FULL_SPATIAL_CORRELATION",
+        "temporal_correlation": 1.0,
+        "upper_tco2e": 27787.71324529134
+      }
+    ],
+    "status": "AVAILABLE",
+    "unavailable_reason": null,
+    "upper_tco2e": 205.2137215285111
+  },
+  "units": {
+    "buffer_tco2e": null,
+    "ebase_tco2e": -11031.621664285249,
+    "eproj_tco2e": -6484.726681340418,
+    "h_tco2e": 6689.940402868929,
+    "lk_tco2e": 0.0,
+    "lower_tco2e": -13174.667084209346,
+    "q": 0,
+    "r_tco2e": -4546.894982944831,
+    "radj_tco2e": null,
+    "ratio": null,
+    "reason_codes": [
+      "NON_POSITIVE_RELATIVE_RESULT"
+    ],
+    "rounding_residual_tco2e": null,
+    "status": "AVAILABLE",
+    "unavailable_reason": null,
+    "unc": null,
+    "uncertainty_deduction_tco2e": null,
+    "upper_tco2e": 205.2137215285111,
+    "zero_reason": "NON_POSITIVE_RELATIVE_RESULT"
+  },
+  "zones": [
+    {
+      "area_ha": 4.88,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 4.883905086,
+      "cause": "UNKNOWN",
+      "cause_reason": "MODIS MCD64A1 was not supplied for RU_TVER_01; this is an absence of the product, not evidence that nothing burned",
+      "contribution_e_tco2e": 56.562312825,
+      "date_range": null,
+      "delta_carbon_tc": -15.426085316,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 122,
+        "spectral_change_fraction": 1.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "SPECTRAL_CHANGE_ONLY",
+      "zone_id": "Z0001"
+    },
+    {
+      "area_ha": 1.04,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 1.040832364,
+      "cause": "UNKNOWN",
+      "cause_reason": "MODIS MCD64A1 was not supplied for RU_TVER_01; this is an absence of the product, not evidence that nothing burned",
+      "contribution_e_tco2e": 52.173663162,
+      "date_range": null,
+      "delta_carbon_tc": -14.229180862,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 26,
+        "spectral_change_fraction": 1.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "SPECTRAL_CHANGE_ONLY",
+      "zone_id": "Z0002"
+    },
+    {
+      "area_ha": 1.76,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 1.761407009,
+      "cause": "UNKNOWN",
+      "cause_reason": "MODIS MCD64A1 was not supplied for RU_TVER_01; this is an absence of the product, not evidence that nothing burned",
+      "contribution_e_tco2e": 30.766838013,
+      "date_range": null,
+      "delta_carbon_tc": -8.390955822,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 44,
+        "spectral_change_fraction": 1.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "SPECTRAL_CHANGE_ONLY",
+      "zone_id": "Z0003"
+    },
+    {
+      "area_ha": 1.24,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 1.240993759,
+      "cause": "UNKNOWN",
+      "cause_reason": "MODIS MCD64A1 was not supplied for RU_TVER_01; this is an absence of the product, not evidence that nothing burned",
+      "contribution_e_tco2e": 18.987774291,
+      "date_range": null,
+      "delta_carbon_tc": -5.178483898,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 31,
+        "spectral_change_fraction": 1.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "SPECTRAL_CHANGE_ONLY",
+      "zone_id": "Z0004"
+    },
+    {
+      "area_ha": 3.84,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 3.843070638,
+      "cause": "UNKNOWN",
+      "cause_reason": "MODIS MCD64A1 was not supplied for RU_TVER_01; this is an absence of the product, not evidence that nothing burned",
+      "contribution_e_tco2e": -104.141175622,
+      "date_range": null,
+      "delta_carbon_tc": 28.402138806,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 96,
+        "spectral_change_fraction": 1.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "SPECTRAL_CHANGE_ONLY",
+      "zone_id": "Z0005"
+    },
+    {
+      "area_ha": 1.0,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 1.000799958,
+      "cause": "UNKNOWN",
+      "cause_reason": "MODIS MCD64A1 was not supplied for RU_TVER_01; this is an absence of the product, not evidence that nothing burned",
+      "contribution_e_tco2e": -48.254024957,
+      "date_range": null,
+      "delta_carbon_tc": 13.160188625,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 25,
+        "spectral_change_fraction": 1.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "SPECTRAL_CHANGE_ONLY",
+      "zone_id": "Z0006"
+    },
+    {
+      "area_ha": 1.0,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 1.000801228,
+      "cause": "UNKNOWN",
+      "cause_reason": "MODIS MCD64A1 was not supplied for RU_TVER_01; this is an absence of the product, not evidence that nothing burned",
+      "contribution_e_tco2e": 16.000792191,
+      "date_range": null,
+      "delta_carbon_tc": -4.363852416,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 25,
+        "spectral_change_fraction": 1.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "SPECTRAL_CHANGE_ONLY",
+      "zone_id": "Z0007"
+    },
+    {
+      "area_ha": 1.48,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 1.481184566,
+      "cause": "UNKNOWN",
+      "cause_reason": "MODIS MCD64A1 was not supplied for RU_TVER_01; this is an absence of the product, not evidence that nothing burned",
+      "contribution_e_tco2e": -60.199533839,
+      "date_range": null,
+      "delta_carbon_tc": 16.418054683,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 37,
+        "spectral_change_fraction": 1.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "SPECTRAL_CHANGE_ONLY",
+      "zone_id": "Z0008"
+    },
+    {
+      "area_ha": 2.8,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 2.802239387,
+      "cause": "UNKNOWN",
+      "cause_reason": "MODIS MCD64A1 was not supplied for RU_TVER_01; this is an absence of the product, not evidence that nothing burned",
+      "contribution_e_tco2e": -275.678454439,
+      "date_range": null,
+      "delta_carbon_tc": 75.185033029,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 70,
+        "spectral_change_fraction": 1.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "SPECTRAL_CHANGE_ONLY",
+      "zone_id": "Z0009"
+    },
+    {
+      "area_ha": 1.16,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 1.160927873,
+      "cause": "UNKNOWN",
+      "cause_reason": "MODIS MCD64A1 was not supplied for RU_TVER_01; this is an absence of the product, not evidence that nothing burned",
+      "contribution_e_tco2e": -35.11688956,
+      "date_range": null,
+      "delta_carbon_tc": 9.577333516,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 29,
+        "spectral_change_fraction": 1.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "SPECTRAL_CHANGE_ONLY",
+      "zone_id": "Z0010"
+    },
+    {
+      "area_ha": 2.72,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 2.722173437,
+      "cause": "UNKNOWN",
+      "cause_reason": "MODIS MCD64A1 was not supplied for RU_TVER_01; this is an absence of the product, not evidence that nothing burned",
+      "contribution_e_tco2e": 6.657999594,
+      "date_range": null,
+      "delta_carbon_tc": -1.815818071,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 68,
+        "spectral_change_fraction": 1.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "SPECTRAL_CHANGE_ONLY",
+      "zone_id": "Z0011"
+    },
+    {
+      "area_ha": 2.96,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 2.962369846,
+      "cause": "UNKNOWN",
+      "cause_reason": "MODIS MCD64A1 was not supplied for RU_TVER_01; this is an absence of the product, not evidence that nothing burned",
+      "contribution_e_tco2e": -1.024349113,
+      "date_range": null,
+      "delta_carbon_tc": 0.27936794,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 74,
+        "spectral_change_fraction": 1.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "SPECTRAL_CHANGE_ONLY",
+      "zone_id": "Z0012"
+    },
+    {
+      "area_ha": 2.04,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 2.041632763,
+      "cause": "UNKNOWN",
+      "cause_reason": "MODIS MCD64A1 was not supplied for RU_TVER_01; this is an absence of the product, not evidence that nothing burned",
+      "contribution_e_tco2e": -5.538878291,
+      "date_range": null,
+      "delta_carbon_tc": 1.51060317,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 51,
+        "spectral_change_fraction": 1.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "SPECTRAL_CHANGE_ONLY",
+      "zone_id": "Z0013"
+    },
+    {
+      "area_ha": 1.12,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 1.103438299,
+      "cause": "UNKNOWN",
+      "cause_reason": "MODIS MCD64A1 was not supplied for RU_TVER_01; this is an absence of the product, not evidence that nothing burned",
+      "contribution_e_tco2e": -0.823204588,
+      "date_range": null,
+      "delta_carbon_tc": 0.224510342,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 28,
+        "spectral_change_fraction": 1.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "SPECTRAL_CHANGE_ONLY",
+      "zone_id": "Z0014"
+    },
+    {
+      "area_ha": 1318.04,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 1318.563309973,
+      "cause": "NOT_APPLICABLE",
+      "cause_reason": "a regrowth indication has no disturbance cause; it is also not evidence of recovered carbon",
+      "contribution_e_tco2e": -4160.332360105,
+      "date_range": null,
+      "delta_carbon_tc": 1134.63609821,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 32951,
+        "spectral_change_fraction": 0.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "RECOVERY_INDICATION",
+      "zone_id": "Z0015"
+    },
+    {
+      "area_ha": 1.2,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 1.200957503,
+      "cause": "NOT_APPLICABLE",
+      "cause_reason": "a regrowth indication has no disturbance cause; it is also not evidence of recovered carbon",
+      "contribution_e_tco2e": -4.498124654,
+      "date_range": null,
+      "delta_carbon_tc": 1.226761269,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 30,
+        "spectral_change_fraction": 0.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "RECOVERY_INDICATION",
+      "zone_id": "Z0016"
+    },
+    {
+      "area_ha": 4.08,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 4.083264595,
+      "cause": "NOT_APPLICABLE",
+      "cause_reason": "a regrowth indication has no disturbance cause; it is also not evidence of recovered carbon",
+      "contribution_e_tco2e": -76.768853555,
+      "date_range": null,
+      "delta_carbon_tc": 20.936960061,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 102,
+        "spectral_change_fraction": 0.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "RECOVERY_INDICATION",
+      "zone_id": "Z0017"
+    },
+    {
+      "area_ha": 4.36,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 4.363486771,
+      "cause": "NOT_APPLICABLE",
+      "cause_reason": "a regrowth indication has no disturbance cause; it is also not evidence of recovered carbon",
+      "contribution_e_tco2e": -379.491516684,
+      "date_range": null,
+      "delta_carbon_tc": 103.497686368,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 109,
+        "spectral_change_fraction": 0.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "RECOVERY_INDICATION",
+      "zone_id": "Z0018"
+    },
+    {
+      "area_ha": 1.48,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 1.481184684,
+      "cause": "NOT_APPLICABLE",
+      "cause_reason": "a regrowth indication has no disturbance cause; it is also not evidence of recovered carbon",
+      "contribution_e_tco2e": -7.040981929,
+      "date_range": null,
+      "delta_carbon_tc": 1.920267799,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 37,
+        "spectral_change_fraction": 0.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "RECOVERY_INDICATION",
+      "zone_id": "Z0019"
+    },
+    {
+      "area_ha": 1.32,
+      "artifact_ref": "RU_TVER_01_2019-2024_zones.geojson",
+      "carbon_overlap_ha": 1.321056431,
+      "cause": "NOT_APPLICABLE",
+      "cause_reason": "a regrowth indication has no disturbance cause; it is also not evidence of recovered carbon",
+      "contribution_e_tco2e": 39.825078023,
+      "date_range": null,
+      "delta_carbon_tc": -10.861384915,
+      "evidence": {
+        "fire_fraction": 0.0,
+        "gfc_loss_fraction": 0.0,
+        "paired_valid_fraction": 1.0,
+        "pixels": 33,
+        "spectral_change_fraction": 0.0
+      },
+      "evidence_refs": [
+        "GFC_2025_V113"
+      ],
+      "fact": "RECOVERY_INDICATION",
+      "zone_id": "Z0020"
+    }
+  ]
+}

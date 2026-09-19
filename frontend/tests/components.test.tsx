@@ -363,7 +363,7 @@ describe('App on golden fixtures', () => {
     const { client } = createFixtureBackend({ timings: { jobQueuedMs: 0, jobRunningMs: 0, opQueuedMs: 0, opSubmittedMs: 0 } });
     const backend = { ...client, kind: 'http', getHealth: async () => ({ api: 'UP', db: 'UP', worker: 'UP', chain: 'UP', deployment_id: '09791e2a-c20a-436b-94f5-c1567da0eb23', mode: 'CONTRACT_FIXTURE' }) } as MrvApiClient;
     render(<App client={backend} config={resolveConfig({ VITE_API_MODE: 'http', VITE_DEMO_SESSION: 'x' }, '')} />);
-    expect(await screen.findByTestId('mock-ledger-banner')).toHaveTextContent('не on-chain');
+    expect(await screen.findByTestId('mock-ledger-banner')).toHaveTextContent('доказательством в блокчейне они не являются');
     expect(screen.queryByTestId('fixture-banner')).toBeNull();
     await userEvent.click(await screen.findByTestId('tab-credits'));
     expect(await screen.findByTestId('ledger-note')).toHaveAttribute('data-ledger', 'mock');

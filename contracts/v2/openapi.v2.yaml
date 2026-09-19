@@ -1,0 +1,795 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: BountyTeam Carbon Lens API
+  version: 2.0.0
+  description: |
+    Verifier API of Carbon Lens: a contour and a period in, a reproducible
+    calculation, a map and a passport out.
+
+    The frozen /api/v1 contract is untouched and keeps its own document
+    (contracts/openapi.yaml). This document is the single source of truth for
+    the HTTP shape of /api/v2 exactly as contracts/openapi.yaml is for v1.
+
+    Six status axes are independent and are never merged:
+    job_state (worker progress), calculation_status (were the numbers
+    computable), evidence_status (how well the change is explained),
+    claim.status (how a stated volume compares with the calculation),
+    passport.status (DRAFT until a verifier finalizes it) and anchor.status
+    (whether a chain record exists). A passport status is never read as an
+    anchor status.
+
+    Partial coverage is a valid scientific outcome: the analysis succeeds, the
+    result is returned and units.q is null with an unavailable_reason. It is
+    not a worker failure. Low optical quality is an evidence warning and does
+    not by itself make q null.
+servers:
+  - url: http://127.0.0.1:8000/api/v2
+    description: Local demo backend
+tags:
+  - name: auth
+  - name: catalog
+  - name: areas
+  - name: requests
+  - name: demo
+  - name: analyses
+
+paths:
+  /auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Exchange a username and a password for an opaque session token
+      description: |
+        The token is cryptographically random, is stored on the server only as a
+        hash, and is not derived from anything present in a client build. It goes
+        back in the response body, not in a cookie, so the client can keep it in
+        memory and it is never replayed by the browser on its own.
+
+        A wrong username and a wrong password give the same 401 with the same
+        message, because telling them apart tells an attacker which usernames
+        exist. Repeated failures for one username are rate limited with 429.
+
+        There is no refresh token and no silent restoration. A reload signs the
+        person in again; the alternative would be a secret that survives the
+        page, which is the thing this design is avoiding.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: 'api-models.v2.schema.json#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: A session
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/Session'
+        '401': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '429': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /auth/demo-accounts:
+    get:
+      tags: [auth]
+      operationId: demoAccounts
+      summary: Demonstration accounts this deployment turned on, if any
+      description: |
+        A deployment that wants a one-click walkthrough declares demonstration
+        accounts; everywhere else this returns an empty list, and then one-click
+        entry does not exist. No password is ever returned: the client learns
+        which roles it may enter, not how to enter them.
+
+        The list is public on purpose. It says nothing an attacker can use: these
+        accounts exist only where somebody deliberately enabled them, and the
+        passwords behind them live in the environment of the service.
+      responses:
+        '200':
+          description: The demonstration accounts, possibly none
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/DemoAccountList'
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /auth/demo-login:
+    post:
+      tags: [auth]
+      operationId: demoLogin
+      summary: Enter a configured demonstration account without typing its password
+      description: |
+        For a walkthrough where a person should click a role rather than retype a
+        password that is not a secret to them anyway. The service resolves the
+        password from its own environment, so the browser never holds it and a
+        build cannot carry it.
+
+        An account that this deployment did not declare is 404, whether or not a
+        user row with that name exists: the answer describes the demonstration
+        configuration, not the user table. The session it returns is an ordinary
+        session — same token shape, same expiry, same audit record — because a
+        demonstration that behaved differently from the real thing would not be
+        a demonstration of it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: 'api-models.v2.schema.json#/components/schemas/DemoLoginRequest'
+      responses:
+        '200':
+          description: A session
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/Session'
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '429': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /auth/me:
+    get:
+      tags: [auth]
+      operationId: whoAmI
+      summary: The signed-in person and the role the server holds for them
+      parameters:
+        - $ref: '#/components/parameters/Session'
+      responses:
+        '200':
+          description: The signed-in person
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/User'
+        '401': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Revoke this session immediately
+      description: |
+        Needs the session it is revoking, so that the sign-out can be recorded
+        against the person who performed it. The token cannot be used again
+        afterwards, which means a second call with the same token is 401: the
+        session it names no longer exists. A client that has already been
+        signed out has nothing left to do.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+      responses:
+        '200':
+          description: The session is revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  revoked: {type: boolean}
+                required: [revoked]
+                additionalProperties: false
+        '401': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /catalog:
+    get:
+      tags: [catalog]
+      operationId: getCatalog
+      summary: Supplied areas, sample requests, available years and method versions
+      parameters:
+        - $ref: '#/components/parameters/Session'
+      responses:
+        '200':
+          description: Catalog of the supplied dataset
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/Catalog'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /areas/measure:
+    post:
+      tags: [areas]
+      operationId: measureArea
+      summary: Geodesic area of a contour, before anything is queued
+      description: |
+        Answers "how big is this, and may I submit it" without creating an
+        analysis. It normalizes the contour and measures it with the same
+        geodesic algorithm the analysis path uses, so a measurement can never
+        disagree with the run that follows.
+
+        A contour that cannot be used is a 200 with valid=false and named
+        errors; 422 is reserved for a body that is not a GeoJSON geometry at
+        all. Exceeding max_area_ha sets within_limit=false and is reported, not
+        thrown.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: 'api-models.v2.schema.json#/components/schemas/AreaMeasureRequest'
+      responses:
+        '200':
+          description: Measurement of the normalized contour
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/AreaMeasurement'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests:
+    post:
+      tags: [requests]
+      operationId: createRequest
+      summary: Start a verification request as a draft
+      description: |
+        A request is the thing a person works with: a contour, a period and an
+        optional stated volume, followed from a draft to a finalized passport.
+        It starts as DRAFT and nothing is calculated yet.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: 'api-models.v2.schema.json#/components/schemas/CreateRequest'
+      responses:
+        '201':
+          description: The draft request
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/VerificationRequest'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+    get:
+      tags: [requests]
+      operationId: listRequests
+      summary: The requests this role is allowed to see
+      description: |
+        An owner sees their own. A verifier sees all of them, because reviewing
+        them is the job. An investor sees only the finalized ones: a draft is
+        not a finding.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+      responses:
+        '200':
+          description: Requests visible to this role
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/VerificationRequestList'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}:
+    get:
+      tags: [requests]
+      operationId: getRequest
+      summary: One request with its recorded history
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The request
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/VerificationRequest'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+    patch:
+      tags: [requests]
+      operationId: updateRequest
+      summary: Change the stated volume while the request is still a draft
+      description: |
+        Only the owner, and only in DRAFT. The contour and the period are not
+        editable: changing those is a different request, and a claim compared
+        against a different scope is not a comparison.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: 'api-models.v2.schema.json#/components/schemas/UpdateRequest'
+      responses:
+        '200':
+          description: The updated draft
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/VerificationRequest'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}/submit:
+    post:
+      tags: [requests]
+      operationId: submitRequest
+      summary: Hand a draft over for verification
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The submitted request
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/VerificationRequest'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}/analysis:
+    post:
+      tags: [requests]
+      operationId: runRequestAnalysis
+      summary: Queue the calculation for a submitted request
+      description: |
+        Moves the request to ANALYSING and queues the analysis with the
+        contour, period and claim the request holds. A run that fails returns
+        the request to SUBMITTED so it can be tried again; it never advances.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: The request, now analysing
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/VerificationRequest'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}/finalize:
+    post:
+      tags: [requests]
+      operationId: finalizeRequest
+      summary: A verifier pins this passport version as the finalized one
+      description: |
+        Only a verifier, and only from CALCULATED. Finalizing does not change
+        Q, the interval, the claim comparison or anything else the calculation
+        produced: it records that a named person accepted a particular passport
+        content hash at a particular time. A later recalculation produces a new
+        passport and leaves this record intact.
+
+        A result whose q is null may be finalized. "We could not tell" is a
+        legitimate verified outcome, and the passport says so; what it may not
+        do is turn into units.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The finalized request
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/VerificationRequest'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}/demo:
+    get:
+      tags: [demo]
+      operationId: getDemoUnit
+      summary: The demonstration state of this request
+      description: |
+        A demonstration of what a unit lifecycle would look like, performed by
+        the anyone who may see the request. Nothing here exists in a registry and none of it confers a
+        right to a carbon unit; is_demonstration is always true and the note
+        says so in words a reader cannot miss.
+
+        Issuing needs a passport a verifier has finalized and a positive q.
+        Zero and null both refuse with 409 NO_POSITIVE_UNITS: every real plot
+        in the supplied data comes out at zero, so a demonstration that quietly
+        issued nothing would be the one misleading thing in the tool.
+
+        Every transition is idempotent: repeating one returns the state that
+        already exists rather than recording a second.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The demonstration unit
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/DemoUnit'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}/demo/issue:
+    post:
+      tags: [demo]
+      operationId: issueDemoUnit
+      summary: An owner issues demonstration units
+      description: |
+        A demonstration of what a unit lifecycle would look like, performed by
+        the owner. Nothing here exists in a registry and none of it confers a
+        right to a carbon unit; is_demonstration is always true and the note
+        says so in words a reader cannot miss.
+
+        Issuing needs a passport a verifier has finalized and a positive q.
+        Zero and null both refuse with 409 NO_POSITIVE_UNITS: every real plot
+        in the supplied data comes out at zero, so a demonstration that quietly
+        issued nothing would be the one misleading thing in the tool.
+
+        Every transition is idempotent: repeating one returns the state that
+        already exists rather than recording a second.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '201':
+          description: The demonstration unit
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/DemoUnit'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}/demo/transfer:
+    post:
+      tags: [demo]
+      operationId: acceptDemoTransfer
+      summary: An investor accepts the demonstration transfer
+      description: |
+        A demonstration of what a unit lifecycle would look like, performed by
+        the investor. Nothing here exists in a registry and none of it confers a
+        right to a carbon unit; is_demonstration is always true and the note
+        says so in words a reader cannot miss.
+
+        Issuing needs a passport a verifier has finalized and a positive q.
+        Zero and null both refuse with 409 NO_POSITIVE_UNITS: every real plot
+        in the supplied data comes out at zero, so a demonstration that quietly
+        issued nothing would be the one misleading thing in the tool.
+
+        Every transition is idempotent: repeating one returns the state that
+        already exists rather than recording a second.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The demonstration unit
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/DemoUnit'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}/demo/retire:
+    post:
+      tags: [demo]
+      operationId: retireDemoUnit
+      summary: The holder retires the demonstration units
+      description: |
+        A demonstration of what a unit lifecycle would look like, performed by
+        the holder. Nothing here exists in a registry and none of it confers a
+        right to a carbon unit; is_demonstration is always true and the note
+        says so in words a reader cannot miss.
+
+        Issuing needs a passport a verifier has finalized and a positive q.
+        Zero and null both refuse with 409 NO_POSITIVE_UNITS: every real plot
+        in the supplied data comes out at zero, so a demonstration that quietly
+        issued nothing would be the one misleading thing in the tool.
+
+        Every transition is idempotent: repeating one returns the state that
+        already exists rather than recording a second.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The demonstration unit
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/DemoUnit'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /analyses:
+    post:
+      tags: [analyses]
+      operationId: createAnalysis
+      summary: Queue an analysis of one contour over one period
+      description: |
+        Accepts either a geometry or the identifier of a supplied area. Naming a
+        supplied area is a shortcut for pasting its polygon and changes nothing
+        else about the analysis.
+
+        The request is bound to (caller, operation, Idempotency-Key) together
+        with the canonical hash of the normalized request. The same key with the
+        same request replays the stored 202; the same key with a different
+        request is 409 IDEMPOTENCY_CONFLICT. The caller is taken from the
+        authenticated session, never from a client-supplied role header.
+
+        An optional claimed_units is an input label. It enters the request
+        identity, and it never changes the calculated numbers.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: 'api-models.v2.schema.json#/components/schemas/AnalysisRequest'
+      responses:
+        '202':
+          description: Analysis queued
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/AnalysisAccepted'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /analyses/{analysis_id}:
+    get:
+      tags: [analyses]
+      operationId: getAnalysis
+      summary: Job progress and, once SUCCEEDED, the typed result
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/AnalysisId'
+      responses:
+        '200':
+          description: Analysis state
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/Analysis'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /analyses/{analysis_id}/artifacts/{artifact_id}:
+    get:
+      tags: [analyses]
+      operationId: getAnalysisArtifact
+      summary: One manifest-listed artifact of this analysis
+      description: |
+        Only artifacts listed in the manifest of this analysis are served, and
+        only after their stored bytes match the recorded sha256 and size. A
+        mismatch is 503 ARTIFACT_INTEGRITY_FAILED, never a silently different
+        file.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/AnalysisId'
+        - $ref: '#/components/parameters/ArtifactId'
+      responses:
+        '200':
+          description: Artifact bytes with the recorded media type
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /analyses/{analysis_id}/report:
+    get:
+      tags: [analyses]
+      operationId: getAnalysisReport
+      summary: The passport as JSON or as a self-contained HTML document
+      description: |
+        The HTML report is self-contained: it embeds the numbers it shows and
+        does not depend on a session URL that expires, so an archived copy still
+        reads correctly. Both formats carry exactly the values of the result.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/AnalysisId'
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [json, html]
+            default: json
+      responses:
+        '200':
+          description: Report
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/Report'
+            text/html:
+              schema:
+                type: string
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /analyses/{analysis_id}/value:
+    get:
+      tags: [analyses]
+      operationId: getAnalysisValue
+      summary: q multiplied by each price, with an optional price of the caller's own
+      description: |
+        Nothing here is stored and no hash moves. A price the caller supplies
+        is an input, not a quotation this system stands behind: it comes back
+        labelled USER_SCENARIO and is deliberately kept out of the analysis,
+        because a stated price must never be able to change a passport.
+
+        When q is null every value is null. There is no scenario value for an
+        answer that does not exist.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/AnalysisId'
+        - name: price_rub
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: 0
+          description: A price of the caller's own, labelled USER_SCENARIO in the answer.
+      responses:
+        '200':
+          description: Scenario values
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/ValueScenarios'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /analyses/{analysis_id}/proof:
+    get:
+      tags: [analyses]
+      operationId: getAnalysisProof
+      summary: Hashes, versions and the honest anchor status
+      description: |
+        A hash detects a changed file against a trusted record. One anchor does
+        not prevent double selling and does not certify that the calculation is
+        true. Anchor fields are nullable and carry an explicit status of
+        NOT_REQUESTED, PENDING, CONFIRMED or FAILED.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/AnalysisId'
+      responses:
+        '200':
+          description: Proof document
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/Proof'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+components:
+  parameters:
+    Session:
+      name: Authorization
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: '^Bearer .+$'
+      description: |
+        `Bearer <token>` from POST /auth/login. The token is opaque, is held in
+        client memory, and is never baked into a browser bundle. The caller
+        identity and the role used for every permission check, for idempotency
+        and for the audit log come from this session; there is no
+        client-supplied role header, because a header a client can set is not
+        an authorization.
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+    RequestId:
+      name: request_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Opaque identifier. Consumers must not parse it.
+    AnalysisId:
+      name: analysis_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Opaque identifier. Consumers must not parse it.
+    ArtifactId:
+      name: artifact_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Opaque identifier of a manifest-listed artifact.
+
+  responses:
+    Failure:
+      description: |
+        Error envelope. 401 unauthenticated; 403 the role may not do this;
+        404 unknown analysis or artifact; 409 idempotency conflict; 422 invalid
+        geometry, period or claim; 429 too many failed sign-in attempts;
+        503 source unavailable or artifact integrity failure. The body never
+        carries a stack trace, a secret, a session token or a local filesystem
+        path.
+      content:
+        application/json:
+          schema:
+            $ref: 'api-models.v2.schema.json#/components/schemas/Error'
