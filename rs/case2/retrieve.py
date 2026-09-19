@@ -37,6 +37,7 @@ from pathlib import Path
 import rasterio
 from rasterio.windows import from_bounds
 
+from rs.case2 import sources
 from rs.case2.catalog import DatasetError
 from rs.determinism import write_json
 
@@ -61,8 +62,106 @@ SIGNING_PARAMETERS = ("X-Amz-Signature", "X-Amz-Credential", "sig", "se", "sp",
                       "token", "Signature", "AWSAccessKeyId")
 
 
+# From processing baseline 04.00 the L2A product carries this offset. Two items
+# of the same acquisition on either side of that change are both valid and are
+# radiometrically different, so a retrieval that expects one must refuse the
+# other rather than scale it and hope.
+BASELINE_OFFSET_CHANGE = "04.00"
+OFFSET_BEFORE_0400 = 0.0
+OFFSET_FROM_0400 = -0.1
+
+
 class RetrievalError(RuntimeError):
     """The open source could not be used, and nothing was substituted for it."""
+
+
+class Scope:
+    """The space and the period a retrieval is allowed to ask about.
+
+    A retriever with no scope will happily fetch anything the catalogue holds.
+    That is not what the user asked for, and a search wider than the request is
+    both a privacy question and a way to end up with data the result cannot
+    account for. The bound is the request itself, padded by one Sentinel pixel
+    so a window on the edge is not rejected for rounding.
+    """
+
+    # About 20 m at these latitudes: one pixel of the analysis grid.
+    PAD_DEGREES = 0.0002
+
+    def __init__(self, bounds, year_start, year_end, *, pad=PAD_DEGREES):
+        self.bounds = tuple(bounds)
+        self.year_start = int(year_start)
+        self.year_end = int(year_end)
+        self.pad = pad
+
+    @classmethod
+    def from_request(cls, geometry, year_start, year_end, **kwargs):
+        return cls(geometry.bounds, year_start, year_end, **kwargs)
+
+    def check_bbox(self, bbox):
+        west, south, east, north = bbox
+        limit = (self.bounds[0] - self.pad, self.bounds[1] - self.pad,
+                 self.bounds[2] + self.pad, self.bounds[3] + self.pad)
+        if (west < limit[0] or south < limit[1]
+                or east > limit[2] or north > limit[3]):
+            raise RetrievalError(
+                f"the search area {list(bbox)} reaches outside the request "
+                f"{list(self.bounds)}; a retrieval asks only about the space "
+                f"the user asked about")
+
+    def check_datetime(self, datetime_range):
+        for half in str(datetime_range).split("/"):
+            year = int(half[:4])
+            if not self.year_start <= year <= self.year_end:
+                raise RetrievalError(
+                    f"the search period {datetime_range} reaches outside the "
+                    f"requested {self.year_start}-{self.year_end}")
+
+    def as_dict(self):
+        return {
+            "bounds": [round(value, 7) for value in self.bounds],
+            "pad_degrees": self.pad,
+            "year_start": self.year_start,
+            "year_end": self.year_end,
+        }
+
+
+def offset_for_baseline(processing_baseline):
+    """The radiometric offset a baseline carries, as the product defines it."""
+    if processing_baseline is None:
+        return None
+    return (OFFSET_FROM_0400
+            if str(processing_baseline) >= BASELINE_OFFSET_CHANGE
+            else OFFSET_BEFORE_0400)
+
+
+def require_compatible(item, *, processing_baseline=None, collection=COLLECTION):
+    """Refuse an item that is not the version the caller is comparing against.
+
+    Compatibility here is not "the catalogue returned something". It is the
+    same collection, and a radiometric offset convention that matches what the
+    reference was produced under. An item on the other side of the 04.00 change
+    reads as a different surface for the same ground.
+    """
+    found = item.get("collection", collection)
+    if found != collection:
+        raise RetrievalError(
+            f"item {item['id']} belongs to collection {found}, not {collection}; "
+            f"a different collection is a different product")
+    if processing_baseline is None:
+        return item
+    actual = item["properties"].get("s2:processing_baseline")
+    if actual == processing_baseline:
+        return item
+    wanted = offset_for_baseline(processing_baseline)
+    have = offset_for_baseline(actual)
+    if wanted != have:
+        raise RetrievalError(
+            f"item {item['id']} is at processing baseline {actual} with a "
+            f"radiometric offset of {have}, and the reference is {processing_baseline} "
+            f"with {wanted}; these are not interchangeable and this package "
+            f"will not rescale one into the other")
+    return item
 
 
 def _digest(value):
@@ -88,18 +187,34 @@ class Retriever:
     """Open-catalogue access with an isolated cache and an offline mode."""
 
     def __init__(self, cache_dir, *, allow_network=True,
-                 timeout=DEFAULT_TIMEOUT_SECONDS, max_asset_bytes=MAX_ASSET_BYTES):
+                 timeout=DEFAULT_TIMEOUT_SECONDS, max_asset_bytes=MAX_ASSET_BYTES,
+                 scope=None):
         self.cache_dir = Path(cache_dir)
         self.allow_network = allow_network
         self.timeout = timeout
         self.max_asset_bytes = max_asset_bytes
+        self.scope = scope
         self.search_dir = self.cache_dir / "search"
         self.asset_dir = self.cache_dir / "assets"
+        # Every read this retriever served, in order, as manifest rows.
+        self.served = []
+
+    def _record(self, **fields):
+        row = sources.SENTINEL2_L2A.entry(**fields)
+        self.served.append(row)
+        return row
+
+    def source_manifest(self, *, generated_at=None):
+        """What this retriever served, as the manifest a checker reads."""
+        return sources.manifest(self.served, generated_at=generated_at)
 
     # -- search ---------------------------------------------------------
 
     def search(self, bbox, datetime_range, limit=20):
         """STAC search by geometry and date, cached by the exact query."""
+        if self.scope is not None:
+            self.scope.check_bbox(bbox)
+            self.scope.check_datetime(datetime_range)
         query = {
             "collections": [COLLECTION],
             "bbox": [round(value, 6) for value in bbox],
@@ -110,8 +225,15 @@ class Retriever:
         cached = self.search_dir / f"{key}.json"
         if cached.is_file():
             document = json.loads(cached.read_text(encoding="utf-8"))
-            return document["response"], {**document["provenance"],
-                                          "from_cache": True}
+            provenance = {**document["provenance"], "from_cache": True,
+                          "cache_key": key,
+                          "mode": sources.MODE_OFFLINE_REPLAY,
+                          "replayed_at": sources.now_utc()}
+            self._record(identifier=f"search:{key}", url=EARTH_SEARCH,
+                         access_date=provenance.get("retrieved_at"),
+                         checksum_sha256=provenance.get("response_sha256"),
+                         cache_key=key, mode=sources.MODE_OFFLINE_REPLAY)
+            return document["response"], provenance
         if not self.allow_network:
             raise RetrievalError(
                 f"no cached search for this query and the network is disabled; "
@@ -139,9 +261,18 @@ class Retriever:
             "collection": COLLECTION,
             "response_sha256": hashlib.sha256(raw).hexdigest(),
             "item_count": len(document.get("features", [])),
+            "cache_key": key,
+            "retrieved_at": sources.now_utc(),
+            "license": sources.SENTINEL2_L2A.license,
+            "required_attribution": sources.SENTINEL2_L2A.attribution,
         }
         write_json(cached, {"provenance": provenance, "response": document})
-        return document, {**provenance, "from_cache": False}
+        self._record(identifier=f"search:{key}", url=EARTH_SEARCH,
+                     access_date=provenance["retrieved_at"],
+                     checksum_sha256=provenance["response_sha256"],
+                     cache_key=key, mode=sources.MODE_ONLINE)
+        return document, {**provenance, "from_cache": False,
+                          "mode": sources.MODE_ONLINE}
 
     # -- item selection -------------------------------------------------
 
@@ -210,7 +341,13 @@ class Retriever:
 
         if cached.is_file() and sidecar.is_file():
             provenance = json.loads(sidecar.read_text(encoding="utf-8"))
-            return cached, {**provenance, "from_cache": True}
+            self._record(identifier=item["id"], url=href,
+                         access_date=provenance.get("retrieved_at"),
+                         checksum_sha256=provenance.get("raw_sha256"),
+                         cache_key=key, mode=sources.MODE_OFFLINE_REPLAY)
+            return cached, {**provenance, "from_cache": True, "cache_key": key,
+                            "mode": sources.MODE_OFFLINE_REPLAY,
+                            "replayed_at": sources.now_utc()}
         if not self.allow_network:
             raise RetrievalError(
                 f"no cached window for {item['id']} {band} and the network is "
@@ -268,14 +405,21 @@ class Retriever:
             "window_bounds_crs": bounds_crs,
             "raw_sha256": hashlib.sha256(cached.read_bytes()).hexdigest(),
             "size_bytes": size,
-            "license": "https://sentinels.copernicus.eu/documents/247904/690755/Sentinel_Data_Legal_Notice",
-            "required_attribution": "Contains modified Copernicus Sentinel data 2019-2024",
+            "cache_key": key,
+            "retrieved_at": sources.now_utc(),
+            "license": sources.SENTINEL2_L2A.license,
+            "required_attribution": sources.SENTINEL2_L2A.attribution,
             "note": (
                 "retrieved for comparison and demonstration; the supplied "
                 "dataset in data/ remains the only source of analysis numbers"),
         }
         write_json(sidecar, provenance)
-        return cached, {**provenance, "from_cache": False}
+        self._record(identifier=item["id"], url=href,
+                     access_date=provenance["retrieved_at"],
+                     checksum_sha256=provenance["raw_sha256"],
+                     cache_key=key, mode=sources.MODE_ONLINE)
+        return cached, {**provenance, "from_cache": False,
+                        "mode": sources.MODE_ONLINE}
 
 
 def _reproject_bounds(bounds, bounds_crs, target_crs):
@@ -321,6 +465,10 @@ def compare_with_supplied(dataset, scene_key, band, retriever, *, window_px=48):
         _to_wgs84_bounds(bounds, supplied_crs),
         _day_range(row["datetime_utc"]))
     item = retriever.select(document["features"], item_id=row["item_id"])
+    # Having the right id is not having the right version: the same acquisition
+    # is served at more than one processing baseline, and they differ by the
+    # -0.1 offset. The comparison is refused rather than rescaled.
+    require_compatible(item, processing_baseline=row["processing_baseline"])
     path, provenance = retriever.fetch_window(
         item, band, bounds, bounds_crs=str(supplied_crs))
 

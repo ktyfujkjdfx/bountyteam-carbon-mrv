@@ -218,6 +218,35 @@ Earth Search serves the same acquisition twice - at baseline 03.01 with offset
 0 and at 05.00 with offset -0.1 - and taking the first result would silently
 produce data that does not match the reference.
 
+**One adapter per product.** Four products go into a result and they are not
+interchangeable, so each has its own adapter carrying its provider, version,
+licence, attribution and the way it is reached. Only Sentinel-2 L2A is
+retrievable by this package; ESA CCI Biomass, Global Forest Change and MODIS
+MCD64A1 arrive with the case, and that is a recorded property of the adapter
+rather than something discovered when a fetch fails.
+
+**A retrieval asks only what the user asked.** A `Scope` bounds every search by
+the request's own bounding box and period, padded by one Sentinel pixel so an
+edge window is not rejected for rounding. A search that reaches wider is
+refused.
+
+**Compatibility is checked, not assumed.** Having the right item id is not
+having the right version: an item on the other side of the 04.00 offset change
+is a different surface over the same ground, and it is refused rather than
+rescaled into the reference.
+
+**The manifest is what makes a run checkable.** `rs.case2.sources` records, for
+every input, the identifier or URL, the product and version, the access date,
+the licence, the checksum, the cache key, and whether it was served over the
+network, replayed from cache, or read from `data/`. Where a cache entry predates
+the recorded access date, the manifest says the date is unknown rather than
+inventing a plausible one.
+
+`python -m rs.case2.retrieval_demo --out runs/retrieval` runs the five claims
+instead of describing them, and prints which were demonstrated. The online
+claim is reported as `NOT_ATTEMPTED` unless `--allow-network` is passed: "we did
+not try" and "it worked" are different statements.
+
 ## Outputs
 
 `analysis.json` carries the request, the stock change, a 2015-2024 timeline on
