@@ -265,6 +265,32 @@ passport, never taken from the caller. Each role performs its own step, every tr
 is idempotent, the history is append-only, and none of it touches a P0 table or the
 frozen ABI.
 
+## The report is a document somebody keeps
+
+`GET /analyses/{id}/report?format=json|html`. Both formats carry the same values; the
+JSON document is the whole result plus the schema version, the run time and the report
+hash.
+
+The HTML is self-contained in the strict sense: no `<script>`, no `<link>`, no `@import`,
+no inline event handler and no `http://` or `https://` anywhere in the file. A copy saved
+today still reads correctly after the session is gone, which is the whole point of
+handing someone a passport rather than a dashboard link. It also carries no session
+token, no password, no `Authorization` header and no local filesystem path, on the
+degraded path as well as the normal one.
+
+It has to contain the plot and its area, the period, the sources and their versions, the
+coverage and evidence quality, the change and the zones, the carbon ledger, the baseline
+and its parts, the uncertainty interval with its sensitivity variants, Q and the buffer,
+the claim comparison, the risks, the projection to 2029, the scenario values, the method
+and its limitations, the analysis id and date, and every hash. A test walks that list.
+
+`report_hash` covers the content and not the rendering: it is `digest({report: version,
+content: content_view(result)})`, and `content_view` excludes the passport block. Two
+downloads are the same bytes, a fresh deployment reproduces the same hash for the same
+request, and finalizing does not invalidate a report somebody already downloaded. A
+changed number no longer matches the hash it was published with, and a stored report
+cannot be rewritten in place.
+
 ## Language the contract will not carry
 
 No public `INVESTABLE`, no "approved for purchase", no "proven fraud". A gap value is the

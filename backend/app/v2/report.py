@@ -92,6 +92,7 @@ class ReportBuilder:
         units, change, areas = result["units"], result["change"], result["areas"]
         coverage, claim, passport = result["coverage"], result["claim"], result["passport"]
         request, identity = result["request"], result["identity"]
+        baseline, uncertainty = result["baseline"], result["uncertainty"]
 
         fixture = result.get("fixture")
         banner = ""
@@ -100,6 +101,7 @@ class ReportBuilder:
                       f'{_e(fixture["label"])}</strong><br>{_e(fixture["note"])}</p>')
 
         summary = _rows([
+            ("Участок", _e(request["aoi_id"] or "произвольный контур запроса")),
             ("Период", f"{_e(request['year_start'])}–{_e(request['year_end'])}"),
             ("Площадь запроса, га", _number(areas["requested_ha"], 4)),
             ("Расчётная площадь, га", _number(areas["calculated_ha"], 4)),
@@ -140,6 +142,58 @@ class ReportBuilder:
             ("Парные валидные оптические пиксели",
              _number(coverage["optical_paired_valid_fraction"], 4)),
         ])
+        baseline_rows = _rows([
+            ("Идентификатор базовой линии", _e(baseline["baseline_id"] or "—")),
+            ("Вид", _e(baseline["kind"])),
+            ("Площадь базовой линии, га", _number(baseline["area_ha"], 4)),
+            ("Изменение запаса базовой линии, т C", _number(baseline["delta_tc"])),
+            ("На гектар, т C/га", _number(baseline["delta_tc_ha"], 6)),
+            ("E базовой линии, т CO₂-экв.", _number(baseline["ebase_tco2e"])),
+            ("Статус", _e(baseline["status"])),
+        ])
+        baseline_parts = "".join(
+            f"<tr><td>{_e(part['aoi_id'])}</td><td>{_number(part['area_ha'], 4)}</td>"
+            f"<td>{_number(part['stock_start_tc_ha'], 4)}</td>"
+            f"<td>{_number(part['stock_end_tc_ha'], 4)}</td>"
+            f"<td>{_number(part['delta_tc'])}</td>"
+            f"<td>{'да' if part['clipped_at_zero'] else 'нет'}</td></tr>"
+            for part in baseline["parts"])
+
+        uncertainty_rows = _rows([
+            ("Вид интервала", _e(uncertainty["interval_kind"])),
+            ("Сценарий пространственной зависимости", _e(uncertainty["method"])),
+            ("Нижняя граница L, т CO₂-экв.", _number(uncertainty["lower_tco2e"])),
+            ("Верхняя граница U, т CO₂-экв.", _number(uncertainty["upper_tco2e"])),
+            ("Стандартное отклонение, т CO₂-экв.", _number(uncertainty["sd_tco2e"])),
+            ("Статус", _e(uncertainty["status"])),
+        ])
+        sensitivity = "".join(
+            f"<tr><td>{_e(variant['label'])}</td>"
+            f"<td>{_e(variant['spatial_dependence'])}</td>"
+            f"<td>{_number(variant['temporal_correlation'], 2)}</td>"
+            f"<td>{_number(variant['sd_tco2e'])}</td>"
+            f"<td>{_number(variant['half_width_tco2e'])}</td></tr>"
+            for variant in uncertainty["sensitivity"])
+        assumptions = uncertainty["assumptions"] or {}
+        method_rows = _rows([
+            ("Доля углерода CF", _number(assumptions.get("cf_agb"), 4)),
+            ("CO₂ на углерод", _number(assumptions.get("co2_per_c"), 6)),
+            ("Сетка", _e(assumptions.get("grid") or "—")),
+            ("Ячеек в расчёте", _number(assumptions.get("cells"), 0)),
+            ("Временная корреляция ρ", _number(assumptions.get("temporal_correlation"), 2)),
+            ("Коэффициент охвата k", _number(assumptions.get("coverage_factor"), 2)),
+            ("Калибрована эмпирически",
+             "нет" if assumptions.get("empirically_calibrated") is False else "—"),
+            ("Версия метода", _e(identity["method_version"])),
+            ("Версия схемы", _e(identity["schema_version"])),
+            ("Версия набора данных", _e(identity["dataset_version"])),
+        ])
+
+        quality_rows = "".join(
+            f"<tr><td>{_e(scene['scene_key'])}</td><td>{_e(scene['datetime_utc'])}</td>"
+            f"<td>{_number(scene['usable_fraction'], 4)}</td></tr>"
+            for scene in result["evidence"]["scenes"])
+
         money = result["scenario_values"]
         money_rows = _rows([
             (f"Цена {name}, руб./ед.", _number((money[name] or {}).get("price_rub"), 0)
@@ -207,9 +261,24 @@ class ReportBuilder:
 <h2>Запрос</h2><table>{summary}</table>
 <h2>Запас и изменение</h2><table>{carbon}</table>
 <h2>От изменения к единицам</h2><table>{ledger}</table>
-<h2>Покрытие</h2>
+<h2>Базовая линия</h2>
+<p>Базовая линия — сценарное допущение кейса, а не доказательство дополнительности.</p>
+<table>{baseline_rows}</table>
+{('<table><tr><th>Участок</th><th>Площадь, га</th><th>Запас на начало, т C/га</th>'
+  '<th>Запас на конец, т C/га</th><th>Изменение, т C</th><th>Обрезано нулём</th></tr>'
+  + baseline_parts + '</table>') if baseline_parts else ''}
+<h2>Неопределённость</h2>
+<p>Это сценарный интервал при заявленных допущениях, а не эмпирически калиброванный
+доверительный интервал.</p>
+<table>{uncertainty_rows}</table>
+{('<p>Сценарии чувствительности показаны отдельно и не заменяют основной сценарий.</p>'
+  '<table><tr><th>Вариант</th><th>Пространственная зависимость</th><th>ρ</th>'
+  '<th>SD</th><th>Полуширина</th></tr>' + sensitivity + '</table>') if sensitivity else ''}
+<h2>Покрытие и качество</h2>
 <p>Четыре покрытия отвечают на разные вопросы и не смешиваются.</p>
 <table>{coverage_rows}</table>
+{('<table><tr><th>Сцена</th><th>Дата UTC</th><th>Доля пригодных пикселей</th></tr>'
+  + quality_rows + '</table>') if quality_rows else ''}
 <h2>Сценарная стоимость</h2>
 <p>Сценарные цены кейса, а не рыночная котировка и не обещанная выручка.</p>
 <table>{money_rows}</table>
@@ -221,11 +290,14 @@ class ReportBuilder:
   '<table><tr><th>Риск</th><th>Основание</th><th>Источник</th><th>Пояснение</th></tr>'
   + risks + '</table>') if risks else ''}
 {('<h2>Базовая линия до ' + str(projection['horizon_year']) + '</h2>'
-  '<p>Продолжение базовой линии по правилам кейса. Факт и продолжение помечены разным '
-  'видом ряда и не образуют одну линию. ' + _e(projection['q_projection_note']) + '</p>'
+  '<p>' + _e(projection['note']) + ' Факт и продолжение помечены разным видом ряда и '
+  'не образуют одну линию. ' + _e(projection['q_projection_note']) + '</p>'
   '<table><tr><th>Год</th><th>Вид ряда</th><th>Базовая линия, т C/га</th></tr>'
   + projected + '</table>') if projected else ''}
 {('<h2>Замечания к свидетельствам</h2><ul>' + warnings + '</ul>') if warnings else ''}
+<h2>Методика</h2>
+<p>Формулы и коэффициенты кейса, под которыми получен этот результат.</p>
+<table>{method_rows}</table>
 <h2>Ограничения</h2><ul>{limitations}</ul>
 {('<h2>Примечания метода</h2><ul>' + notes + '</ul>') if notes else ''}
 <h2>Идентичность</h2><table>{_rows([
