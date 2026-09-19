@@ -61,6 +61,13 @@ from .research import ResearchRow, research_rows, research_table
 from .risk import Risk, RiskReport, assess_risks
 from .rs_adapter import RasterInputs, RsPayloadError, from_fixture, from_rs_payload
 from .units import Coverage, ScenarioValue, UnitsResult, compute_units
+from .workflow import (
+    Actor,
+    Lifecycle,
+    WorkflowError,
+    opaque_actor_ref,
+    passport_workflow_block,
+)
 from .value import (
     OFFICIAL_CASE_PRICE,
     USER_SCENARIO,
@@ -74,6 +81,7 @@ from .value import (
 
 __all__ = [
     "METHOD_VERSION",
+    "Actor",
     "Analysis",
     "AnalysisContext",
     "AnalysisRequest",
@@ -94,6 +102,7 @@ __all__ = [
     "IntegrityReport",
     "IntervalResult",
     "IntervalVariant",
+    "Lifecycle",
     "MethodOptions",
     "OBSERVED",
     "OFFICIAL_CASE_PRICE",
@@ -114,6 +123,7 @@ __all__ = [
     "USER_SCENARIO",
     "UnitsResult",
     "ValueResult",
+    "WorkflowError",
     "analyse",
     "assess_risks",
     "baseline_stock",
@@ -136,6 +146,8 @@ __all__ = [
     "manifest_hash",
     "notes",
     "official_prices",
+    "opaque_actor_ref",
+    "passport_workflow_block",
     "parameters_snapshot",
     "project_baseline",
     "reasons",
