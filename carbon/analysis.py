@@ -20,12 +20,12 @@ from dataclasses import dataclass, field
 from . import canonical, notes, reasons
 from .baseline import BaselinePart, BaselineResult, compute_baseline
 from .claim import AnalysisContext, ClaimInput, ClaimResult, compare_claim
-from .interval import INDEPENDENT_CELLS, CellObservations, IntervalResult, compute_interval
+from .interval import INDEPENDENT_NATIVE_CELLS, CellObservations, IntervalResult, compute_interval
 from .parameters import DEFAULT_PARAMETERS, METHOD_VERSION, CaseParameters
 from .units import Coverage, UnitsResult, compute_units
 
-DEFAULT_POOL = "AGB"
-DEFAULT_UNIT = "tCO2e"
+DEFAULT_POOL = reasons.POOL_AGB_LIVE_WOODY
+DEFAULT_UNIT = reasons.UNIT_POTENTIAL_CASE
 # Agreed with RS: completeness is judged in hectares, 1e-4 ha is 1 m².
 AREA_TOLERANCE_HA = 1e-4
 
@@ -36,7 +36,7 @@ class MethodOptions:
 
     temporal_correlation: float = 0.0
     coverage_factor: float = 1.0
-    spatial_dependence: str = INDEPENDENT_CELLS
+    spatial_dependence: str = INDEPENDENT_NATIVE_CELLS
 
 
 @dataclass(frozen=True)

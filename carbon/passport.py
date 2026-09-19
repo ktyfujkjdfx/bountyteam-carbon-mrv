@@ -171,11 +171,13 @@ def _claim_block(analysis: Analysis) -> dict[str, Any]:
     claim = analysis.claim
     return {
         "status": claim.status,
+        "reason": claim.reason,
+        "comparable": claim.comparable,
         "mismatch_reasons": list(claim.mismatch_reasons),
         "claimed_units": claim.claimed_units,
         "source": claim.source,
         "units": claim.units,
-        "gap_units": claim.gap_units,
+        "unsupported_gap": claim.unsupported_gap,
         "supported_share": claim.supported_share,
         "gap_values": [
             {"price_rub": value.price_rub, "value_rub": value.value_rub}

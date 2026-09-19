@@ -24,8 +24,8 @@ from . import reasons
 from .analysis import AnalysisRequest, MethodOptions
 from .baseline import compute_baseline
 from .interval import (
-    FULLY_DEPENDENT_CELLS,
-    INDEPENDENT_CELLS,
+    FULL_SPATIAL_CORRELATION,
+    INDEPENDENT_NATIVE_CELLS,
     CellObservations,
     compute_interval,
 )
@@ -37,10 +37,10 @@ BASELINE_FLAT_RESEARCH = "RESEARCH_FLAT_BASELINE"
 BASELINE_VARIANTS = (BASELINE_OFFICIAL, BASELINE_FLAT_RESEARCH)
 
 DEFAULT_ASSUMPTIONS = (
-    MethodOptions(temporal_correlation=0.0, spatial_dependence=INDEPENDENT_CELLS),
-    MethodOptions(temporal_correlation=1.0, spatial_dependence=INDEPENDENT_CELLS),
-    MethodOptions(temporal_correlation=0.0, spatial_dependence=FULLY_DEPENDENT_CELLS),
-    MethodOptions(temporal_correlation=1.0, spatial_dependence=FULLY_DEPENDENT_CELLS),
+    MethodOptions(temporal_correlation=0.0, spatial_dependence=INDEPENDENT_NATIVE_CELLS),
+    MethodOptions(temporal_correlation=1.0, spatial_dependence=INDEPENDENT_NATIVE_CELLS),
+    MethodOptions(temporal_correlation=0.0, spatial_dependence=FULL_SPATIAL_CORRELATION),
+    MethodOptions(temporal_correlation=1.0, spatial_dependence=FULL_SPATIAL_CORRELATION),
 )
 
 

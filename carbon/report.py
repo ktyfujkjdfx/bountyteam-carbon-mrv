@@ -35,6 +35,7 @@ _STATUS_TEXT = {
 
 _CLAIM_TEXT = {
     reasons.CLAIM_NOT_PROVIDED: "заявление не предоставлено",
+    reasons.CLAIM_NOT_APPLICABLE: "заявлен нулевой объём, сравнивать нечего",
     reasons.CLAIM_NOT_COMPARABLE: "заявление несопоставимо с расчётом",
     reasons.CLAIM_UNASSESSABLE: "оценить невозможно: число единиц не определено",
     reasons.CLAIM_SUPPORTED: "заявленный объём не превышает расчёт по условиям кейса",
@@ -387,10 +388,11 @@ method_version: {_escape(report['method_version'])}</p>
 <table class="kv">{_rows([
     ("Статус сравнения", _escape(_CLAIM_TEXT.get(claim["status"], claim["status"]))),
     ("Код статуса", _escape(claim["status"])),
+    ("Причина", _escape(claim.get("reason")) or "—"),
     ("Источник заявления", _escape(claim["source"])),
     ("Заявлено, ед.", _number(claim["claimed_units"], 3)),
     ("Расчёт по условиям кейса, ед.", _number(claim["units"])),
-    ("Разрыв, ед.", _number(claim["gap_units"], 3)),
+    ("Разрыв, ед.", _number(claim["unsupported_gap"], 3)),
     ("Доля поддержки", _number(claim["supported_share"], 6)),
 ])}</table>
 

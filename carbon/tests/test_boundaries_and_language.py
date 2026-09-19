@@ -143,3 +143,48 @@ def test_the_published_passport_and_page_avoid_unsupported_wordings(request_id, 
         for phrase in FORBIDDEN_WORDINGS:
             if phrase in surface:
                 assert any(phrase in text for text in quoted), phrase
+
+
+# -- the enumerations of the method freeze --------------------------------------------------
+
+
+def test_the_claim_statuses_are_exactly_the_seven_of_the_freeze():
+    assert reasons.CLAIM_STATUSES == {
+        "NOT_PROVIDED", "NOT_APPLICABLE", "NOT_COMPARABLE", "UNASSESSABLE",
+        "SUPPORTED_BY_CASE", "PARTIALLY_SUPPORTED_BY_CASE", "NOT_SUPPORTED_BY_CASE",
+    }
+
+
+def test_the_spatial_scenarios_are_named_as_the_freeze_names_them():
+    from carbon.interval import FULL_SPATIAL_CORRELATION, INDEPENDENT_NATIVE_CELLS, SPATIAL_MODES
+
+    assert INDEPENDENT_NATIVE_CELLS == "INDEPENDENT_NATIVE_CELLS"
+    assert FULL_SPATIAL_CORRELATION == "FULL_SPATIAL_CORRELATION"
+    assert reasons.SPATIAL_SCENARIOS == set(SPATIAL_MODES)
+    # the main scenario is the independent one; the correlated one is a stress scenario
+    assert SPATIAL_MODES[0] == INDEPENDENT_NATIVE_CELLS
+
+
+def test_the_availability_and_zero_vocabularies_never_overlap():
+    """A reason for null must never be usable as a reason for zero, or the two blur."""
+    assert reasons.UNAVAILABLE_REASONS & reasons.ZERO_UNIT_REASONS == frozenset()
+
+
+def test_every_public_code_is_a_stable_upper_case_identifier():
+    import re
+
+    groups = (
+        reasons.UNAVAILABLE_REASONS, reasons.ZERO_UNIT_REASONS, reasons.CLAIM_STATUSES,
+        reasons.CLAIM_MISMATCH_REASONS, reasons.CLAIM_REASONS, reasons.CLAIM_SOURCES,
+        reasons.SPATIAL_SCENARIOS,
+    )
+    for group in groups:
+        for code in group:
+            assert re.fullmatch(r"[A-Z][A-Z0-9_]*", code), code
+
+
+def test_the_pool_and_the_unit_are_named_once():
+    from carbon.analysis import DEFAULT_POOL, DEFAULT_UNIT
+
+    assert DEFAULT_POOL == reasons.POOL_AGB_LIVE_WOODY == "AGB_LIVE_WOODY"
+    assert DEFAULT_UNIT == reasons.UNIT_POTENTIAL_CASE == "POTENTIAL_UNIT_OF_THE_CASE"

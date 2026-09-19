@@ -39,8 +39,8 @@ from .integrity import (
     verify,
 )
 from .interval import (
-    FULLY_DEPENDENT_CELLS,
-    INDEPENDENT_CELLS,
+    FULL_SPATIAL_CORRELATION,
+    INDEPENDENT_NATIVE_CELLS,
     CellObservations,
     IntervalResult,
     IntervalVariant,
@@ -71,8 +71,8 @@ __all__ = [
     "ClaimResult",
     "Coverage",
     "DEFAULT_PARAMETERS",
-    "FULLY_DEPENDENT_CELLS",
-    "INDEPENDENT_CELLS",
+    "FULL_SPATIAL_CORRELATION",
+    "INDEPENDENT_NATIVE_CELLS",
     "IntegrityReport",
     "IntervalResult",
     "IntervalVariant",

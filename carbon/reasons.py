@@ -42,8 +42,19 @@ ZERO_UNIT_REASONS = frozenset({
     ROUNDED_TO_ZERO,
 })
 
+# The pool and the unit a result speaks about. They are part of comparability: a claim
+# stated in other units is not a smaller or larger claim, it is a different one.
+POOL_AGB_LIVE_WOODY = "AGB_LIVE_WOODY"
+UNIT_POTENTIAL_CASE = "POTENTIAL_UNIT_OF_THE_CASE"
+
+# Spatial scenarios of the interval, named as the method freeze names them.
+INDEPENDENT_NATIVE_CELLS = "INDEPENDENT_NATIVE_CELLS"
+FULL_SPATIAL_CORRELATION = "FULL_SPATIAL_CORRELATION"
+SPATIAL_SCENARIOS = frozenset({INDEPENDENT_NATIVE_CELLS, FULL_SPATIAL_CORRELATION})
+
 # Claim comparison statuses.
 CLAIM_NOT_PROVIDED = "NOT_PROVIDED"
+CLAIM_NOT_APPLICABLE = "NOT_APPLICABLE"
 CLAIM_NOT_COMPARABLE = "NOT_COMPARABLE"
 CLAIM_UNASSESSABLE = "UNASSESSABLE"
 CLAIM_SUPPORTED = "SUPPORTED_BY_CASE"
@@ -52,12 +63,18 @@ CLAIM_NOT_SUPPORTED = "NOT_SUPPORTED_BY_CASE"
 
 CLAIM_STATUSES = frozenset({
     CLAIM_NOT_PROVIDED,
+    CLAIM_NOT_APPLICABLE,
     CLAIM_NOT_COMPARABLE,
     CLAIM_UNASSESSABLE,
     CLAIM_SUPPORTED,
     CLAIM_PARTIALLY_SUPPORTED,
     CLAIM_NOT_SUPPORTED,
 })
+
+# Why a comparison did not produce a share. A zero claim is not a supported claim: there
+# is nothing to support, and saying otherwise would read as an endorsement.
+NO_POSITIVE_CLAIM = "NO_POSITIVE_CLAIM"
+CLAIM_REASONS = frozenset({NO_POSITIVE_CLAIM})
 
 # Why a provided claim cannot be compared with the calculation.
 INVALID_CLAIM_VALUE = "INVALID_CLAIM_VALUE"

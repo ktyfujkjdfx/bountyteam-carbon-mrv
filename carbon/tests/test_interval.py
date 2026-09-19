@@ -6,7 +6,7 @@ import math
 import pytest
 
 from carbon import CellObservations, compute_interval, notes, reasons
-from carbon.interval import FULLY_DEPENDENT_CELLS, INDEPENDENT_CELLS, INTERVAL_KIND
+from carbon.interval import FULL_SPATIAL_CORRELATION, INDEPENDENT_NATIVE_CELLS, INTERVAL_KIND
 
 CF = 0.47
 CO2_PER_C = 44 / 12
@@ -54,8 +54,8 @@ def test_spatial_dependence_scales_the_interval_by_sqrt_n():
     assert result.sd_tco2e == pytest.approx(math.sqrt(count) * cell_weight * cell_sd)
 
     variants = {variant.label: variant for variant in result.sensitivity}
-    independent = variants[f"{INDEPENDENT_CELLS}_RHO_0"]
-    dependent = variants[f"{FULLY_DEPENDENT_CELLS}_RHO_0"]
+    independent = variants[f"{INDEPENDENT_NATIVE_CELLS}_RHO_0"]
+    dependent = variants[f"{FULL_SPATIAL_CORRELATION}_RHO_0"]
     assert dependent.sd_tco2e == pytest.approx(count * cell_weight * cell_sd)
     assert dependent.sd_tco2e / independent.sd_tco2e == pytest.approx(math.sqrt(count))
 
@@ -65,23 +65,23 @@ def test_mandatory_sensitivity_grid_is_always_present():
     result = compute_interval(cells, year_start=2019, year_end=2024)
     labels = [variant.label for variant in result.sensitivity]
     assert labels == [
-        f"{INDEPENDENT_CELLS}_RHO_0",
-        f"{INDEPENDENT_CELLS}_RHO_1",
-        f"{FULLY_DEPENDENT_CELLS}_RHO_0",
-        f"{FULLY_DEPENDENT_CELLS}_RHO_1",
+        f"{INDEPENDENT_NATIVE_CELLS}_RHO_0",
+        f"{INDEPENDENT_NATIVE_CELLS}_RHO_1",
+        f"{FULL_SPATIAL_CORRELATION}_RHO_0",
+        f"{FULL_SPATIAL_CORRELATION}_RHO_1",
     ]
     for variant in result.sensitivity:
         assert variant.half_width_tco2e >= 0.0
         assert variant.lower_tco2e <= result.e_proj_tco2e <= variant.upper_tco2e
-    independent = next(v for v in result.sensitivity if v.label == f"{INDEPENDENT_CELLS}_RHO_0")
-    dependent = next(v for v in result.sensitivity if v.label == f"{FULLY_DEPENDENT_CELLS}_RHO_0")
+    independent = next(v for v in result.sensitivity if v.label == f"{INDEPENDENT_NATIVE_CELLS}_RHO_0")
+    dependent = next(v for v in result.sensitivity if v.label == f"{FULL_SPATIAL_CORRELATION}_RHO_0")
     assert dependent.sd_tco2e >= independent.sd_tco2e
 
 
 def test_main_mode_is_independent_native_cells_and_is_recorded():
     cells = uniform_cells(count=4, area_ha=10.0, sd=2.0)
     result = compute_interval(cells, year_start=2019, year_end=2024, temporal_correlation=0.25)
-    assert result.assumptions["spatial_dependence"] == INDEPENDENT_CELLS
+    assert result.assumptions["spatial_dependence"] == INDEPENDENT_NATIVE_CELLS
     assert result.assumptions["temporal_correlation"] == 0.25
     assert result.assumptions["coverage_factor"] == 1.0
     assert result.assumptions["empirically_calibrated"] is False
@@ -92,10 +92,10 @@ def test_fully_dependent_main_mode_can_be_requested_for_sensitivity():
     cells = uniform_cells(count=9, area_ha=11.0, sd=1.0)
     independent = compute_interval(cells, year_start=2019, year_end=2024)
     dependent = compute_interval(
-        cells, year_start=2019, year_end=2024, spatial_dependence=FULLY_DEPENDENT_CELLS
+        cells, year_start=2019, year_end=2024, spatial_dependence=FULL_SPATIAL_CORRELATION
     )
     assert dependent.sd_tco2e > independent.sd_tco2e
-    assert dependent.assumptions["spatial_dependence"] == FULLY_DEPENDENT_CELLS
+    assert dependent.assumptions["spatial_dependence"] == FULL_SPATIAL_CORRELATION
 
 
 def test_errors_are_weighted_by_area_not_divided_by_sqrt_n():
@@ -106,7 +106,7 @@ def test_errors_are_weighted_by_area_not_divided_by_sqrt_n():
     assert single.area_ha == pytest.approx(split.area_ha)
     assert split.sd_tco2e == pytest.approx(single.sd_tco2e / math.sqrt(100))
     dependent = compute_interval(
-        many_cells, year_start=2019, year_end=2024, spatial_dependence=FULLY_DEPENDENT_CELLS
+        many_cells, year_start=2019, year_end=2024, spatial_dependence=FULL_SPATIAL_CORRELATION
     )
     assert dependent.sd_tco2e == pytest.approx(single.sd_tco2e)
 

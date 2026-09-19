@@ -62,7 +62,7 @@ def test_changing_any_number_changes_the_hash(sealed):
 def test_a_different_method_assumption_gives_a_different_passport(case):
     _, _, default_analysis, provenance = case("RU_VOLOGDA_02")
     _, _, dependent_analysis, _ = case(
-        "RU_VOLOGDA_02", options=MethodOptions(spatial_dependence="FULLY_DEPENDENT_CELLS")
+        "RU_VOLOGDA_02", options=MethodOptions(spatial_dependence="FULL_SPATIAL_CORRELATION")
     )
     assert (
         build_passport(default_analysis, provenance=provenance).content_hash
@@ -76,7 +76,7 @@ def test_content_carries_the_scientific_record(sealed):
     assert content["format"] == canonical.FORMAT
     assert content["request"]["geometry_hash"] == analysis.geometry_hash
     assert content["request"]["year_start"] == analysis.request.year_start
-    assert content["request"]["pool"] == "AGB"
+    assert content["request"]["pool"] == "AGB_LIVE_WOODY"
     assert content["provenance"]["parameters"]["co2_per_c_exact"] == "44/12"
     assert content["provenance"]["all_checksums_match"] is True
     assert content["interval"]["kind"] == "SCENARIO"

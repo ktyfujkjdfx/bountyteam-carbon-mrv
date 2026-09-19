@@ -68,10 +68,10 @@ def test_the_research_baseline_is_where_an_assumption_decides_the_answer(table):
         if row.request_id == "RU_TVER_01" and row.baseline_variant == BASELINE_FLAT_RESEARCH
     ]
     answers = {(row.spatial_dependence, row.temporal_correlation): row.units for row in tver}
-    assert answers[("INDEPENDENT_CELLS", 0.0)] == 0
-    assert answers[("INDEPENDENT_CELLS", 1.0)] > 0
-    assert answers[("FULLY_DEPENDENT_CELLS", 0.0)] == 0
-    assert answers[("FULLY_DEPENDENT_CELLS", 1.0)] == 0
+    assert answers[("INDEPENDENT_NATIVE_CELLS", 0.0)] == 0
+    assert answers[("INDEPENDENT_NATIVE_CELLS", 1.0)] > 0
+    assert answers[("FULL_SPATIAL_CORRELATION", 0.0)] == 0
+    assert answers[("FULL_SPATIAL_CORRELATION", 1.0)] == 0
 
 
 def test_the_research_baseline_never_produces_a_reported_result(table):
@@ -89,8 +89,8 @@ def test_full_spatial_dependence_widens_the_interval_by_the_square_root_of_the_c
             (row.spatial_dependence, row.temporal_correlation): row
             for row in official(table, request_id)
         }
-        independent = rows[("INDEPENDENT_CELLS", 0.0)]
-        dependent = rows[("FULLY_DEPENDENT_CELLS", 0.0)]
+        independent = rows[("INDEPENDENT_NATIVE_CELLS", 0.0)]
+        dependent = rows[("FULL_SPATIAL_CORRELATION", 0.0)]
         assert dependent.sd_tco2e > independent.sd_tco2e
         # equal-sized cells with similar deviations give roughly sqrt(N)
         assert 1.0 < dependent.sd_tco2e / independent.sd_tco2e < math.sqrt(3400)
@@ -103,7 +103,7 @@ def test_perfect_temporal_correlation_narrows_the_interval(table):
             (row.spatial_dependence, row.temporal_correlation): row
             for row in official(table, request_id)
         }
-        assert rows[("INDEPENDENT_CELLS", 1.0)].sd_tco2e < rows[("INDEPENDENT_CELLS", 0.0)].sd_tco2e
+        assert rows[("INDEPENDENT_NATIVE_CELLS", 1.0)].sd_tco2e < rows[("INDEPENDENT_NATIVE_CELLS", 0.0)].sd_tco2e
 
 
 def test_the_estimate_itself_is_untouched_by_the_interval_assumptions(table):

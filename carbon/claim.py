@@ -1,12 +1,18 @@
 """Comparison of a stated volume with the calculated units.
 
-    gap_units = max(claimed_units − Q, 0)
+    unsupported_gap = max(claimed_units − Q, 0)
     supported_share = min(Q / claimed_units, 1)      only for claimed_units > 0
-    gap_value_p = gap_units × p
+    gap_value_p = unsupported_gap × p
 
 A claim is an input label (USER_INPUT or DEMO_INPUT), never a calculated result, and it
 never changes the stock, the interval, the baseline or Q. The arithmetic status sits next
 to, and does not replace, the evidence status of the analysis.
+
+A claim of zero is `NOT_APPLICABLE` with `reason = NO_POSITIVE_CLAIM`, never
+`SUPPORTED_BY_CASE`. Nothing was stated, so nothing can be supported, and calling an empty
+claim "supported" reads as an endorsement of the project rather than a statement about
+arithmetic. The comparison says what the case rules give; it never says that a violation
+or a deception has been established.
 """
 from __future__ import annotations
 
@@ -49,13 +55,22 @@ class ClaimGapValue:
 class ClaimResult:
     status: str
     mismatch_reasons: tuple[str, ...] = ()
+    reason: str | None = None
     claimed_units: float | None = None
     source: str | None = None
     units: int | None = None
-    gap_units: float | None = None
+    unsupported_gap: float | None = None
     supported_share: float | None = None
     gap_values: tuple[ClaimGapValue, ...] = ()
     notes: tuple[notes.Note, ...] = ()
+
+    @property
+    def comparable(self) -> bool:
+        return self.status in (
+            reasons.CLAIM_SUPPORTED,
+            reasons.CLAIM_PARTIALLY_SUPPORTED,
+            reasons.CLAIM_NOT_SUPPORTED,
+        )
 
 
 def compare_claim(
@@ -103,30 +118,38 @@ def compare_claim(
             notes=(label,),
         )
 
-    gap = max(claimed - units, 0.0)
-    collected = [label, notes.note(notes.CLAIM_GAP_SCENARIO)]
     if claimed == 0.0:
-        share = None
+        # Nothing was claimed, so there is nothing to support. Calling this
+        # SUPPORTED_BY_CASE would read as an endorsement instead of arithmetic.
+        return ClaimResult(
+            status=reasons.CLAIM_NOT_APPLICABLE,
+            reason=reasons.NO_POSITIVE_CLAIM,
+            claimed_units=0.0,
+            source=claim.source,
+            units=units,
+            unsupported_gap=0.0,
+            supported_share=None,
+            notes=(label, notes.note(notes.CLAIM_ZERO)),
+        )
+
+    gap = max(claimed - units, 0.0)
+    share = min(units / claimed, 1.0)
+    if units >= claimed:
         status = reasons.CLAIM_SUPPORTED
-        collected.append(notes.note(notes.CLAIM_ZERO))
+    elif units > 0:
+        status = reasons.CLAIM_PARTIALLY_SUPPORTED
     else:
-        share = min(units / claimed, 1.0)
-        if units >= claimed:
-            status = reasons.CLAIM_SUPPORTED
-        elif units > 0:
-            status = reasons.CLAIM_PARTIALLY_SUPPORTED
-        else:
-            status = reasons.CLAIM_NOT_SUPPORTED
+        status = reasons.CLAIM_NOT_SUPPORTED
 
     return ClaimResult(
         status=status,
         claimed_units=claimed,
         source=claim.source,
         units=units,
-        gap_units=gap,
+        unsupported_gap=gap,
         supported_share=share,
         gap_values=tuple(
             ClaimGapValue(price_rub=price, value_rub=gap * price) for price in parameters.prices_rub
         ),
-        notes=tuple(collected),
+        notes=(label, notes.note(notes.CLAIM_GAP_SCENARIO)),
     )

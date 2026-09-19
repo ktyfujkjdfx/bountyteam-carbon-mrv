@@ -27,7 +27,7 @@ def claim(**overrides) -> ClaimInput:
 def test_absent_claim_is_not_provided():
     result = compare_claim(None, analysis=ANALYSIS, units=500)
     assert result.status == reasons.CLAIM_NOT_PROVIDED
-    assert result.gap_units is None
+    assert result.unsupported_gap is None
     assert result.supported_share is None
     assert result.gap_values == ()
 
@@ -35,7 +35,7 @@ def test_absent_claim_is_not_provided():
 def test_claim_at_or_below_q_is_supported():
     result = compare_claim(claim(claimed_units=400.0), analysis=ANALYSIS, units=500)
     assert result.status == reasons.CLAIM_SUPPORTED
-    assert result.gap_units == 0.0
+    assert result.unsupported_gap == 0.0
     assert result.supported_share == 1.0
     assert [value.value_rub for value in result.gap_values] == [0.0, 0.0, 0.0]
 
@@ -49,7 +49,7 @@ def test_equal_claim_is_supported():
 def test_claim_above_q_is_partially_supported_and_priced_as_a_scenario():
     result = compare_claim(claim(claimed_units=1000.0), analysis=ANALYSIS, units=400)
     assert result.status == reasons.CLAIM_PARTIALLY_SUPPORTED
-    assert result.gap_units == 600.0
+    assert result.unsupported_gap == 600.0
     assert result.supported_share == pytest.approx(0.4)
     assert [value.price_rub for value in result.gap_values] == [500.0, 1500.0, 4000.0]
     assert [value.value_rub for value in result.gap_values] == [
@@ -63,22 +63,38 @@ def test_claim_above_q_is_partially_supported_and_priced_as_a_scenario():
 def test_zero_q_against_a_positive_claim_is_not_supported():
     result = compare_claim(claim(claimed_units=250.0), analysis=ANALYSIS, units=0)
     assert result.status == reasons.CLAIM_NOT_SUPPORTED
-    assert result.gap_units == 250.0
+    assert result.unsupported_gap == 250.0
     assert result.supported_share == 0.0
 
 
-def test_zero_claim_has_no_supported_share():
+def test_a_zero_claim_is_not_applicable_and_never_supported():
+    """Method freeze: nothing was claimed, so nothing can be supported."""
     result = compare_claim(claim(claimed_units=0.0), analysis=ANALYSIS, units=10)
-    assert result.status == reasons.CLAIM_SUPPORTED
-    assert result.gap_units == 0.0
+    assert result.status == reasons.CLAIM_NOT_APPLICABLE
+    assert result.status != reasons.CLAIM_SUPPORTED
+    assert result.reason == reasons.NO_POSITIVE_CLAIM
+    assert result.unsupported_gap == 0.0
     assert result.supported_share is None
+    assert result.comparable is False
+    assert result.gap_values == ()
     assert notes.CLAIM_ZERO in {item.code for item in result.notes}
+
+
+@pytest.mark.parametrize("units", [None, 0, 10])
+def test_a_zero_claim_is_not_applicable_whatever_q_is(units):
+    result = compare_claim(claim(claimed_units=0.0), analysis=ANALYSIS, units=units)
+    if units is None:
+        # Q is unknown, so the claim cannot be assessed at all; that answer comes first.
+        assert result.status == reasons.CLAIM_UNASSESSABLE
+    else:
+        assert result.status == reasons.CLAIM_NOT_APPLICABLE
+        assert result.reason == reasons.NO_POSITIVE_CLAIM
 
 
 def test_null_q_makes_the_claim_unassessable():
     result = compare_claim(claim(), analysis=ANALYSIS, units=None)
     assert result.status == reasons.CLAIM_UNASSESSABLE
-    assert result.gap_units is None
+    assert result.unsupported_gap is None
     assert result.supported_share is None
     assert result.gap_values == ()
 
@@ -88,7 +104,7 @@ def test_unusable_claim_values_are_not_comparable(value):
     result = compare_claim(claim(claimed_units=value), analysis=ANALYSIS, units=500)
     assert result.status == reasons.CLAIM_NOT_COMPARABLE
     assert reasons.INVALID_CLAIM_VALUE in result.mismatch_reasons
-    assert result.gap_units is None
+    assert result.unsupported_gap is None
 
 
 @pytest.mark.parametrize(
@@ -105,7 +121,7 @@ def test_mismatched_claims_are_not_comparable(overrides, expected):
     result = compare_claim(claim(**overrides), analysis=ANALYSIS, units=500)
     assert result.status == reasons.CLAIM_NOT_COMPARABLE
     assert expected in result.mismatch_reasons
-    assert result.gap_units is None
+    assert result.unsupported_gap is None
     assert result.supported_share is None
 
 

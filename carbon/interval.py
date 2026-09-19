@@ -30,9 +30,9 @@ import numpy as np
 from . import notes, reasons
 from .parameters import DEFAULT_PARAMETERS, METHOD_VERSION, CaseParameters
 
-INDEPENDENT_CELLS = "INDEPENDENT_CELLS"
-FULLY_DEPENDENT_CELLS = "FULLY_DEPENDENT_CELLS"
-SPATIAL_MODES = (INDEPENDENT_CELLS, FULLY_DEPENDENT_CELLS)
+INDEPENDENT_NATIVE_CELLS = "INDEPENDENT_NATIVE_CELLS"
+FULL_SPATIAL_CORRELATION = "FULL_SPATIAL_CORRELATION"
+SPATIAL_MODES = (INDEPENDENT_NATIVE_CELLS, FULL_SPATIAL_CORRELATION)
 SENSITIVITY_TEMPORAL_CORRELATIONS = (0.0, 1.0)
 INTERVAL_KIND = "SCENARIO"
 
@@ -122,7 +122,7 @@ def _variant(
     variance = sd_start**2 + sd_end**2 - 2 * temporal_correlation * sd_start * sd_end
     cell_sd = np.sqrt(np.clip(variance, 0.0, None))
     scaled = weights * cell_sd
-    if spatial_dependence == INDEPENDENT_CELLS:
+    if spatial_dependence == INDEPENDENT_NATIVE_CELLS:
         sd_total = float(math.sqrt(float(np.sum(scaled**2))))
     else:
         sd_total = float(np.sum(scaled))
@@ -146,7 +146,7 @@ def compute_interval(
     parameters: CaseParameters = DEFAULT_PARAMETERS,
     temporal_correlation: float = 0.0,
     coverage_factor: float = 1.0,
-    spatial_dependence: str = INDEPENDENT_CELLS,
+    spatial_dependence: str = INDEPENDENT_NATIVE_CELLS,
 ) -> IntervalResult:
     """Stock difference with a scenario interval and its mandatory sensitivity table."""
     if not -1.0 <= temporal_correlation <= 1.0:
