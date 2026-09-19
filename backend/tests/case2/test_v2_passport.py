@@ -87,8 +87,8 @@ def test_the_json_report_carries_exactly_the_result(harness):
 def test_the_json_report_is_byte_stable_across_downloads(harness):
     job = analysed(harness, POSITIVE, "stable-key-000001")
     path = f"/api/v2/analyses/{job['analysis_id']}/report?format=json"
-    first = harness.client.get(path, headers={"X-Demo-Session": SESSION}).content
-    second = harness.client.get(path, headers={"X-Demo-Session": SESSION}).content
+    first = harness.client.get(path, headers=harness.api.headers()).content
+    second = harness.client.get(path, headers=harness.api.headers()).content
     assert first == second
 
 
@@ -96,7 +96,7 @@ def test_the_html_report_is_self_contained(harness):
     job = analysed(harness, POSITIVE, "html-key-00000001")
     response = harness.client.get(
         f"/api/v2/analyses/{job['analysis_id']}/report?format=html",
-        headers={"X-Demo-Session": SESSION})
+        headers=harness.api.headers())
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     html = response.text
@@ -110,7 +110,7 @@ def test_the_html_report_shows_the_numbers_and_the_hash(harness):
     job = analysed(harness, POSITIVE, "htmlnum-key-00001")
     html = harness.client.get(
         f"/api/v2/analyses/{job['analysis_id']}/report?format=html",
-        headers={"X-Demo-Session": SESSION}).text
+        headers=harness.api.headers()).text
     result = job["result"]
     assert str(result["units"]["q"]) in html
     assert result["passport"]["content_hash"] in html
@@ -122,7 +122,7 @@ def test_the_html_report_states_the_fixture_label(harness):
     job = analysed(harness, POSITIVE, "htmlfix-key-00001")
     html = harness.client.get(
         f"/api/v2/analyses/{job['analysis_id']}/report?format=html",
-        headers={"X-Demo-Session": SESSION}).text
+        headers=harness.api.headers()).text
     assert job["result"]["fixture"]["label"] in html
     assert "UNIT_TEST_VECTOR" in html
 
@@ -132,7 +132,7 @@ def test_an_absent_number_is_explained_rather_than_shown_as_zero(harness):
                    "htmlnull-key-0001")
     html = harness.client.get(
         f"/api/v2/analyses/{job['analysis_id']}/report?format=html",
-        headers={"X-Demo-Session": SESSION}).text
+        headers=harness.api.headers()).text
     assert "не рассчитаны" in html
     assert "Сценарная стоимость не рассчитывается" in html
 
@@ -145,7 +145,7 @@ def test_an_unknown_report_format_is_refused(harness):
     job = analysed(harness, POSITIVE, "format-key-000001")
     response = harness.client.get(
         f"/api/v2/analyses/{job['analysis_id']}/report?format=pdf",
-        headers={"X-Demo-Session": SESSION})
+        headers=harness.api.headers())
     assert response.status_code == 422
 
 

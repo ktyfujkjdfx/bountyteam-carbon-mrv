@@ -23,7 +23,7 @@ def test_routes_exactly_match_the_v2_document():
 
 
 def test_v2_document_is_served_as_the_contract(harness):
-    response = harness.client.get("/api/v2/openapi.json", headers={"X-Demo-Session": SESSION})
+    response = harness.client.get("/api/v2/openapi.json", headers=harness.api.headers())
     assert response.status_code == 200
     assert response.json() == openapi_v2_document()
 
@@ -82,7 +82,7 @@ def test_reads_require_the_demo_session(harness, path):
 
 
 def test_a_wrong_session_is_not_a_hint(harness):
-    response = harness.client.get("/api/v2/catalog", headers={"X-Demo-Session": "wrong-token"})
+    response = harness.client.get("/api/v2/catalog", headers={"Authorization": "Bearer wrong-token"})
     assert response.status_code == 401
     assert "wrong-token" not in response.text
 
@@ -90,12 +90,12 @@ def test_a_wrong_session_is_not_a_hint(harness):
 def test_the_mutation_needs_a_key_and_takes_its_caller_from_the_session(harness):
     """A role a client can set is not an authorization, so no such header is read."""
     accepted = harness.client.post("/api/v2/analyses", json=GOOD,
-                                   headers={"X-Demo-Session": SESSION,
+                                   headers={**harness.api.headers(),
                                             "Idempotency-Key": "no-actor-key-1"})
     assert accepted.status_code == 202
 
     without_key = harness.client.post("/api/v2/analyses", json=GOOD,
-                                      headers={"X-Demo-Session": SESSION})
+                                      headers=harness.api.headers())
     assert without_key.status_code == 422
     assert without_key.json()["error"]["code"] == "VALIDATION_ERROR"
 
@@ -107,7 +107,7 @@ def test_a_short_key_is_refused(harness):
 
 
 def test_every_response_carries_the_hardening_headers(harness):
-    response = harness.client.get("/api/v2/catalog", headers={"X-Demo-Session": SESSION})
+    response = harness.client.get("/api/v2/catalog", headers=harness.api.headers())
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["Referrer-Policy"] == "no-referrer"
     assert response.headers["Cache-Control"] == "no-store"
@@ -226,7 +226,7 @@ def test_a_malformed_analysis_id_is_422_not_a_lookup(harness):
 
 
 def test_an_unknown_route_under_v2_is_404_in_the_envelope(harness):
-    response = harness.client.get("/api/v2/nothing-here", headers={"X-Demo-Session": SESSION})
+    response = harness.client.get("/api/v2/nothing-here", headers=harness.api.headers())
     assert response.status_code == 404
     assert_model(response.json(), "Error")
 
@@ -240,7 +240,7 @@ def test_errors_carry_no_stack_trace_or_local_path(harness):
 
 def test_cors_is_off_unless_an_origin_is_configured(harness, tmp_path):
     response = harness.client.get("/api/v2/catalog",
-                                  headers={"X-Demo-Session": SESSION,
+                                  headers={**harness.api.headers(),
                                            "Origin": "https://evil.example"})
     assert "access-control-allow-origin" not in {k.lower() for k in response.headers}
 
@@ -250,11 +250,11 @@ def test_cors_allows_only_the_configured_origin(tmp_path):
 
     harness = Harness(tmp_path, cors_origins=("http://127.0.0.1:4173",))
     allowed = harness.client.get("/api/v2/catalog",
-                                 headers={"X-Demo-Session": SESSION,
+                                 headers={**harness.api.headers(),
                                           "Origin": "http://127.0.0.1:4173"})
     assert allowed.headers["access-control-allow-origin"] == "http://127.0.0.1:4173"
     refused = harness.client.get("/api/v2/catalog",
-                                 headers={"X-Demo-Session": SESSION,
+                                 headers={**harness.api.headers(),
                                           "Origin": "https://evil.example"})
     assert "access-control-allow-origin" not in {k.lower() for k in refused.headers}
 
@@ -262,7 +262,7 @@ def test_cors_allows_only_the_configured_origin(tmp_path):
 # -- measuring a contour before anything is queued ----------------------------------------
 def _measure(harness, geometry, *, status: int = 200):
     response = harness.client.post("/api/v2/areas/measure", json={"geometry": geometry},
-                                   headers={"X-Demo-Session": SESSION})
+                                   headers=harness.api.headers())
     assert response.status_code == status, response.text
     body = response.json()
     assert_model(body, "AreaMeasurement" if status == 200 else "Error")

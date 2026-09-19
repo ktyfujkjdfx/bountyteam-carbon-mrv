@@ -11,7 +11,6 @@ in a threadpool and SQLite never blocks the event loop.
 from __future__ import annotations
 
 import copy
-import hmac
 import logging
 import re
 import uuid
@@ -26,8 +25,8 @@ from starlette.applications import Starlette
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.routing import Mount
 
-from ..errors import ApiError, error_body, invalid, unauthorized
-from . import service
+from ..errors import ApiError, error_body, invalid
+from . import auth, service
 from .contracts import ContractViolation, openapi_v2_document
 from .service import LensContext
 
@@ -53,6 +52,11 @@ class ClaimScopeBody(_Strict):
     unit: str
 
 
+class LoginBody(_Strict):
+    username: str
+    password: str
+
+
 class AreaMeasureBody(_Strict):
     geometry: dict[str, Any]
 
@@ -72,25 +76,20 @@ def _lens(request: Request) -> LensContext:
     return request.app.state.lens
 
 
-def require_session(request: Request, x_demo_session: Annotated[str | None, Header()] = None):
-    expected = request.app.state.lens.app.settings.demo_session
-    if not x_demo_session or not hmac.compare_digest(x_demo_session.encode(), expected.encode()):
-        raise unauthorized()
+def bearer_token(authorization: Annotated[str | None, Header()] = None) -> str | None:
+    """The opaque session token, or nothing. The scheme name is not case sensitive."""
+    if not authorization:
+        return None
+    scheme, _, value = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not value.strip():
+        return None
+    return value.strip()
 
 
-def caller(request: Request, x_demo_session: Annotated[str | None, Header()] = None) -> str:
-    """Who is acting, derived from the session rather than announced by the client.
-
-    A role in a header the caller can set is not an authorization, so there is none. The
-    identity is a stable digest of the session token: it survives restarts, it scopes
-    idempotency and the audit log, and it never puts the token itself into either.
-    """
-    from ..contracts import sha256_hex
-
-    token = (x_demo_session or "").encode()
-    if not token:
-        raise unauthorized()
-    return "session:" + sha256_hex(token)[2:18]
+def principal(request: Request,
+              authorization: Annotated[str | None, Header()] = None) -> auth.Principal:
+    """Who is acting. Read from the session row, never from anything the client names."""
+    return auth.resolve(request.app.state.lens.app, bearer_token(authorization))
 
 
 def require_idempotency_key(idempotency_key: Annotated[str | None, Header()] = None) -> str:
@@ -106,52 +105,75 @@ def _uuid(value: str) -> str:
 
 
 Lens = Annotated[LensContext, Depends(_lens)]
-Caller = Annotated[str, Depends(caller)]
+Who = Annotated[auth.Principal, Depends(principal)]
+Token = Annotated[str | None, Depends(bearer_token)]
 KeyHeader = Annotated[str, Depends(require_idempotency_key)]
 
-router = APIRouter(dependencies=[Depends(require_session)])
+router = APIRouter()
 
 
+# -- signing in ------------------------------------------------------------------------
+@router.post("/auth/login")
+def login(lens: Lens, body: LoginBody):
+    return auth.login(lens.app, username=body.username, password=body.password)
+
+
+@router.get("/auth/me")
+def whoami(who: Who):
+    return who.public
+
+
+@router.post("/auth/logout")
+def logout(lens: Lens, token: Token, who: Who):
+    auth.audit(lens.app, who.user_id, who.role, "LOGOUT", who.user_id)
+    return auth.logout(lens.app, token)
+
+
+# -- the work --------------------------------------------------------------------------
 @router.get("/catalog")
-def get_catalog(lens: Lens):
+def get_catalog(lens: Lens, who: Who):
+    auth.require(who, "catalog.read")
     return service.catalog_view(lens)
 
 
 @router.post("/areas/measure")
-def measure_area(lens: Lens, body: AreaMeasureBody):
+def measure_area(lens: Lens, who: Who, body: AreaMeasureBody):
+    auth.require(who, "area.measure")
     return service.measure_area(lens, body.model_dump())
 
 
 @router.post("/analyses", status_code=202)
-def create_analysis(lens: Lens, body: AnalysisRequestBody, actor: Caller, key: KeyHeader):
-    return service.submit(lens, actor=actor, key=key,
+def create_analysis(lens: Lens, who: Who, body: AnalysisRequestBody, key: KeyHeader):
+    auth.require(who, "analysis.create")
+    return service.submit(lens, who=who, key=key,
                           body=body.model_dump(exclude_unset=False))
 
 
 @router.get("/analyses/{analysis_id}")
-def get_analysis(lens: Lens, analysis_id: AnalysisId):
-    return service.analysis_view(lens, _uuid(analysis_id))
+def get_analysis(lens: Lens, who: Who, analysis_id: AnalysisId):
+    return service.analysis_view(lens, _uuid(analysis_id), who=who)
 
 
 @router.get("/analyses/{analysis_id}/artifacts/{artifact_id}")
-def get_artifact(lens: Lens, analysis_id: AnalysisId, artifact_id: ArtifactId):
-    data, media_type = service.artifact_bytes(lens, _uuid(analysis_id), artifact_id)
+def get_artifact(lens: Lens, who: Who, analysis_id: AnalysisId, artifact_id: ArtifactId):
+    data, media_type = service.artifact_bytes(lens, _uuid(analysis_id), artifact_id,
+                                              who=who)
     return Response(data, media_type=media_type)
 
 
 @router.get("/analyses/{analysis_id}/report")
-def get_report(lens: Lens, analysis_id: AnalysisId,
+def get_report(lens: Lens, who: Who, analysis_id: AnalysisId,
                format: Annotated[Literal["json", "html"], Query()] = "json"):
     identifier = _uuid(analysis_id)
     if format == "html":
-        return Response(service.report_html(lens, identifier),
+        return Response(service.report_html(lens, identifier, who=who),
                         media_type="text/html; charset=utf-8")
-    return service.report_view(lens, identifier)
+    return service.report_view(lens, identifier, who=who)
 
 
 @router.get("/analyses/{analysis_id}/proof")
-def get_proof(lens: Lens, analysis_id: AnalysisId):
-    return service.proof_view(lens, _uuid(analysis_id))
+def get_proof(lens: Lens, who: Who, analysis_id: AnalysisId):
+    return service.proof_view(lens, _uuid(analysis_id), who=who)
 
 
 def frozen_openapi_v2() -> dict:
@@ -232,7 +254,8 @@ def create_lens_app(lens: LensContext) -> FastAPI:
     if origins:
         app.add_middleware(CORSMiddleware, allow_origins=list(origins), allow_credentials=False,
                            allow_methods=["GET", "POST"],
-                           allow_headers=["Content-Type", "Idempotency-Key", "X-Demo-Session"],
+                           allow_headers=["Content-Type", "Idempotency-Key",
+                                          "Authorization"],
                            expose_headers=["X-Request-ID"])
     app.include_router(router)
     return app

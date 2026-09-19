@@ -24,7 +24,7 @@ from ..contracts import digest
 from ..db import utc_now
 from ..errors import ApiError, invalid, not_found
 from ..operations import idempotent
-from . import assemble, catalog, geometry
+from . import assemble, auth as lens_auth, catalog, geometry
 from .adapters import build_ports
 from .adapters.carbon import POOL, CarbonEngineUnavailable
 from .adapters.raster import RasterCoreUnavailable
@@ -169,10 +169,11 @@ def measure_area(lens: LensContext, body: dict) -> dict:
     return validate(api_validator("AreaMeasurement"), measurement, "AreaMeasurement")
 
 
-def submit(lens: LensContext, *, actor: str, key: str, body: dict) -> dict:
+def submit(lens: LensContext, *, who: Any, key: str, body: dict) -> dict:
     """Queue an analysis. The same key with the same request replays the stored 202."""
     resolved = resolve(body)
     analysis_id = new_id()
+    actor = who.user_id
     scope = scope_key(geometry_hash=resolved.geometry_hash, year_start=resolved.year_start,
                       year_end=resolved.year_end, pool=POOL,
                       method_version=BACKEND_METHOD_VERSION)
@@ -191,6 +192,9 @@ def submit(lens: LensContext, *, actor: str, key: str, body: dict) -> dict:
                 year_start=resolved.year_start, year_end=resolved.year_end, scope=scope)
             audit(conn, "LENS_ANALYSIS_QUEUED", analysis_id, actor=actor,
                   geometry_hash=resolved.geometry_hash, input_hash=resolved.input_hash)
+            lens_auth.audit(lens.app, who.user_id, who.role, "ANALYSIS_CREATED",
+                            accepted["analysis_id"], conn=conn,
+                            geometry_hash=resolved.geometry_hash)
             return {"analysis_id": accepted["analysis_id"], "job_state": "QUEUED",
                     "status_url": f"/api/v2/analyses/{accepted['analysis_id']}",
                     "created_at": accepted["created_at"]}
@@ -355,10 +359,34 @@ def _public_id(record: dict, analysis_id: str) -> str:
 
 
 # -- reads -----------------------------------------------------------------------------
-def analysis_view(lens: LensContext, analysis_id: str) -> dict:
+def _readable(lens: LensContext, analysis_id: str, who: Any):
+    """The analysis row, once the signed-in person is allowed to see it.
+
+    A person who may not read an analysis is told 404 rather than 403, so that probing
+    identifiers cannot be used to learn which ones exist.
+    """
+    row = lens.store.require(analysis_id)
+    if who is None:
+        return row
+    if not lens_auth.may_read_analysis(who, owner_id=row["actor"],
+                                       finalized=_is_finalized(row)):
+        raise not_found("Analysis")
+    return row
+
+
+def _is_finalized(row: Any) -> bool:
     from ..contracts import loads_json
 
-    row = lens.store.require(analysis_id)
+    if not row["result_json"]:
+        return False
+    result = loads_json(row["result_json"])
+    return result.get("passport", {}).get("status") == "FINALIZED"
+
+
+def analysis_view(lens: LensContext, analysis_id: str, *, who: Any = None) -> dict:
+    from ..contracts import loads_json
+
+    row = _readable(lens, analysis_id, who)
     ready = row["job_state"] == "SUCCEEDED"
     view = {
         "analysis_id": row["analysis_id"],
@@ -375,23 +403,28 @@ def analysis_view(lens: LensContext, analysis_id: str) -> dict:
     return validate(api_validator("Analysis"), view, "Analysis")
 
 
-def report_view(lens: LensContext, analysis_id: str) -> dict:
-    lens.store.require(analysis_id)
+def _report(lens: LensContext, analysis_id: str, who: Any):
+    row = _readable(lens, analysis_id, who)
     stored = lens.store.report(analysis_id)
     if stored is None:
         raise not_found("Report")
-    return validate(api_validator("Report"), stored[0], "Report")
+    if who is not None:
+        lens_auth.require(who, "report.read.final" if _is_finalized(row)
+                          else "report.read.draft")
+        lens_auth.audit(lens.app, who.user_id, who.role, "REPORT_DOWNLOADED", analysis_id)
+    return stored
 
 
-def report_html(lens: LensContext, analysis_id: str) -> bytes:
-    lens.store.require(analysis_id)
-    stored = lens.store.report(analysis_id)
-    if stored is None:
-        raise not_found("Report")
-    return stored[1]
+def report_view(lens: LensContext, analysis_id: str, *, who: Any = None) -> dict:
+    return validate(api_validator("Report"), _report(lens, analysis_id, who)[0], "Report")
 
 
-def proof_view(lens: LensContext, analysis_id: str) -> dict:
+def report_html(lens: LensContext, analysis_id: str, *, who: Any = None) -> bytes:
+    return _report(lens, analysis_id, who)[1]
+
+
+def proof_view(lens: LensContext, analysis_id: str, *, who: Any = None) -> dict:
+    _readable(lens, analysis_id, who)
     result = lens.store.result(analysis_id)
     if result is None:
         raise not_found("Result")
@@ -426,6 +459,11 @@ def catalog_view(lens: LensContext) -> dict:
     return validate(api_validator("Catalog"), document, "Catalog")
 
 
-def artifact_bytes(lens: LensContext, analysis_id: str, artifact_id: str) -> tuple[bytes, str]:
-    lens.store.require(analysis_id)
-    return lens.store.artifact(analysis_id, artifact_id)
+def artifact_bytes(lens: LensContext, analysis_id: str, artifact_id: str, *,
+                   who: Any = None) -> tuple[bytes, str]:
+    _readable(lens, analysis_id, who)
+    data = lens.store.artifact(analysis_id, artifact_id)
+    if who is not None:
+        lens_auth.audit(lens.app, who.user_id, who.role, "ARTIFACT_DOWNLOADED",
+                        analysis_id, artifact_id=artifact_id)
+    return data

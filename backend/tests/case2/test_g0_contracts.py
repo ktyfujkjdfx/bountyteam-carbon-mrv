@@ -64,6 +64,9 @@ def test_openapi_v2_describes_exactly_the_agreed_routes():
     document = v2.openapi_v2_document()
     assert document["openapi"].startswith("3.1")
     assert {(path, method) for path, item in document["paths"].items() for method in item} == {
+        ("/auth/login", "post"),
+        ("/auth/me", "get"),
+        ("/auth/logout", "post"),
         ("/catalog", "get"),
         ("/areas/measure", "post"),
         ("/analyses", "post"),
@@ -81,8 +84,13 @@ def test_openapi_v2_documents_the_agreed_failure_codes():
             codes = set(operation["responses"])
             assert "401" in codes, f"{method} {path} does not document 401"
             assert "503" in codes, f"{method} {path} does not document 503"
-            if path != "/catalog":
-                assert "422" in codes, f"{method} {path} does not document 422"
+            # A route with a body or a path parameter can be sent a malformed one.
+            if "{" in path or method == "post":
+                if path not in ("/auth/logout",):
+                    assert "422" in codes, f"{method} {path} does not document 422"
+            # Anything that touches the work can be refused by role; signing in cannot.
+            if not path.startswith("/auth/"):
+                assert "403" in codes, f"{method} {path} does not document 403"
             if "{analysis_id}" in path:
                 assert "404" in codes, f"{method} {path} does not document 404"
     assert "409" in document["paths"]["/analyses"]["post"]["responses"]

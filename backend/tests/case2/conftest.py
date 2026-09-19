@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from backend.app.config import Settings
 from backend.app.context import create_context
 from backend.app.main import create_app
+from backend.app.v2 import auth as auth_module
 from backend.app.v2 import catalog
 from backend.app.v2.api import compose, create_lens_app
 from backend.app.v2.contracts import api_validator, schema_errors
@@ -23,9 +24,19 @@ from backend.app.v2.service import create_lens_context
 from backend.app.v2.worker import LensWorker
 
 SESSION = "test-demo-session-000000"
-# There is no client-supplied role header any more: the caller is derived from the
-# session. This value is only used to prove that such a header changes nothing.
+# There is no client-supplied role header any more: the role is server state, read from
+# the session row. This value is only used to prove that such a header changes nothing.
 ACTOR = "issuer"
+
+# The three demo sign-ins the suite creates. Passwords exist only in this file and in the
+# database as scrypt hashes; nothing here resembles a deployment secret.
+PASSWORD = "test-password-1234"
+# The production scrypt cost is deliberately expensive, which makes a suite that signs in
+# for every test unbearably slow. The cost is lowered here and nowhere else;
+# `test_the_production_password_cost_is_not_what_the_suite_runs_at` pins the real one.
+auth_module.SCRYPT_N = 1 << 8
+ACCOUNTS = {"owner": "PROJECT_OWNER", "verifier": "VERIFIER", "investor": "INVESTOR"}
+DEFAULT_ROLE = "VERIFIER"
 TVER = "RU_TVER_01"
 MORDOVIA = "RU_MORDOVIA_03"
 
@@ -75,14 +86,16 @@ def make_settings(tmp_path: Path, **overrides) -> Settings:
 class LensApi:
     """Every JSON response is checked against the published model before a test sees it."""
 
-    def __init__(self, client: TestClient):
+    def __init__(self, client: TestClient, tokens: dict[str, str] | None = None):
         self.client = client
+        self.tokens = tokens or {}
 
     def headers(self, *, actor: str | None = None, key: str | None = None,
-                session: str | None = SESSION) -> dict:
+                session: str | None = SESSION, role: str | None = None) -> dict:
+        """Authorization from a real sign-in. `session=None` means send none at all."""
         headers = {}
         if session is not None:
-            headers["X-Demo-Session"] = session
+            headers["Authorization"] = "Bearer " + self.tokens[role or DEFAULT_ROLE]
         if actor:
             # Deliberately still sent by some tests: an ignored header must stay ignored.
             headers["X-Demo-Actor"] = actor
@@ -91,9 +104,9 @@ class LensApi:
         return headers
 
     def get(self, path: str, model: str | None = None, *, status: int = 200,
-            session: str | None = SESSION, **kwargs):
-        response = self.client.get("/api/v2" + path, headers=self.headers(session=session),
-                                   **kwargs)
+            session: str | None = SESSION, role: str | None = None, **kwargs):
+        response = self.client.get(
+            "/api/v2" + path, headers=self.headers(session=session, role=role), **kwargs)
         assert response.status_code == status, response.text
         if model is None:
             return response
@@ -102,9 +115,11 @@ class LensApi:
         return body
 
     def post(self, path: str, body: dict, *, actor: str | None = None, key: str,
-             status: int = 202, session: str | None = SESSION, model: str = "AnalysisAccepted"):
-        response = self.client.post("/api/v2" + path, json=body,
-                                    headers=self.headers(actor=actor, key=key, session=session))
+             status: int = 202, session: str | None = SESSION, role: str | None = None,
+             model: str = "AnalysisAccepted"):
+        response = self.client.post(
+            "/api/v2" + path, json=body,
+            headers=self.headers(actor=actor, key=key, session=session, role=role))
         assert response.status_code == status, response.text
         payload = response.json()
         assert_model(payload, model if status == 202 else "Error")
@@ -122,8 +137,37 @@ class Harness:
         self.lens = create_lens_context(self.ctx, **engine_override())
         self.app = compose(create_app(ctx=self.ctx), create_lens_app(self.lens))
         self.client = TestClient(self.app)
-        self.api = LensApi(self.client)
+        self.users = self._accounts()
+        self.api = LensApi(self.client, self._sign_in())
         self.worker = LensWorker(self.lens, worker_id="test-lens-worker")
+
+    def _accounts(self) -> dict:
+        """One account per role, created once and reused across a restart."""
+        from backend.app.v2 import auth
+
+        existing = {row["role"]: row for row in auth.audit_trail(self.ctx, limit=0)}
+        del existing
+        out = {}
+        with self.ctx.db.reader() as conn:
+            known = {row["role"]: dict(row) for row in conn.execute(
+                "SELECT user_id, username, display_name, role FROM lens_users").fetchall()}
+        for username, role in ACCOUNTS.items():
+            if role in known:
+                out[role] = known[role]
+                continue
+            principal = auth.create_user(self.ctx, username=username, password=PASSWORD,
+                                         role=role)
+            out[role] = principal.public
+        return out
+
+    def _sign_in(self) -> dict[str, str]:
+        tokens = {}
+        for username, role in ACCOUNTS.items():
+            response = self.client.post("/api/v2/auth/login",
+                                        json={"username": username, "password": PASSWORD})
+            assert response.status_code == 200, response.text
+            tokens[role] = response.json()["token"]
+        return tokens
 
     def restart(self) -> "Harness":
         """A process restart over the same database and artifact store."""
@@ -137,13 +181,15 @@ class Harness:
         for _ in range(passes):
             assert self.worker.tick()
 
-    def submit(self, body: dict, *, key: str, actor: str | None = None) -> str:
-        return self.api.post("/analyses", body, key=key, actor=actor)["analysis_id"]
+    def submit(self, body: dict, *, key: str, actor: str | None = None,
+               role: str | None = None) -> str:
+        return self.api.post("/analyses", body, key=key, actor=actor,
+                             role=role)["analysis_id"]
 
-    def analyse(self, body: dict, *, key: str) -> dict:
-        analysis_id = self.submit(body, key=key)
+    def analyse(self, body: dict, *, key: str, role: str | None = None) -> dict:
+        analysis_id = self.submit(body, key=key, role=role)
         self.run()
-        return self.api.get(f"/analyses/{analysis_id}", "Analysis")
+        return self.api.get(f"/analyses/{analysis_id}", "Analysis", role=role)
 
     def counted(self, table: str, where: str = "1=1", params: tuple = ()) -> int:
         with self.ctx.db.reader() as conn:

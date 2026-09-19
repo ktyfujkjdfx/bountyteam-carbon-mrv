@@ -27,11 +27,92 @@ servers:
   - url: http://127.0.0.1:8000/api/v2
     description: Local demo backend
 tags:
+  - name: auth
   - name: catalog
   - name: areas
   - name: analyses
 
 paths:
+  /auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Exchange a username and a password for an opaque session token
+      description: |
+        The token is cryptographically random, is stored on the server only as a
+        hash, and is not derived from anything present in a client build. It goes
+        back in the response body, not in a cookie, so the client can keep it in
+        memory and it is never replayed by the browser on its own.
+
+        A wrong username and a wrong password give the same 401 with the same
+        message, because telling them apart tells an attacker which usernames
+        exist. Repeated failures for one username are rate limited with 429.
+
+        There is no refresh token and no silent restoration. A reload signs the
+        person in again; the alternative would be a secret that survives the
+        page, which is the thing this design is avoiding.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: 'api-models.v2.schema.json#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: A session
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/Session'
+        '401': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '429': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /auth/me:
+    get:
+      tags: [auth]
+      operationId: whoAmI
+      summary: The signed-in person and the role the server holds for them
+      parameters:
+        - $ref: '#/components/parameters/Session'
+      responses:
+        '200':
+          description: The signed-in person
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/User'
+        '401': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Revoke this session immediately
+      description: |
+        Needs the session it is revoking, so that the sign-out can be recorded
+        against the person who performed it. The token cannot be used again
+        afterwards, which means a second call with the same token is 401: the
+        session it names no longer exists. A client that has already been
+        signed out has nothing left to do.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+      responses:
+        '200':
+          description: The session is revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  revoked: {type: boolean}
+                required: [revoked]
+                additionalProperties: false
+        '401': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
   /catalog:
     get:
       tags: [catalog]
@@ -47,6 +128,7 @@ paths:
               schema:
                 $ref: 'api-models.v2.schema.json#/components/schemas/Catalog'
         '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
         '503': {$ref: '#/components/responses/Failure'}
 
   /areas/measure:
@@ -80,6 +162,7 @@ paths:
               schema:
                 $ref: 'api-models.v2.schema.json#/components/schemas/AreaMeasurement'
         '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
         '422': {$ref: '#/components/responses/Failure'}
         '503': {$ref: '#/components/responses/Failure'}
 
@@ -118,6 +201,7 @@ paths:
               schema:
                 $ref: 'api-models.v2.schema.json#/components/schemas/AnalysisAccepted'
         '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
         '409': {$ref: '#/components/responses/Failure'}
         '422': {$ref: '#/components/responses/Failure'}
         '503': {$ref: '#/components/responses/Failure'}
@@ -138,6 +222,7 @@ paths:
               schema:
                 $ref: 'api-models.v2.schema.json#/components/schemas/Analysis'
         '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
         '404': {$ref: '#/components/responses/Failure'}
         '422': {$ref: '#/components/responses/Failure'}
         '503': {$ref: '#/components/responses/Failure'}
@@ -165,6 +250,7 @@ paths:
                 type: string
                 format: binary
         '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
         '404': {$ref: '#/components/responses/Failure'}
         '422': {$ref: '#/components/responses/Failure'}
         '503': {$ref: '#/components/responses/Failure'}
@@ -199,6 +285,7 @@ paths:
               schema:
                 type: string
         '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
         '404': {$ref: '#/components/responses/Failure'}
         '422': {$ref: '#/components/responses/Failure'}
         '503': {$ref: '#/components/responses/Failure'}
@@ -224,6 +311,7 @@ paths:
               schema:
                 $ref: 'api-models.v2.schema.json#/components/schemas/Proof'
         '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
         '404': {$ref: '#/components/responses/Failure'}
         '422': {$ref: '#/components/responses/Failure'}
         '503': {$ref: '#/components/responses/Failure'}
@@ -231,16 +319,19 @@ paths:
 components:
   parameters:
     Session:
-      name: X-Demo-Session
+      name: Authorization
       in: header
       required: true
       schema:
         type: string
+        pattern: '^Bearer .+$'
       description: |
-        Demo session token. Never baked into a browser bundle. The caller
-        identity used for idempotency and for the audit log is derived from
-        this session; there is no client-supplied role header, because a header
-        a client can set is not an authorization.
+        `Bearer <token>` from POST /auth/login. The token is opaque, is held in
+        client memory, and is never baked into a browser bundle. The caller
+        identity and the role used for every permission check, for idempotency
+        and for the audit log come from this session; there is no
+        client-supplied role header, because a header a client can set is not
+        an authorization.
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -267,10 +358,12 @@ components:
   responses:
     Failure:
       description: |
-        Error envelope. 401 unauthenticated; 404 unknown analysis or artifact;
-        409 idempotency conflict; 422 invalid geometry, period or claim;
+        Error envelope. 401 unauthenticated; 403 the role may not do this;
+        404 unknown analysis or artifact; 409 idempotency conflict; 422 invalid
+        geometry, period or claim; 429 too many failed sign-in attempts;
         503 source unavailable or artifact integrity failure. The body never
-        carries a stack trace, a secret or a local filesystem path.
+        carries a stack trace, a secret, a session token or a local filesystem
+        path.
       content:
         application/json:
           schema:

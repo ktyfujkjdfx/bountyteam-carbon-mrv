@@ -37,6 +37,11 @@ def main(argv=None) -> int:
         from .app.v2.service import create_lens_context
         from .app.v2.worker import start_worker_thread
 
+        from .app.v2.auth import seed_demo_users
+
+        if settings.lens_demo_accounts:
+            seed_demo_users(ctx, {username: (role, password)
+                                  for username, role, password in settings.lens_demo_accounts})
         try:
             lens = create_lens_context(ctx)
         except EnginesUnavailable as exc:

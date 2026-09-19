@@ -61,6 +61,43 @@
         "required": ["code", "message"],
         "additionalProperties": false
       },
+      "Role": {
+        "type": "string",
+        "enum": ["PROJECT_OWNER", "VERIFIER", "INVESTOR"],
+        "description": "What the signed-in person may do. Held on the server and never taken from a request header: a role a client can set is not an authorization."
+      },
+      "User": {
+        "type": "object",
+        "description": "The signed-in person. Carries no password material and no session token.",
+        "properties": {
+          "user_id": {"$ref": "#/components/schemas/Id"},
+          "username": {"type": "string"},
+          "display_name": {"type": "string"},
+          "role": {"$ref": "#/components/schemas/Role"}
+        },
+        "required": ["user_id", "username", "display_name", "role"],
+        "additionalProperties": false
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "username": {"type": "string", "minLength": 1, "maxLength": 64},
+          "password": {"type": "string", "minLength": 1, "maxLength": 256}
+        },
+        "required": ["username", "password"],
+        "additionalProperties": false
+      },
+      "Session": {
+        "type": "object",
+        "description": "An opaque session token and who it belongs to. The token is random, stored only as a hash, and is not derivable from anything in a build.",
+        "properties": {
+          "token": {"type": "string", "minLength": 32},
+          "expires_at": {"$ref": "#/components/schemas/Timestamp"},
+          "user": {"$ref": "#/components/schemas/User"}
+        },
+        "required": ["token", "expires_at", "user"],
+        "additionalProperties": false
+      },
       "JobState": {
         "type": "string",
         "enum": ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED"],

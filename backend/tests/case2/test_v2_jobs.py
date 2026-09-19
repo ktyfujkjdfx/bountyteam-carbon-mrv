@@ -201,7 +201,7 @@ def test_an_analysis_serves_only_its_own_manifest_files(harness):
     artifact = artifacts[0]
     assert artifact["url"] == (f"/api/v2/analyses/{job['analysis_id']}"
                                f"/artifacts/{artifact['artifact_id']}")
-    response = harness.client.get(artifact["url"], headers={"X-Demo-Session": SESSION})
+    response = harness.client.get(artifact["url"], headers=harness.api.headers())
     assert response.status_code == 200
     assert response.headers["content-type"].startswith(artifact["media_type"])
     assert len(response.content) == artifact["size_bytes"]
@@ -224,7 +224,7 @@ def test_a_path_traversal_artifact_id_never_reaches_the_filesystem(harness):
     for candidate in ("..%2f..%2fetc%2fpasswd", "....//etc/passwd"):
         response = harness.client.get(
             f"/api/v2/analyses/{job['analysis_id']}/artifacts/{candidate}",
-            headers={"X-Demo-Session": SESSION})
+            headers=harness.api.headers())
         assert response.status_code in (404, 422), candidate
         assert b"root:" not in response.content
 
@@ -236,7 +236,7 @@ def test_a_tampered_artifact_is_refused_rather_than_served(harness):
     path = harness.lens.store.artifact_root / rows[0]["storage_name"]
     path.write_bytes(path.read_bytes() + b"tampered")
 
-    response = harness.client.get(artifact["url"], headers={"X-Demo-Session": SESSION})
+    response = harness.client.get(artifact["url"], headers=harness.api.headers())
     assert response.status_code == 503
     assert_model(response.json(), "Error")
     assert response.json()["error"]["code"] == "ARTIFACT_INTEGRITY_FAILED"
@@ -248,7 +248,7 @@ def test_a_missing_artifact_file_is_503_not_a_silent_empty_body(harness):
     rows = harness.lens.store.artifact_rows(job["analysis_id"])
     (harness.lens.store.artifact_root / rows[0]["storage_name"]).unlink()
 
-    response = harness.client.get(artifact["url"], headers={"X-Demo-Session": SESSION})
+    response = harness.client.get(artifact["url"], headers=harness.api.headers())
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "ARTIFACT_UNAVAILABLE"
 

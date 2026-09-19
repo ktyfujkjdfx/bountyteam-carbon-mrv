@@ -24,12 +24,59 @@ GET  /api/v2/analyses/{analysis_id}/report?format=json|html
 GET  /api/v2/analyses/{analysis_id}/proof
 ```
 
-`X-Demo-Session` on every route; `Idempotency-Key` additionally on the one mutation. Path
-identifiers are opaque and must not be parsed.
+```
+POST /api/v2/auth/login                                 -> 200 {token, expires_at, user}
+GET  /api/v2/auth/me
+POST /api/v2/auth/logout
+```
 
-**There is no `X-Demo-Actor` header.** A role a client can set is not an authorization, so
-the caller is derived from the authenticated session and nothing else. Anyone who was
-sending that header should stop; it is ignored.
+`Authorization: Bearer <token>` on every route except `/auth/login`;
+`Idempotency-Key` additionally on the one mutation. Path identifiers are opaque and must
+not be parsed.
+
+**There is no `X-Demo-Actor` header and no `X-Demo-Session` header on `/api/v2`.** A role
+a client can set is not an authorization, so the caller and the role are read from the
+session row on the server and from nothing else. Anyone still sending those headers should
+stop; they are ignored.
+
+## Signing in
+
+`POST /auth/login` takes a username and a password and returns an opaque random token.
+The token is stored on the server only as a hash, so a copy of the database does not hand
+anyone a working session, and it never reaches a log line, an audit row, a passport or a
+content hash.
+
+Three rules the client should know about:
+
+- a wrong username and a wrong password are the same 401 with the same message, and
+  repeated failures for one username are 429;
+- **there is no refresh token and no silent restoration.** Keep the token in memory; a
+  reload signs the person in again. The alternative is a secret that survives the page,
+  which is the thing this design exists to avoid, and it must never be a value baked into
+  a build;
+- a session lives in the database, so it survives a backend restart, and `POST
+  /auth/logout` revokes it immediately. Signing out twice is 401, because the session the
+  second call names is already gone.
+
+## Roles and what the server refuses
+
+| Action | PROJECT_OWNER | VERIFIER | INVESTOR |
+|---|---|---|---|
+| Read the catalog | yes | yes | yes |
+| Measure a contour | yes | yes | no |
+| Queue an analysis | yes | yes | no |
+| Read an analysis, its artifacts and its proof | own only | all | finalized only |
+| Download a draft report | own only | yes | no |
+| Download a final report | yes | yes | yes |
+| Finalize a passport | no | yes | no |
+
+Every one of these is checked on the server. A hidden button is a styling choice, not an
+authorization, and the suite asserts each cell of this table over HTTP.
+
+An analysis the caller may not read is **404, not 403**, so that probing identifiers
+cannot be used to learn which ones exist. An investor sees a passport only once a verifier
+has finalized it: a draft is not a finding, and presenting one as if it were would be the
+most consequential mistake this screen could make.
 
 `POST /areas/measure` answers "how big is this, and may I submit it" without creating an
 analysis. It runs the same normalisation and the same geodesic area as the analysis path,

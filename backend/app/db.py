@@ -242,6 +242,54 @@ CREATE TABLE lens_events (
 );
 CREATE INDEX lens_events_analysis ON lens_events(analysis_id, seq);
 """),
+    (3, "carbon lens roles, sessions and audit", """
+-- Who may do what. The role lives here and is read from the session on every
+-- request; it is never taken from anything the client sends.
+CREATE TABLE lens_users (
+    user_id TEXT PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    display_name TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('PROJECT_OWNER','VERIFIER','INVESTOR')),
+    -- scrypt$n$r$p$salt$hash. The password itself is never stored or logged.
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    disabled_at TEXT
+);
+
+-- Only the hash of a session token is stored, so a copy of this database does
+-- not hand anyone a working session.
+CREATE TABLE lens_sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES lens_users(user_id),
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    revoked_at TEXT
+);
+CREATE INDEX lens_sessions_user ON lens_sessions(user_id, expires_at);
+
+-- Failed sign-ins, for rate limiting. Successful ones are not kept here.
+CREATE TABLE lens_login_failures (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL COLLATE NOCASE,
+    occurred_at TEXT NOT NULL
+);
+CREATE INDEX lens_login_failures_window ON lens_login_failures(username, occurred_at);
+
+-- What people did. Deliberately outside the scientific content hash: who read a
+-- report cannot change what the report says.
+CREATE TABLE lens_audit (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    occurred_at TEXT NOT NULL,
+    user_id TEXT,
+    role TEXT,
+    action TEXT NOT NULL,
+    subject TEXT,
+    details_json TEXT NOT NULL
+);
+CREATE INDEX lens_audit_user ON lens_audit(user_id, seq);
+CREATE INDEX lens_audit_subject ON lens_audit(subject, seq);
+"""),
 ]
 
 
