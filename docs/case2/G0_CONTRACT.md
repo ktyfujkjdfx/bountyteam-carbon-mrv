@@ -240,6 +240,31 @@ and is their assumption, not a quotation this system stands behind. Nothing is s
 no hash moves — a stated price must never be able to change a passport. When q is null
 every value is null.
 
+## The demonstration lifecycle is a demonstration
+
+```
+GET  /api/v2/requests/{request_id}/demo
+POST /api/v2/requests/{request_id}/demo/issue        owner, after FINALIZED, q > 0
+POST /api/v2/requests/{request_id}/demo/transfer     investor accepts
+POST /api/v2/requests/{request_id}/demo/retire       the holder retires
+```
+
+`ISSUED_DEMO → TRANSFERRED_DEMO → RETIRED_DEMO`. Every status ends in `_DEMO`, every
+answer carries `is_demonstration: true`, and the note says in plain Russian that nothing
+was issued, transferred or retired in any registry and that the record confers no right
+to a carbon unit.
+
+**`q = 0` and `q = null` refuse with `409 NO_POSITIVE_UNITS`.** This is not a corner case.
+Every real plot in the supplied data comes out at zero, so a lifecycle that issued anyway
+would be the single genuinely misleading thing in the tool, and the message says that
+zero is a result rather than a fault.
+
+Issuing also needs a passport a verifier has already finalized — issuing against a draft
+is issuing against a number nobody accepted — and the quantity is copied from that
+passport, never taken from the caller. Each role performs its own step, every transition
+is idempotent, the history is append-only, and none of it touches a P0 table or the
+frozen ABI.
+
 ## Language the contract will not carry
 
 No public `INVESTABLE`, no "approved for purchase", no "proven fraud". A gap value is the

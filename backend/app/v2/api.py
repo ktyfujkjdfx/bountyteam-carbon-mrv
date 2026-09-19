@@ -180,6 +180,26 @@ def finalize_request(lens: Lens, who: Who, request_id: RequestId):
     return service.finalize_request(lens, request_id, who=who)
 
 
+@router.get("/requests/{request_id}/demo")
+def get_demo_unit(lens: Lens, who: Who, request_id: RequestId):
+    return service.demo_view(lens, request_id, who=who)
+
+
+@router.post("/requests/{request_id}/demo/issue", status_code=201)
+def issue_demo_unit(lens: Lens, who: Who, request_id: RequestId):
+    return service.demo_issue(lens, request_id, who=who)
+
+
+@router.post("/requests/{request_id}/demo/transfer")
+def accept_demo_transfer(lens: Lens, who: Who, request_id: RequestId):
+    return service.demo_transfer(lens, request_id, who=who)
+
+
+@router.post("/requests/{request_id}/demo/retire")
+def retire_demo_unit(lens: Lens, who: Who, request_id: RequestId):
+    return service.demo_retire(lens, request_id, who=who)
+
+
 # -- the work --------------------------------------------------------------------------
 @router.get("/catalog")
 def get_catalog(lens: Lens, who: Who):

@@ -185,6 +185,51 @@
         "required": ["analysis_id", "q", "unit", "price_parameters_ref", "scenarios", "note"],
         "additionalProperties": false
       },
+      "DemoUnitStatus": {
+        "type": "string",
+        "enum": ["ISSUED_DEMO", "TRANSFERRED_DEMO", "RETIRED_DEMO"],
+        "description": "Every value ends in _DEMO on purpose. Nothing here exists in a registry and none of it confers a right to a carbon unit."
+      },
+      "DemoUnit": {
+        "type": "object",
+        "description": "A demonstration of what issuing, transferring and retiring would look like. It is not a registry entry, and is_demonstration is always true.",
+        "properties": {
+          "request_id": {"$ref": "#/components/schemas/Id"},
+          "status": {"$ref": "#/components/schemas/DemoUnitStatus"},
+          "units": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Copied from the passport that was finalized, so a later recalculation cannot change what was demonstrated. Issuing needs a positive q: zero and null both refuse."
+          },
+          "passport_hash": {"$ref": "#/components/schemas/Hash"},
+          "issued_by": {"$ref": "#/components/schemas/Id"},
+          "issued_at": {"$ref": "#/components/schemas/Timestamp"},
+          "held_by": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "transferred_at": {"oneOf": [{"$ref": "#/components/schemas/Timestamp"}, {"type": "null"}]},
+          "retired_by": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "retired_at": {"oneOf": [{"$ref": "#/components/schemas/Timestamp"}, {"type": "null"}]},
+          "is_demonstration": {"const": true},
+          "note": {"type": "string"},
+          "events": {"type": "array", "items": {"$ref": "#/components/schemas/DemoEvent"}}
+        },
+        "required": ["request_id", "status", "units", "passport_hash", "issued_by",
+                     "issued_at", "held_by", "transferred_at", "retired_by", "retired_at",
+                     "is_demonstration", "note", "events"],
+        "additionalProperties": false
+      },
+      "DemoEvent": {
+        "type": "object",
+        "description": "One recorded step of the demonstration. The history is append-only.",
+        "properties": {
+          "occurred_at": {"$ref": "#/components/schemas/Timestamp"},
+          "from_status": {"oneOf": [{"$ref": "#/components/schemas/DemoUnitStatus"}, {"type": "null"}]},
+          "to_status": {"$ref": "#/components/schemas/DemoUnitStatus"},
+          "user_id": {"oneOf": [{"$ref": "#/components/schemas/Id"}, {"type": "null"}]},
+          "note": {"type": "string"}
+        },
+        "required": ["occurred_at", "from_status", "to_status", "user_id", "note"],
+        "additionalProperties": false
+      },
       "RequestStatus": {
         "type": "string",
         "enum": ["DRAFT", "SUBMITTED", "ANALYSING", "CALCULATED", "FINALIZED"],

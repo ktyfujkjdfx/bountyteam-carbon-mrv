@@ -339,6 +339,41 @@ CREATE INDEX lens_request_events_request ON lens_request_events(request_id, seq)
 CREATE TRIGGER lens_request_events_append_only BEFORE UPDATE ON lens_request_events
 BEGIN SELECT RAISE(ABORT, 'the request history is append-only'); END;
 """),
+    (5, "carbon lens demonstration unit lifecycle", """
+-- A demonstration of what issuing, transferring and retiring would look like.
+-- It is not a registry, it issues nothing that exists, and it is deliberately in
+-- its own table so that nothing here can be mistaken for a P0 credit.
+CREATE TABLE lens_demo_units (
+    request_id TEXT PRIMARY KEY REFERENCES lens_requests(request_id),
+    status TEXT NOT NULL CHECK (status IN
+        ('ISSUED_DEMO','TRANSFERRED_DEMO','RETIRED_DEMO')),
+    -- The quantity is copied from the passport that was finalized, so a later
+    -- recalculation cannot change what was demonstrated.
+    units INTEGER NOT NULL CHECK (units > 0),
+    passport_hash TEXT NOT NULL,
+    issued_by TEXT NOT NULL REFERENCES lens_users(user_id),
+    issued_at TEXT NOT NULL,
+    held_by TEXT REFERENCES lens_users(user_id),
+    transferred_at TEXT,
+    retired_by TEXT REFERENCES lens_users(user_id),
+    retired_at TEXT,
+    CHECK ((status = 'ISSUED_DEMO') OR (held_by IS NOT NULL)),
+    CHECK ((status = 'RETIRED_DEMO') = (retired_at IS NOT NULL))
+);
+
+CREATE TABLE lens_demo_events (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id TEXT NOT NULL REFERENCES lens_demo_units(request_id),
+    occurred_at TEXT NOT NULL,
+    from_status TEXT,
+    to_status TEXT NOT NULL,
+    user_id TEXT,
+    note TEXT NOT NULL
+);
+CREATE INDEX lens_demo_events_request ON lens_demo_events(request_id, seq);
+CREATE TRIGGER lens_demo_events_append_only BEFORE UPDATE ON lens_demo_events
+BEGIN SELECT RAISE(ABORT, 'the demonstration history is append-only'); END;
+"""),
 ]
 
 

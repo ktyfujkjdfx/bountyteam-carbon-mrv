@@ -31,6 +31,7 @@ tags:
   - name: catalog
   - name: areas
   - name: requests
+  - name: demo
   - name: analyses
 
 paths:
@@ -342,6 +343,146 @@ paths:
             application/json:
               schema:
                 $ref: 'api-models.v2.schema.json#/components/schemas/VerificationRequest'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}/demo:
+    get:
+      tags: [demo]
+      operationId: getDemoUnit
+      summary: The demonstration state of this request
+      description: |
+        A demonstration of what a unit lifecycle would look like, performed by
+        the anyone who may see the request. Nothing here exists in a registry and none of it confers a
+        right to a carbon unit; is_demonstration is always true and the note
+        says so in words a reader cannot miss.
+
+        Issuing needs a passport a verifier has finalized and a positive q.
+        Zero and null both refuse with 409 NO_POSITIVE_UNITS: every real plot
+        in the supplied data comes out at zero, so a demonstration that quietly
+        issued nothing would be the one misleading thing in the tool.
+
+        Every transition is idempotent: repeating one returns the state that
+        already exists rather than recording a second.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The demonstration unit
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/DemoUnit'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}/demo/issue:
+    post:
+      tags: [demo]
+      operationId: issueDemoUnit
+      summary: An owner issues demonstration units
+      description: |
+        A demonstration of what a unit lifecycle would look like, performed by
+        the owner. Nothing here exists in a registry and none of it confers a
+        right to a carbon unit; is_demonstration is always true and the note
+        says so in words a reader cannot miss.
+
+        Issuing needs a passport a verifier has finalized and a positive q.
+        Zero and null both refuse with 409 NO_POSITIVE_UNITS: every real plot
+        in the supplied data comes out at zero, so a demonstration that quietly
+        issued nothing would be the one misleading thing in the tool.
+
+        Every transition is idempotent: repeating one returns the state that
+        already exists rather than recording a second.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '201':
+          description: The demonstration unit
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/DemoUnit'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}/demo/transfer:
+    post:
+      tags: [demo]
+      operationId: acceptDemoTransfer
+      summary: An investor accepts the demonstration transfer
+      description: |
+        A demonstration of what a unit lifecycle would look like, performed by
+        the investor. Nothing here exists in a registry and none of it confers a
+        right to a carbon unit; is_demonstration is always true and the note
+        says so in words a reader cannot miss.
+
+        Issuing needs a passport a verifier has finalized and a positive q.
+        Zero and null both refuse with 409 NO_POSITIVE_UNITS: every real plot
+        in the supplied data comes out at zero, so a demonstration that quietly
+        issued nothing would be the one misleading thing in the tool.
+
+        Every transition is idempotent: repeating one returns the state that
+        already exists rather than recording a second.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The demonstration unit
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/DemoUnit'
+        '401': {$ref: '#/components/responses/Failure'}
+        '403': {$ref: '#/components/responses/Failure'}
+        '404': {$ref: '#/components/responses/Failure'}
+        '409': {$ref: '#/components/responses/Failure'}
+        '422': {$ref: '#/components/responses/Failure'}
+        '503': {$ref: '#/components/responses/Failure'}
+
+  /requests/{request_id}/demo/retire:
+    post:
+      tags: [demo]
+      operationId: retireDemoUnit
+      summary: The holder retires the demonstration units
+      description: |
+        A demonstration of what a unit lifecycle would look like, performed by
+        the holder. Nothing here exists in a registry and none of it confers a
+        right to a carbon unit; is_demonstration is always true and the note
+        says so in words a reader cannot miss.
+
+        Issuing needs a passport a verifier has finalized and a positive q.
+        Zero and null both refuse with 409 NO_POSITIVE_UNITS: every real plot
+        in the supplied data comes out at zero, so a demonstration that quietly
+        issued nothing would be the one misleading thing in the tool.
+
+        Every transition is idempotent: repeating one returns the state that
+        already exists rather than recording a second.
+      parameters:
+        - $ref: '#/components/parameters/Session'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The demonstration unit
+          content:
+            application/json:
+              schema:
+                $ref: 'api-models.v2.schema.json#/components/schemas/DemoUnit'
         '401': {$ref: '#/components/responses/Failure'}
         '403': {$ref: '#/components/responses/Failure'}
         '404': {$ref: '#/components/responses/Failure'}

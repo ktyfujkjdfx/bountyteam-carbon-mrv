@@ -24,7 +24,7 @@ from ..contracts import digest
 from ..db import utc_now
 from ..errors import ApiError, invalid, not_found
 from ..operations import idempotent
-from . import assemble, auth as lens_auth, catalog, geometry, verification
+from . import assemble, auth as lens_auth, catalog, demo, geometry, verification
 from .adapters import build_ports
 from .adapters.carbon import POOL, CarbonEngineUnavailable
 from .adapters.raster import RasterCoreUnavailable
@@ -583,3 +583,35 @@ def value_view(lens: LensContext, analysis_id: str, *, who: Any,
         "note": VALUE_NOTE,
     }
     return validate(api_validator("ValueScenarios"), document, "ValueScenarios")
+
+
+# -- the demonstration lifecycle -----------------------------------------------------------
+def demo_view(lens: LensContext, request_id: str, *, who: Any) -> dict:
+    document = demo.view(lens.app, request_id, who=who)
+    return validate(api_validator("DemoUnit"), document, "DemoUnit")
+
+
+def demo_issue(lens: LensContext, request_id: str, *, who: Any) -> dict:
+    """Issue demonstration units, if the calculation produced any.
+
+    The quantity comes from the published passport rather than from the caller, so a
+    demonstration cannot show a number the calculation never produced.
+    """
+    def units_of(analysis_id: str | None) -> int | None:
+        if not analysis_id:
+            return None
+        result = lens.store.result(analysis_id)
+        return result["units"]["q"] if result else None
+
+    document = demo.issue(lens.app, request_id, who=who, units_of=units_of)
+    return validate(api_validator("DemoUnit"), document, "DemoUnit")
+
+
+def demo_transfer(lens: LensContext, request_id: str, *, who: Any) -> dict:
+    document = demo.accept_transfer(lens.app, request_id, who=who)
+    return validate(api_validator("DemoUnit"), document, "DemoUnit")
+
+
+def demo_retire(lens: LensContext, request_id: str, *, who: Any) -> dict:
+    document = demo.retire(lens.app, request_id, who=who)
+    return validate(api_validator("DemoUnit"), document, "DemoUnit")
