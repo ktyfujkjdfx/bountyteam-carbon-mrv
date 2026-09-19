@@ -31,6 +31,12 @@ one Draft PR; after the stage, report and stop for consumer review.
   empirical calibration is established.
 - The method (ρ_t, coverage factor, main dependence mode) is approved by the Team Lead
   before real Q values are published; record it in `METHOD_VERSION`.
+- A risk is never multiplied into Q, a projected year never enters the Q of the
+  requested period, and a price scenario never changes Q. Each of those is enforced by a
+  test, not only by a comment.
+- A zero claim is NOT_APPLICABLE with reason NO_POSITIVE_CLAIM, never SUPPORTED_BY_CASE.
+- A missing AGB_SD is an error, never 0.0: zero deviation narrows the interval and raises
+  Q on the strength of missing data.
 - The research baseline is research only. The reported Q always comes from
   `data/methodology/baseline.csv`, and a variant never rewrites a passport.
 - Golden results live in `carbon/tests/golden/results.json`. Regenerate with
