@@ -153,6 +153,18 @@ def analysis_payload(analysis):
                 "the three coverages answer different questions and are never "
                 "combined; cloud in an optical scene does not reduce biomass coverage"
             ),
+            # The contract names four axes. Three are measured here; the fourth
+            # is a property of a baseline this module does not own and must not
+            # guess. Naming the owner is better than emitting a null axis that
+            # looks measured.
+            "axes": ["biomass", "biomass_sd", "optical_paired"],
+            "axes_not_produced_here": {
+                "baseline": (
+                    "the share of the request a baseline covers is computed by "
+                    "the owner of the baseline, from the baseline it used; RS "
+                    "measures no baseline and will not report a coverage for one"
+                )
+            },
             "area_note": (
                 "missing_ha is the clamped shortfall a consumer acts on; "
                 "area_difference_ha is the signed technical difference "
