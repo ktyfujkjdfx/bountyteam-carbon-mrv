@@ -67,18 +67,18 @@ export function LensApp({ client: injected, config: injectedConfig }: { client?:
   }, []);
 
   const signIn = useCallback(
-    async (email: string, password: string) => {
+    async (username: string, password: string) => {
       if (loginBusy) return;
       setLoginBusy(true);
       setLoginError(null);
       try {
-        const next = config.mode === 'fixture' ? demoLogin(email, password) : await serviceLogin({ baseUrl: config.baseUrl }, email, password);
+        const next = config.mode === 'fixture' ? demoLogin(username, password) : await serviceLogin({ baseUrl: config.baseUrl }, username, password);
         setSession(next);
         goTo(next.role);
       } catch (error) {
         if (error instanceof LensError && error.code === 'AUTH_NOT_DEPLOYED' && config.demoAccounts) {
           try {
-            const fallback = config.mode === 'http' ? sessionTokenLogin(email, password) : demoLogin(email, password);
+            const fallback = config.mode === 'http' ? sessionTokenLogin(username, password) : demoLogin(username, password);
             setSession(fallback);
             goTo(fallback.role);
             return;
@@ -104,7 +104,7 @@ export function LensApp({ client: injected, config: injectedConfig }: { client?:
   if (!session) {
     return (
       <LoginScreen
-        onSubmit={(email, password) => void signIn(email, password)}
+        onSubmit={(username, password) => void signIn(username, password)}
         busy={loginBusy}
         error={loginError}
         showDemoAccounts={config.demoAccounts}

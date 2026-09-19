@@ -16,7 +16,7 @@ const AUTH = process.env.E2E_LENS_AUTH ?? 'demo';
 
 async function signIn(page: Page, email: string) {
   await page.goto(`/lens?demo=1&auth=${AUTH}`);
-  await page.getByTestId('lens-login-email').fill(email);
+  await page.getByTestId('lens-login-username').fill(email);
   await page.getByTestId('lens-login-password').fill(SESSION as string);
   await page.getByTestId('lens-login-submit').click();
   await expect(page.getByTestId('lens-role')).toBeVisible({ timeout: 20_000 });
@@ -82,7 +82,7 @@ test('live service: the three roles run one analysis end to end', async ({ page 
 
 test('live service: a wrong token is rejected and nothing is invented', async ({ page }) => {
   await page.goto(`/lens?demo=1&auth=${AUTH}`);
-  await page.getByTestId('lens-login-email').fill('verifier@demo.local');
+  await page.getByTestId('lens-login-username').fill('verifier@demo.local');
   await page.getByTestId('lens-login-password').fill('not-the-session-token');
   await page.getByTestId('lens-login-submit').click();
   await expect(page.getByTestId('lens-catalog-error')).toContainText(/UNAUTHORIZED|401|session|сесси/i, { timeout: 20_000 });

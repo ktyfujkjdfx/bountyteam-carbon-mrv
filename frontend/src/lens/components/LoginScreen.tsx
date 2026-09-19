@@ -2,7 +2,7 @@ import { useId, useState } from 'react';
 import { DEMO_ACCOUNTS, ROLE_LABELS } from '../auth';
 
 interface Props {
-  onSubmit: (email: string, password: string) => void;
+  onSubmit: (username: string, password: string) => void;
   busy: boolean;
   error: string | null;
   showDemoAccounts: boolean;
@@ -14,9 +14,9 @@ interface Props {
  * can use. Passwords are never pre-filled into a production build and never written to the URL.
  */
 export function LoginScreen({ onSubmit, busy, error, showDemoAccounts, modeNote }: Props) {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const emailId = useId();
+  const usernameId = useId();
   const passwordId = useId();
 
   return (
@@ -30,12 +30,12 @@ export function LoginScreen({ onSubmit, busy, error, showDemoAccounts, modeNote 
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            if (!busy) onSubmit(email, password);
+            if (!busy) onSubmit(username, password);
           }}
         >
-          <label className="lens-field" htmlFor={emailId}>
-            <span>Почта</span>
-            <input id={emailId} className="input" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} data-testid="lens-login-email" required />
+          <label className="lens-field" htmlFor={usernameId}>
+            <span>Логин</span>
+            <input id={usernameId} className="input" type="text" autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} data-testid="lens-login-username" required />
           </label>
           <label className="lens-field" htmlFor={passwordId}>
             <span>Пароль</span>
@@ -72,7 +72,7 @@ export function LoginScreen({ onSubmit, busy, error, showDemoAccounts, modeNote 
                     type="button"
                     className="lens-demo-account"
                     onClick={() => {
-                      setEmail(account.email);
+                      setUsername(account.email);
                       setPassword(account.password);
                       onSubmit(account.email, account.password);
                     }}

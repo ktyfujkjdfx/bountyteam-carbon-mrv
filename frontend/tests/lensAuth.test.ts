@@ -34,10 +34,42 @@ describe('sign-in', () => {
     });
   });
 
-  it('passes a rejected password through as a rejection, not as an outage', async () => {
+  it('sends the exact OpenAPI v2 login body and reads the nested server user', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      token: 'opaque-session-token-that-is-long-enough',
+      expires_at: '2026-09-20T00:00:00Z',
+      user: { user_id: 'user-owner', username: 'owner', display_name: 'Owner', role: 'PROJECT_OWNER' },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    const session = await login(
+      { baseUrl: 'https://service.test/api/v2', fetchImpl: fetchImpl as unknown as typeof fetch },
+      'owner',
+      'correct horse battery staple',
+    );
+
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe('https://service.test/api/v2/auth/login');
+    const init = fetchImpl.mock.calls[0]?.[1] as RequestInit;
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toEqual({ username: 'owner', password: 'correct horse battery staple' });
+    expect(session).toMatchObject({ role: 'owner', email: 'owner', display_name: 'Owner', source: 'SERVICE' });
+  });
+
+  it('reports 401 without revealing whether the login or password was wrong', async () => {
     const fetchImpl = vi.fn(async () => new Response('', { status: 401 }));
-    await expect(login({ baseUrl: 'https://service.test/api/v2', fetchImpl: fetchImpl as unknown as typeof fetch }, 'a@b.c', 'x')).rejects.toMatchObject({
+    const attempt = login({ baseUrl: 'https://service.test/api/v2', fetchImpl: fetchImpl as unknown as typeof fetch }, 'unknown', 'wrong');
+    await expect(attempt).rejects.toMatchObject({
       code: 'AUTH_REJECTED',
+      message: 'Логин или пароль не подошли.',
+      status: 401,
+    });
+  });
+
+  it('reports 429 as rate limiting rather than bad credentials', async () => {
+    const fetchImpl = vi.fn(async () => new Response('', { status: 429 }));
+    await expect(login({ baseUrl: 'https://service.test/api/v2', fetchImpl: fetchImpl as unknown as typeof fetch }, 'owner', 'wrong')).rejects.toMatchObject({
+      code: 'AUTH_RATE_LIMITED',
+      status: 429,
     });
   });
 

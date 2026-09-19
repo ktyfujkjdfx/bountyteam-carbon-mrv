@@ -236,7 +236,7 @@ test('unknown values from the service degrade to neutral labels without a white 
 test('live mode without a service reports the failure and never substitutes the offline set', async ({ page }) => {
   const { pageErrors } = watch(page);
   await page.goto('/lens?demo=1');
-  await page.getByTestId('lens-login-email').fill('verifier@demo.local');
+  await page.getByTestId('lens-login-username').fill('verifier@demo.local');
   await page.getByTestId('lens-login-password').fill('demo');
   await page.getByTestId('lens-login-submit').click();
   // Either the login fails against the missing service, or the labelled demo account is used and the

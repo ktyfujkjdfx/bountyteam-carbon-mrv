@@ -6,6 +6,10 @@
 // against a labelled local account list and says so on screen.
 
 import { LensError, asRecord } from './client';
+import type { components as LensApiComponents } from '../api/generated/openapi.v2';
+
+type LoginRequest = LensApiComponents['schemas']['LoginRequest'];
+type ServiceRole = LensApiComponents['schemas']['Role'];
 
 export type LensRole = 'owner' | 'verifier' | 'investor';
 
@@ -62,6 +66,13 @@ export function isRole(value: unknown): value is LensRole {
   return value === 'owner' || value === 'verifier' || value === 'investor';
 }
 
+function serviceRole(value: ServiceRole | unknown): LensRole | null {
+  if (value === 'PROJECT_OWNER') return 'owner';
+  if (value === 'VERIFIER') return 'verifier';
+  if (value === 'INVESTOR') return 'investor';
+  return null;
+}
+
 export function readStoredSession(storage: StorageLike | null = safeStorage()): LensSession | null {
   try {
     const raw = storage?.getItem(LENS_SESSION_STORAGE_KEY);
@@ -104,13 +115,14 @@ async function call(transport: AuthTransport, path: string, init: RequestInit): 
  * Sign in against the service. A deployment without /auth/login answers 404/405, and the caller falls
  * back to the labelled demo accounts instead of pretending someone was authenticated.
  */
-export async function login(transport: AuthTransport, email: string, password: string): Promise<LensSession> {
+export async function login(transport: AuthTransport, username: string, password: string): Promise<LensSession> {
+  const body: LoginRequest = { username, password };
   let response: Response;
   try {
     response = await call(transport, '/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(body),
     });
   } catch (error) {
     throw new LensError('NETWORK', `Сервис недоступен: ${error instanceof Error ? error.message : String(error)}`);
@@ -118,21 +130,25 @@ export async function login(transport: AuthTransport, email: string, password: s
   if (response.status === 404 || response.status === 405) {
     throw new LensError('AUTH_NOT_DEPLOYED', 'Сервис пока не принимает вход по паролю.', { status: response.status });
   }
-  if (response.status === 401 || response.status === 403) {
-    throw new LensError('AUTH_REJECTED', 'Почта или пароль не подошли.', { status: response.status });
+  if (response.status === 401) {
+    throw new LensError('AUTH_REJECTED', 'Логин или пароль не подошли.', { status: response.status });
+  }
+  if (response.status === 429) {
+    throw new LensError('AUTH_RATE_LIMITED', 'Слишком много попыток входа. Повторите позже.', { status: response.status });
   }
   if (!response.ok) {
     throw new LensError('AUTH_FAILED', `Вход не выполнен: сервис ответил HTTP ${response.status}.`, { status: response.status });
   }
   const payload = asRecord(await response.json().catch(() => null));
+  const user = asRecord(payload.user);
   const token = typeof payload.token === 'string' ? payload.token : typeof payload.access_token === 'string' ? payload.access_token : '';
-  const role = payload.role;
-  if (!token || !isRole(role)) throw new LensError('CONTRACT', 'Сервис не вернул токен и роль сессии.');
+  const role = serviceRole(user.role);
+  if (!token || !role || typeof user.username !== 'string') throw new LensError('CONTRACT', 'Сервис не вернул токен и пользователя сессии.');
   return {
     token,
     role,
-    email: String(payload.email ?? email),
-    display_name: String(payload.display_name ?? email),
+    email: user.username,
+    display_name: String(user.display_name ?? user.username),
     source: 'SERVICE',
   };
 }
