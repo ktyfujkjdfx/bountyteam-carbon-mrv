@@ -2985,7 +2985,12 @@ main {
 .lens-result > *,
 .lens-single > *,
 .lens-hero-block > *,
-.lens-hero > * {
+.lens-hero > *,
+.lens-calculator > *,
+.lens-passport > *,
+.lens-quality > *,
+.lens-observations > *,
+.lens-lifecycle > * {
   min-width: 0;
 }
 

@@ -188,6 +188,8 @@ export function useWorkspace(client: LensApiClient, actorEmail: string, notify: 
   });
   // Каждый показанный снимок держит objectURL; без освобождения вкладка копит их на каждый результат.
   const snapshotRelease = useRef<Array<() => void>>([]);
+  // Номер последней начатой загрузки: по нему опоздавший прогон понимает, что его обогнали.
+  const snapshotRun = useRef(0);
   const [zoneResult, setZoneResult] = useState<AnalysisResult | null>(null);
   const [proof, setProof] = useState<Proof | null>(null);
 
@@ -569,16 +571,28 @@ export function useWorkspace(client: LensApiClient, actorEmail: string, notify: 
       setSnapshots({ for: result, state: { kind: 'unavailable', reason: 'Сервис не приложил к этому результату ни одного снимка.' } });
       return;
     }
-    snapshotRelease.current.forEach((release) => release());
-    snapshotRelease.current = [];
+    // Загрузок может идти несколько сразу: строгий режим вызывает эффект дважды, а человек
+    // успевает переключить заявку. Прежние ссылки поэтому освобождаются не в начале новой
+    // загрузки, а только когда ей есть чем их заменить: иначе отзываешь blob у снимка, который
+    // в эту секунду показан на экране, и вместо него остаётся битая картинка.
+    const run = snapshotRun.current + 1;
+    snapshotRun.current = run;
     setSnapshots({ for: result, state: { kind: 'loading' } });
+    const releases: Array<() => void> = [];
     try {
       const loaded: SnapshotImage[] = [];
       for (const artifact of wanted) {
         const payload = await client.getArtifact(artifact);
-        snapshotRelease.current.push(payload.release);
+        releases.push(payload.release);
         loaded.push({ role: artifact.role, artifact, src: payload.src, integrity: payload.integrity });
       }
+      if (run !== snapshotRun.current) {
+        // Опоздавший прогон: его обогнали, и показывать он уже ничего не будет.
+        releases.forEach((release) => release());
+        return;
+      }
+      snapshotRelease.current.forEach((release) => release());
+      snapshotRelease.current = releases;
       setSnapshots({ for: result, state: { kind: 'ready', images: loaded } });
       // Несовпавший хеш — это не мелочь фона: снимок не показан, и человек должен узнать почему.
       const refused = loaded.filter((image) => image.integrity === 'MISMATCH').length;
@@ -591,6 +605,8 @@ export function useWorkspace(client: LensApiClient, actorEmail: string, notify: 
         });
       }
     } catch (error) {
+      releases.forEach((release) => release());
+      if (run !== snapshotRun.current) return;
       const reason = error instanceof LensError ? `${error.code}: ${error.message}` : String(error);
       setSnapshots({ for: result, state: { kind: 'unavailable', reason } });
       notify({ tone: 'warn', title: 'Снимки не загрузились', text: reason, hint: 'Карта и расчёт остаются на месте.' });

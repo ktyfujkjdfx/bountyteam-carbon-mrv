@@ -294,16 +294,20 @@ export function LensMapView(props: Props) {
     if (!map || !ready || cells.kind !== 'ready' || !visible.cells) return;
     const drawn = cells.cells.map((cell) => {
       const selected = cell.cell_id === selectedCellId;
+      // Ячеек тысячи, и их обводка складывалась в сплошную сетку поверх участка: самый мелкий
+      // слой закрывал зоны изменений, ради которых карту и открывают. Невыбранная ячейка теперь
+      // только заливка, а весь слой уходит под зоны.
       const layer = L.polygon(toLatLngs(cell.geometry), {
         color: selected ? COLOR.selected : cell.valid ? COLOR.cell : COLOR.gap,
-        weight: selected ? 2 : 0.7,
+        weight: selected ? 2 : 0,
         fillColor: cell.valid ? COLOR.cell : COLOR.gap,
-        fillOpacity: selected ? 0.35 : 0.12,
-        dashArray: cell.valid ? undefined : '3 3',
+        fillOpacity: selected ? 0.35 : 0.1,
+        ...(cell.valid ? {} : { weight: 0.6, dashArray: '3 3' }),
       })
         .addTo(map)
         .bindTooltip(`Ячейка ${cell.cell_id}${cell.valid ? '' : ' · без числовых данных'}`, { direction: 'top' });
       layer.on('click', () => onSelectCell(cell.cell_id));
+      if (!selected) layer.bringToBack();
       return layer;
     });
     return () => {
