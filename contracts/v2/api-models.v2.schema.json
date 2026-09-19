@@ -353,14 +353,18 @@
       "ClaimMismatchReason": {
         "type": "string",
         "enum": [
-          "NO_POSITIVE_CLAIM",
           "INVALID_CLAIM_VALUE",
           "GEOMETRY_MISMATCH",
           "PERIOD_MISMATCH",
           "POOL_MISMATCH",
           "UNIT_MISMATCH"
         ],
-        "description": "NO_POSITIVE_CLAIM accompanies NOT_APPLICABLE: there was nothing positive to compare, which is not a disagreement."
+        "description": "Why a stated volume could not be compared with the calculation. A claim of zero is not here: nothing disagreed, so it carries claim.reason instead."
+      },
+      "ClaimReason": {
+        "type": "string",
+        "enum": ["NO_POSITIVE_CLAIM"],
+        "description": "Why the comparison does not apply at all. NO_POSITIVE_CLAIM accompanies NOT_APPLICABLE: there was nothing positive to compare, which is not a disagreement."
       },
       "UnavailableReason": {
         "type": "string",
@@ -762,7 +766,7 @@
           },
           "normalisation_area_ha": {"oneOf": [{"type": "number"}, {"type": "null"}]},
           "sign_convention": {"const": "POSITIVE_E_MEANS_POOL_LOSS"},
-          "pool": {"const": "AGB"}
+          "pool": {"const": "AGB_LIVE_WOODY"}
         },
         "required": ["year_start", "year_end", "mean_carbon_start_tc_ha", "mean_carbon_end_tc_ha",
                      "total_carbon_start_tc", "total_carbon_end_tc", "delta_carbon_tc", "eproj_ref",
@@ -919,6 +923,7 @@
         "description": "Comparison of a stated volume with q. gap_value is the scenario value of the unsupported part of the claim; it is not an established loss, a probabilistic Value at Risk or proven fraud.",
         "properties": {
           "status": {"$ref": "#/components/schemas/ClaimStatus"},
+          "reason": {"oneOf": [{"$ref": "#/components/schemas/ClaimReason"}, {"type": "null"}]},
           "origin": {"oneOf": [{"$ref": "#/components/schemas/ClaimOrigin"}, {"type": "null"}]},
           "comparable": {"type": "boolean"},
           "claimed_units": {"oneOf": [{"type": "number"}, {"type": "null"}]},
@@ -933,7 +938,8 @@
           "scenario_gap_values": {"oneOf": [{"$ref": "#/components/schemas/ScenarioValues"}, {"type": "null"}]},
           "scope_note": {"type": "string"}
         },
-        "required": ["status", "origin", "comparable", "claimed_units", "q", "unsupported_gap",
+        "required": ["status", "reason", "origin", "comparable", "claimed_units", "q",
+                     "unsupported_gap",
                      "supported_share", "mismatch_reasons", "scope", "scenario_gap_values", "scope_note"],
         "additionalProperties": false
       },

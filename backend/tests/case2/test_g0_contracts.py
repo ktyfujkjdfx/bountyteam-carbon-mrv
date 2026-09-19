@@ -232,14 +232,16 @@ def test_a_zero_claim_is_normalised_even_by_an_engine_that_has_not_adopted_it():
     """Backend does not wait for the engine to agree before refusing to mislead."""
     from backend.app.v2.adapters.carbon import no_positive_claim
 
-    engine_answer = {"status": "SUPPORTED_BY_CASE", "mismatch_reasons": [],
-                     "claimed_units": 0.0, "source": "USER_INPUT", "units": 0,
-                     "gap_units": 0.0, "supported_share": 1.0, "gap_values": []}
+    engine_answer = {"status": "SUPPORTED_BY_CASE", "reason": None,
+                     "mismatch_reasons": [], "claimed_units": 0.0,
+                     "source": "USER_INPUT", "units": 0, "unsupported_gap": 0.0,
+                     "supported_share": 1.0, "gap_values": []}
     normalised = no_positive_claim(dict(engine_answer))
     assert normalised["status"] == "NOT_APPLICABLE"
-    assert normalised["mismatch_reasons"] == ["NO_POSITIVE_CLAIM"]
+    assert normalised["reason"] == "NO_POSITIVE_CLAIM"
+    assert normalised["mismatch_reasons"] == [], "nothing disagreed"
     assert normalised["supported_share"] is None
-    assert normalised["gap_units"] == 0.0
+    assert normalised["unsupported_gap"] == 0.0
 
 
 def test_no_public_investability_or_fraud_vocabulary():
@@ -396,10 +398,11 @@ def test_an_undeclared_enum_value_is_refused_rather_than_served():
 
 
 def test_a_zero_claim_has_its_own_status_and_its_own_reason():
-    statuses, reasons = _enum("ClaimStatus"), _enum("ClaimMismatchReason")
+    statuses = _enum("ClaimStatus")
     assert "NOT_APPLICABLE" in statuses
-    assert "NO_POSITIVE_CLAIM" in reasons
-    # It is a reason for not comparing, not a reason the claim disagreed.
+    assert _enum("ClaimReason") == {"NO_POSITIVE_CLAIM"}
+    # It is a reason the comparison does not apply, never a reason it disagreed.
+    assert "NO_POSITIVE_CLAIM" not in _enum("ClaimMismatchReason")
     assert "NO_POSITIVE_CLAIM" not in statuses
 
 

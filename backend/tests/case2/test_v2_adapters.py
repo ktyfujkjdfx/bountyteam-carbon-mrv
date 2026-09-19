@@ -336,7 +336,8 @@ def test_the_claim_comparison_runs_through_the_engine():
     claim = assessment["claim"]
     assert claim["status"] == "PARTIALLY_SUPPORTED_BY_CASE"
     assert claim["source"] == "USER_INPUT"
-    assert claim["gap_units"] == pytest.approx(100000.0 - assessment["units"]["units"])
+    assert claim["unsupported_gap"] == pytest.approx(
+        100000.0 - assessment["units"]["units"])
 
 
 def test_the_engine_never_imports_a_web_or_chain_library():

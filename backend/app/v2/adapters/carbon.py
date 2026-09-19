@@ -24,8 +24,8 @@ log = logging.getLogger("backend.lens.carbon")
 # The pool and unit strings are the ones the carbon engine emits. They are compared for
 # string equality when a claim is checked for comparability, so a second spelling on this
 # side would manufacture a POOL_MISMATCH out of nothing.
-POOL = "AGB"
-UNIT = "tCO2e"
+POOL = "AGB_LIVE_WOODY"
+UNIT = "POTENTIAL_UNIT_OF_THE_CASE"
 SCHEMA = "carbon.case2.assessment/1"
 # RS treats a request as fully covered below this many hectares of gap, because geodesic
 # area is not additive over a partition. Passing the raw fraction to an engine that wants
@@ -42,6 +42,19 @@ SPATIAL_NAMES = {
 }
 CLAIM_NOT_APPLICABLE = "NOT_APPLICABLE"
 NO_POSITIVE_CLAIM = "NO_POSITIVE_CLAIM"
+
+
+def _attr(value: Any, *names: str, default: Any = None) -> Any:
+    """The first of these attributes the engine actually has.
+
+    Field names on the engine's result objects are its own to choose. Reading several
+    spellings here is what lets a rename land on one side without breaking the other in
+    the same commit, and it changes no number.
+    """
+    for name in names:
+        if hasattr(value, name):
+            return getattr(value, name)
+    return default
 
 try:  # pragma: no cover - depends on what is merged into the branch
     import carbon as _engine
@@ -344,11 +357,12 @@ def _units_payload(units: Any) -> dict:
 def _claim_payload(claim: Any) -> dict:
     payload = {
         "status": claim.status,
+        "reason": _attr(claim, "reason"),
         "mismatch_reasons": list(claim.mismatch_reasons),
         "claimed_units": claim.claimed_units,
         "source": claim.source,
         "units": claim.units,
-        "gap_units": claim.gap_units,
+        "unsupported_gap": _attr(claim, "unsupported_gap", "gap_units"),
         "supported_share": claim.supported_share,
         "gap_values": [_plain(value) for value in claim.gap_values],
     }
@@ -366,12 +380,12 @@ def no_positive_claim(payload: dict) -> dict:
     claimed = payload.get("claimed_units")
     if claimed is None or float(claimed) != 0.0:
         return payload
-    reasons = [code for code in payload["mismatch_reasons"] if code != NO_POSITIVE_CLAIM]
     payload.update({
         "status": CLAIM_NOT_APPLICABLE,
-        "mismatch_reasons": [NO_POSITIVE_CLAIM, *reasons],
+        # Its own field, not a mismatch. Nothing disagreed; there was nothing to compare.
+        "reason": NO_POSITIVE_CLAIM,
         "supported_share": None,
-        "gap_units": 0.0,
+        "unsupported_gap": 0.0,
         "gap_values": [],
     })
     return payload

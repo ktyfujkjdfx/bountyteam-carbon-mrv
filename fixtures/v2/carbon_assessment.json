@@ -92,9 +92,10 @@
     "claimed_units": null,
     "source": null,
     "units": 395,
-    "gap_units": null,
+    "unsupported_gap": null,
     "supported_share": null,
-    "gap_values": []
+    "gap_values": [],
+    "reason": null
   },
   "notes": [
     "Интервал сценарный при заявленных допущениях.",

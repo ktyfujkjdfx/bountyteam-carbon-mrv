@@ -151,11 +151,15 @@ same way, and `scenario_values` is all-null whenever `q` is null.
 
 ## A claim of zero is `NOT_APPLICABLE`
 
-`claimed_units = 0` gives `claim.status = NOT_APPLICABLE`, `supported_share = null`,
-`unsupported_gap = 0` and `mismatch_reasons = ["NO_POSITIVE_CLAIM"]`. Nothing positive was
-stated, so nothing was supported; calling that `SUPPORTED_BY_CASE` would let an empty
-statement inherit the vocabulary of a confirmed one. The field is named `unsupported_gap`
-throughout, and it is never negative.
+`claimed_units = 0` gives `claim.status = NOT_APPLICABLE`, `claim.reason =
+NO_POSITIVE_CLAIM`, `supported_share = null` and `unsupported_gap = 0`. Nothing positive
+was stated, so nothing was supported; calling that `SUPPORTED_BY_CASE` would let an empty
+statement inherit the vocabulary of a confirmed one. `unsupported_gap` is never negative.
+
+`reason` and `mismatch_reasons` are separate fields because they answer separate
+questions. `mismatch_reasons` says why a comparison could not be made — a different
+contour, period, pool or unit. `reason` says the comparison does not apply at all, and
+`NO_POSITIVE_CLAIM` is not a disagreement.
 
 ## Coverage, area and the arithmetic that lands outside the range
 
@@ -325,9 +329,9 @@ branch. `carbon` keeps `units`, Backend keeps nullability and presentation. Four
 alignments were settled in Backend's favour of the engine, so that nobody has to translate
 twice:
 
-- `pool` is `AGB` and `unit` is `tCO2e`, exactly as the engine emits them. These strings
-  are compared for equality when a claim is checked, so a second spelling would
-  manufacture a `POOL_MISMATCH` out of nothing.
+- `pool` is `AGB_LIVE_WOODY` and `unit` is `POTENTIAL_UNIT_OF_THE_CASE`, exactly as the
+  engine emits them. These strings are compared for equality when a claim is checked, so
+  a second spelling would manufacture a `POOL_MISMATCH` out of nothing.
 - `passport.comparison_result` uses the engine's version vocabulary — `INITIAL`,
   `REVISION_OF_SAME_SCOPE`, `NEW_OBSERVATION`, `NOT_COMPARABLE`. Whether Q rose or fell is
   a separate presentational field, `comparison_direction`, so "a later observation" is

@@ -5,299 +5,1035 @@
   "description": "The contract between Backend and the two computation owners. RasterAnalysis is produced by rs.case2 and consumed by Backend and by the carbon engine; CellLayer is the per-cell uncertainty artifact; CarbonAssessment is produced by the carbon engine; ArtifactManifest records what a run wrote. These models are additive: a producer may add fields, but never remove or retype a required one. Backend validates every adapter response against them, so a silent contract drift fails the job instead of reaching a passport.",
   "components": {
     "schemas": {
-      "Hash": {"type": "string", "pattern": "^0x[0-9a-f]{64}$"},
-      "RawSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-
+      "Hash": {
+        "type": "string",
+        "pattern": "^0x[0-9a-f]{64}$"
+      },
+      "RawSha256": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
       "RasterRequestBlock": {
         "type": "object",
         "properties": {
-          "area_ha": {"type": "number", "exclusiveMinimum": 0},
-          "year_start": {"type": "integer"},
-          "year_end": {"type": "integer"},
-          "years": {"type": "integer", "exclusiveMinimum": 0},
-          "parents": {"type": "array", "items": {"type": "string"}}
+          "area_ha": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "year_start": {
+            "type": "integer"
+          },
+          "year_end": {
+            "type": "integer"
+          },
+          "years": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "parents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         },
-        "required": ["area_ha", "year_start", "year_end", "years", "parents"]
+        "required": [
+          "area_ha",
+          "year_start",
+          "year_end",
+          "years",
+          "parents"
+        ]
       },
-
       "StockChangeBlock": {
         "type": "object",
         "description": "Sign convention: positive e_tco2e is a loss from the accounted pool over the period.",
         "properties": {
-          "stock_start_tc": {"type": "number"},
-          "stock_end_tc": {"type": "number"},
-          "delta_tc": {"type": "number"},
-          "e_tco2e": {"type": "number"},
-          "e_per_ha_per_year": {"type": "number"},
-          "normalisation_area_ha": {"type": "number", "exclusiveMinimum": 0},
-          "sign_convention": {"type": "string"},
-          "unit": {"type": "string"}
+          "stock_start_tc": {
+            "type": "number"
+          },
+          "stock_end_tc": {
+            "type": "number"
+          },
+          "delta_tc": {
+            "type": "number"
+          },
+          "e_tco2e": {
+            "type": "number"
+          },
+          "e_per_ha_per_year": {
+            "type": "number"
+          },
+          "normalisation_area_ha": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "sign_convention": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
         },
-        "required": ["stock_start_tc", "stock_end_tc", "delta_tc", "e_tco2e",
-                     "e_per_ha_per_year", "normalisation_area_ha", "sign_convention"]
+        "required": [
+          "stock_start_tc",
+          "stock_end_tc",
+          "delta_tc",
+          "e_tco2e",
+          "e_per_ha_per_year",
+          "normalisation_area_ha",
+          "sign_convention"
+        ]
       },
-
       "TimelineEntry": {
         "type": "object",
         "properties": {
-          "year": {"type": "integer"},
-          "mean_tc_ha": {"type": "number"},
-          "total_tc": {"type": "number"},
-          "mean_agb_t_ha": {"type": "number"},
-          "cells": {"type": "integer", "minimum": 0},
-          "covered_ha": {"type": "number", "minimum": 0}
+          "year": {
+            "type": "integer"
+          },
+          "mean_tc_ha": {
+            "type": "number"
+          },
+          "total_tc": {
+            "type": "number"
+          },
+          "mean_agb_t_ha": {
+            "type": "number"
+          },
+          "cells": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "covered_ha": {
+            "type": "number",
+            "minimum": 0
+          }
         },
-        "required": ["year", "mean_tc_ha", "total_tc", "mean_agb_t_ha", "cells", "covered_ha"]
+        "required": [
+          "year",
+          "mean_tc_ha",
+          "total_tc",
+          "mean_agb_t_ha",
+          "cells",
+          "covered_ha"
+        ]
       },
-
       "CoverageAxis": {
         "type": "object",
         "properties": {
-          "area_ha": {"type": "number", "minimum": 0},
-          "fraction": {"type": "number", "minimum": 0}
+          "area_ha": {
+            "type": "number",
+            "minimum": 0
+          },
+          "fraction": {
+            "type": "number",
+            "minimum": 0
+          }
         },
-        "required": ["area_ha", "fraction"]
+        "required": [
+          "area_ha",
+          "fraction"
+        ]
       },
-
       "RasterCoverageBlock": {
         "type": "object",
         "description": "Three coverages that answer different questions and are never combined into one number.",
         "properties": {
-          "requested_ha": {"type": "number", "exclusiveMinimum": 0},
-          "calculated_ha": {"type": "number", "minimum": 0},
-          "missing_ha": {"type": "number", "minimum": 0},
-          "complete": {"type": "boolean"},
-          "biomass": {"$ref": "#/components/schemas/CoverageAxis"},
-          "biomass_sd": {"$ref": "#/components/schemas/CoverageAxis"},
-          "optical_paired": {"$ref": "#/components/schemas/CoverageAxis"}
+          "requested_ha": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "calculated_ha": {
+            "type": "number",
+            "minimum": 0
+          },
+          "missing_ha": {
+            "type": "number",
+            "minimum": 0
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "biomass": {
+            "$ref": "#/components/schemas/CoverageAxis"
+          },
+          "biomass_sd": {
+            "$ref": "#/components/schemas/CoverageAxis"
+          },
+          "optical_paired": {
+            "$ref": "#/components/schemas/CoverageAxis"
+          }
         },
-        "required": ["requested_ha", "calculated_ha", "missing_ha", "complete",
-                     "biomass", "biomass_sd", "optical_paired"]
+        "required": [
+          "requested_ha",
+          "calculated_ha",
+          "missing_ha",
+          "complete",
+          "biomass",
+          "biomass_sd",
+          "optical_paired"
+        ]
       },
-
       "RasterAnalysis": {
         "type": "object",
         "description": "Output of rs.case2.payload.analysis_payload. Backend never recomputes any of these numbers.",
         "properties": {
-          "schema": {"type": "string"},
-          "request": {"$ref": "#/components/schemas/RasterRequestBlock"},
-          "stock_change": {"$ref": "#/components/schemas/StockChangeBlock"},
-          "timeline": {"type": "array", "items": {"$ref": "#/components/schemas/TimelineEntry"}},
-          "coverage": {"$ref": "#/components/schemas/RasterCoverageBlock"},
+          "schema": {
+            "type": "string"
+          },
+          "request": {
+            "$ref": "#/components/schemas/RasterRequestBlock"
+          },
+          "stock_change": {
+            "$ref": "#/components/schemas/StockChangeBlock"
+          },
+          "timeline": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimelineEntry"
+            }
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/RasterCoverageBlock"
+          },
           "cells": {
             "type": "object",
             "properties": {
-              "count": {"type": "integer", "minimum": 0},
-              "valid_count": {"type": "integer", "minimum": 0},
-              "weight_sum_ha": {"type": "number", "minimum": 0},
-              "artifact": {"type": "string"}
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "valid_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "weight_sum_ha": {
+                "type": "number",
+                "minimum": 0
+              },
+              "artifact": {
+                "type": "string"
+              }
             },
-            "required": ["count", "valid_count", "weight_sum_ha"]
+            "required": [
+              "count",
+              "valid_count",
+              "weight_sum_ha"
+            ]
           },
           "optical": {
             "type": "object",
             "properties": {
-              "scenes": {"type": "array", "items": {"type": "object"}},
-              "paired": {"oneOf": [{"type": "object"}, {"type": "null"}]}
+              "scenes": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "paired": {
+                "oneOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
             },
-            "required": ["scenes", "paired"]
+            "required": [
+              "scenes",
+              "paired"
+            ]
           },
-          "change_evidence": {"oneOf": [{"type": "object"}, {"type": "null"}]},
-          "grids": {"type": "object"},
-          "parameters": {"type": "object"},
-          "limitations": {"type": "array", "items": {"type": "string"}},
-          "artifacts": {"type": "array", "items": {"$ref": "#/components/schemas/ArtifactRecord"}}
+          "change_evidence": {
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "grids": {
+            "type": "object"
+          },
+          "parameters": {
+            "type": "object"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactRecord"
+            }
+          }
         },
-        "required": ["schema", "request", "stock_change", "timeline", "coverage", "cells",
-                     "optical", "change_evidence", "parameters", "limitations"]
+        "required": [
+          "schema",
+          "request",
+          "stock_change",
+          "timeline",
+          "coverage",
+          "cells",
+          "optical",
+          "change_evidence",
+          "parameters",
+          "limitations"
+        ]
       },
-
       "CellFeature": {
         "type": "object",
         "description": "One native CCI cell. weight_ha is the geodesic area of the intersection with the request, not the area of the whole cell.",
         "properties": {
-          "type": {"const": "Feature"},
-          "geometry": {"type": "object"},
+          "type": {
+            "const": "Feature"
+          },
+          "geometry": {
+            "type": "object"
+          },
           "properties": {
             "type": "object",
             "properties": {
-              "cell_id": {"type": "string"},
-              "parent_aoi_id": {"type": "string"},
-              "weight_ha": {"type": "number", "minimum": 0},
-              "agb_t_ha": {"type": "object", "additionalProperties": {"type": "number"}},
-              "agb_sd_t_ha": {"type": "object", "additionalProperties": {"type": "number"}},
-              "valid": {"type": "boolean"}
+              "cell_id": {
+                "type": "string"
+              },
+              "parent_aoi_id": {
+                "type": "string"
+              },
+              "weight_ha": {
+                "type": "number",
+                "minimum": 0
+              },
+              "agb_t_ha": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "number"
+                }
+              },
+              "agb_sd_t_ha": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "number"
+                }
+              },
+              "valid": {
+                "type": "boolean"
+              }
             },
-            "required": ["cell_id", "weight_ha", "agb_t_ha", "agb_sd_t_ha", "valid"]
+            "required": [
+              "cell_id",
+              "weight_ha",
+              "agb_t_ha",
+              "agb_sd_t_ha",
+              "valid"
+            ]
           }
         },
-        "required": ["type", "geometry", "properties"]
+        "required": [
+          "type",
+          "geometry",
+          "properties"
+        ]
       },
-
       "CellLayer": {
         "type": "object",
         "description": "Per-cell uncertainty artifact. A single summary standard deviation cannot express spatial dependence, so the interval owner receives the cells themselves.",
         "properties": {
-          "type": {"const": "FeatureCollection"},
-          "name": {"type": "string"},
-          "note": {"type": "string"},
-          "features": {"type": "array", "items": {"$ref": "#/components/schemas/CellFeature"}}
+          "type": {
+            "const": "FeatureCollection"
+          },
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CellFeature"
+            }
+          }
         },
-        "required": ["type", "features"]
+        "required": [
+          "type",
+          "features"
+        ]
       },
-
       "CarbonInterval": {
         "type": "object",
         "properties": {
-          "status": {"type": "string", "enum": ["AVAILABLE", "UNAVAILABLE"]},
-          "unavailable_reason": {"oneOf": [{"type": "string"}, {"type": "null"}]},
-          "lower_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "upper_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "sd_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "interval_kind": {"type": "string"},
-          "method_version": {"type": "string"},
-          "assumptions": {"type": "object"},
-          "sensitivity": {"type": "array", "items": {"type": "object"}}
+          "status": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "UNAVAILABLE"
+            ]
+          },
+          "unavailable_reason": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lower_tco2e": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "upper_tco2e": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sd_tco2e": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "interval_kind": {
+            "type": "string"
+          },
+          "method_version": {
+            "type": "string"
+          },
+          "assumptions": {
+            "type": "object"
+          },
+          "sensitivity": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
         },
-        "required": ["status", "unavailable_reason", "lower_tco2e", "upper_tco2e", "sd_tco2e",
-                     "interval_kind", "method_version", "assumptions", "sensitivity"]
+        "required": [
+          "status",
+          "unavailable_reason",
+          "lower_tco2e",
+          "upper_tco2e",
+          "sd_tco2e",
+          "interval_kind",
+          "method_version",
+          "assumptions",
+          "sensitivity"
+        ]
       },
-
       "CarbonBaseline": {
         "type": "object",
         "properties": {
-          "status": {"type": "string", "enum": ["AVAILABLE", "UNAVAILABLE"]},
-          "unavailable_reason": {"oneOf": [{"type": "string"}, {"type": "null"}]},
-          "baseline_id": {"oneOf": [{"type": "string"}, {"type": "null"}]},
-          "area_ha": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "delta_tc": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "delta_tc_ha": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "e_base_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "parts": {"type": "array", "items": {"type": "object"}}
+          "status": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "UNAVAILABLE"
+            ]
+          },
+          "unavailable_reason": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "baseline_id": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "area_ha": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delta_tc": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delta_tc_ha": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "e_base_tco2e": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
         },
-        "required": ["status", "unavailable_reason", "baseline_id", "area_ha", "delta_tc",
-                     "delta_tc_ha", "e_base_tco2e", "parts"]
+        "required": [
+          "status",
+          "unavailable_reason",
+          "baseline_id",
+          "area_ha",
+          "delta_tc",
+          "delta_tc_ha",
+          "e_base_tco2e",
+          "parts"
+        ]
       },
-
       "CarbonUnits": {
         "type": "object",
         "description": "Either status UNAVAILABLE with units null and an unavailable_reason, or status AVAILABLE with an integer units value and, when it is zero, a zero_reason. Never both reasons at once.",
         "properties": {
-          "status": {"type": "string", "enum": ["AVAILABLE", "UNAVAILABLE"]},
-          "unavailable_reason": {"oneOf": [{"type": "string"}, {"type": "null"}]},
-          "zero_reason": {"oneOf": [{"type": "string"}, {"type": "null"}]},
-          "e_proj_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "e_base_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "leakage_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "lower_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "upper_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "h_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "r_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "ratio": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "uncertainty_share": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "uncertainty_deduction_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "r_adj_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "buffer_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "units": {"oneOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
-          "rounding_residual_tco2e": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "scenario_values": {"type": "array", "items": {"type": "object"}},
-          "method_version": {"type": "string"}
+          "status": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "UNAVAILABLE"
+            ]
+          },
+          "unavailable_reason": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "zero_reason": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "e_proj_tco2e": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "e_base_tco2e": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "leakage_tco2e": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lower_tco2e": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "upper_tco2e": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "h_tco2e": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "r_tco2e": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratio": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "uncertainty_share": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "uncertainty_deduction_tco2e": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "r_adj_tco2e": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "buffer_tco2e": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "units": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rounding_residual_tco2e": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scenario_values": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "method_version": {
+            "type": "string"
+          }
         },
-        "required": ["status", "unavailable_reason", "zero_reason", "e_proj_tco2e", "e_base_tco2e",
-                     "leakage_tco2e", "lower_tco2e", "upper_tco2e", "h_tco2e", "r_tco2e", "ratio",
-                     "uncertainty_share", "r_adj_tco2e", "buffer_tco2e", "units",
-                     "rounding_residual_tco2e", "scenario_values", "method_version"]
+        "required": [
+          "status",
+          "unavailable_reason",
+          "zero_reason",
+          "e_proj_tco2e",
+          "e_base_tco2e",
+          "leakage_tco2e",
+          "lower_tco2e",
+          "upper_tco2e",
+          "h_tco2e",
+          "r_tco2e",
+          "ratio",
+          "uncertainty_share",
+          "r_adj_tco2e",
+          "buffer_tco2e",
+          "units",
+          "rounding_residual_tco2e",
+          "scenario_values",
+          "method_version"
+        ]
       },
-
       "CarbonClaim": {
         "type": "object",
         "properties": {
-          "status": {"type": "string"},
-          "mismatch_reasons": {"type": "array", "items": {"type": "string"}},
-          "claimed_units": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "source": {"oneOf": [{"type": "string"}, {"type": "null"}]},
-          "units": {"oneOf": [{"type": "integer"}, {"type": "null"}]},
-          "gap_units": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "supported_share": {"oneOf": [{"type": "number"}, {"type": "null"}]},
-          "gap_values": {"type": "array", "items": {"type": "object"}}
+          "status": {
+            "type": "string"
+          },
+          "mismatch_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "claimed_units": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "units": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unsupported_gap": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "supported_share": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gap_values": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "reason": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
         },
-        "required": ["status", "mismatch_reasons", "claimed_units", "source", "units",
-                     "gap_units", "supported_share", "gap_values"]
+        "required": [
+          "status",
+          "mismatch_reasons",
+          "claimed_units",
+          "source",
+          "units",
+          "unsupported_gap",
+          "supported_share",
+          "gap_values",
+          "reason"
+        ]
       },
-
       "CarbonAssessment": {
         "type": "object",
         "description": "Output of the carbon engine for one request. The engine performs no I/O other than reading data/methodology/*.csv and imports no web, database or chain library.",
         "properties": {
-          "schema": {"type": "string"},
-          "method_version": {"type": "string"},
-          "parameters": {"type": "object"},
-          "interval": {"$ref": "#/components/schemas/CarbonInterval"},
-          "baseline": {"$ref": "#/components/schemas/CarbonBaseline"},
-          "units": {"$ref": "#/components/schemas/CarbonUnits"},
-          "claim": {"$ref": "#/components/schemas/CarbonClaim"},
-          "notes": {"type": "array", "items": {"type": "string"}}
+          "schema": {
+            "type": "string"
+          },
+          "method_version": {
+            "type": "string"
+          },
+          "parameters": {
+            "type": "object"
+          },
+          "interval": {
+            "$ref": "#/components/schemas/CarbonInterval"
+          },
+          "baseline": {
+            "$ref": "#/components/schemas/CarbonBaseline"
+          },
+          "units": {
+            "$ref": "#/components/schemas/CarbonUnits"
+          },
+          "claim": {
+            "$ref": "#/components/schemas/CarbonClaim"
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         },
-        "required": ["schema", "method_version", "parameters", "interval", "baseline",
-                     "units", "claim", "notes"]
+        "required": [
+          "schema",
+          "method_version",
+          "parameters",
+          "interval",
+          "baseline",
+          "units",
+          "claim",
+          "notes"
+        ]
       },
-
       "ArtifactRecord": {
         "type": "object",
         "description": "One file a run wrote, with the metadata needed to place it and check it.",
         "properties": {
-          "id": {"type": "string"},
-          "role": {"type": "string"},
-          "media_type": {"type": "string"},
-          "path": {"type": "string"},
-          "api_url": {"type": "string"},
-          "sha256": {"$ref": "#/components/schemas/RawSha256"},
-          "size_bytes": {"type": "integer", "minimum": 0},
-          "crs": {"type": "string"},
-          "resolution": {"type": "array", "items": {"type": "number"}},
-          "resolution_units": {"type": "string"},
-          "bbox_native": {"oneOf": [{"type": "array", "items": {"type": "number"}}, {"type": "null"}]},
-          "bbox_wgs84": {"oneOf": [{"type": "array", "items": {"type": "number"}}, {"type": "null"}]},
-          "unit": {"type": "string"},
-          "provenance": {"type": "string"}
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "media_type": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "api_url": {
+            "type": "string"
+          },
+          "sha256": {
+            "$ref": "#/components/schemas/RawSha256"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "crs": {
+            "type": "string"
+          },
+          "resolution": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "resolution_units": {
+            "type": "string"
+          },
+          "bbox_native": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bbox_wgs84": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit": {
+            "type": "string"
+          },
+          "provenance": {
+            "type": "string"
+          }
         },
-        "required": ["id", "role", "media_type", "path", "sha256", "size_bytes"]
+        "required": [
+          "id",
+          "role",
+          "media_type",
+          "path",
+          "sha256",
+          "size_bytes"
+        ]
       },
-
       "ArtifactManifest": {
         "type": "object",
         "description": "What was read, with checksums, and a content hash over the scientific payload. The run time stays outside that hash so a genuine replay is distinguishable from a coincidence.",
         "properties": {
-          "schema": {"type": "string"},
-          "method_version": {"type": "string"},
-          "code_commit": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+          "schema": {
+            "type": "string"
+          },
+          "method_version": {
+            "type": "string"
+          },
+          "code_commit": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "dataset": {
             "type": "object",
             "properties": {
-              "root": {"type": "string"},
+              "root": {
+                "type": "string"
+              },
               "files": {
                 "type": "array",
                 "items": {
                   "type": "object",
                   "properties": {
-                    "path": {"type": "string"},
-                    "sha256": {"$ref": "#/components/schemas/RawSha256"},
-                    "size_bytes": {"type": "integer", "minimum": 0},
-                    "role": {"type": "string"}
+                    "path": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "$ref": "#/components/schemas/RawSha256"
+                    },
+                    "size_bytes": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "role": {
+                      "type": "string"
+                    }
                   },
-                  "required": ["path", "sha256", "size_bytes", "role"]
+                  "required": [
+                    "path",
+                    "sha256",
+                    "size_bytes",
+                    "role"
+                  ]
                 }
               }
             },
-            "required": ["root", "files"]
+            "required": [
+              "root",
+              "files"
+            ]
           },
-          "parameters": {"type": "object"},
-          "request": {"type": "object"},
-          "content_sha256": {"$ref": "#/components/schemas/Hash"},
-          "artifacts": {"type": "array", "items": {"$ref": "#/components/schemas/ArtifactRecord"}}
+          "parameters": {
+            "type": "object"
+          },
+          "request": {
+            "type": "object"
+          },
+          "content_sha256": {
+            "$ref": "#/components/schemas/Hash"
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactRecord"
+            }
+          }
         },
-        "required": ["schema", "method_version", "code_commit", "dataset", "parameters",
-                     "request", "content_sha256"]
+        "required": [
+          "schema",
+          "method_version",
+          "code_commit",
+          "dataset",
+          "parameters",
+          "request",
+          "content_sha256"
+        ]
       }
     }
   }

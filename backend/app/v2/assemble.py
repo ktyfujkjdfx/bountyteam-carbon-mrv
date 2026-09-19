@@ -38,11 +38,16 @@ ROLE_TO_SOURCE = {
     "biomass": "CCI_V7",
     "cci_biomass": "CCI_V7",
     "cci_cell_layer": "CCI_V7",
+    "sentinel2_reflectance": "S2_L2A",
+    "sentinel2_scl": "S2_L2A",
     "sentinel2:reflectance_path": "S2_L2A",
     "sentinel2:scl_path": "S2_L2A",
     "gfc": "GFC_2025_V113",
+    "gfc_lossyear": "GFC_2025_V113",
     "modis_burn": "MODIS_MCD64A1_061",
+    "modis_burn_date": "MODIS_MCD64A1_061",
     "table": "CASE_RULES_V1",
+    "case_table": "CASE_RULES_V1",
 }
 ALWAYS_CITED = ("IPCC_FOREST_2006", "IPCC_GENERIC_2006", "CASE_RULES_V1")
 
@@ -327,7 +332,8 @@ def claim_block(claim: dict, *, geometry_hash: str, year_start: int, year_end: i
         "comparable": comparable,
         "claimed_units": claim["claimed_units"],
         "q": claim["units"],
-        "unsupported_gap": claim["gap_units"],
+        "reason": claim.get("reason"),
+        "unsupported_gap": claim["unsupported_gap"],
         "supported_share": claim["supported_share"],
         "mismatch_reasons": list(claim["mismatch_reasons"]),
         "scope": scope or {"geometry_hash": geometry_hash, "year_start": year_start,
@@ -655,8 +661,9 @@ def unavailable_result(*, analysis_id: str, run_id: str, created_at: str,
         "status": "NOT_PROVIDED" if request_snapshot["claimed_units"] is None
         else "UNASSESSABLE",
         "mismatch_reasons": [], "claimed_units": request_snapshot["claimed_units"],
-        "source": request_snapshot["claim_origin"], "units": None, "gap_units": None,
-        "supported_share": None, "gap_values": []})
+        "source": request_snapshot["claim_origin"], "units": None,
+        "unsupported_gap": None, "supported_share": None, "gap_values": [],
+        "reason": None})
     year_start, year_end = request_snapshot["year_start"], request_snapshot["year_end"]
     result = {
         "fixture": None,

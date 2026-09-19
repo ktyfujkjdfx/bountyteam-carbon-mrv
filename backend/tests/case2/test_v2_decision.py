@@ -233,7 +233,7 @@ def test_a_claim_against_a_null_result_is_unassessable(harness):
 
 def test_a_claim_about_another_period_is_not_comparable(harness):
     scope = {"geometry_hash": "0x" + "1" * 64, "year_start": 2019, "year_end": 2020,
-             "pool": "AGB", "unit": "tCO2e"}
+             "pool": "AGB_LIVE_WOODY", "unit": "POTENTIAL_UNIT_OF_THE_CASE"}
     result = result_of(harness, {**POSITIVE, "claimed_units": 500, "claim_scope": scope},
                        "scope-key-00000001")
     claim = result["claim"]
@@ -245,7 +245,7 @@ def test_a_claim_about_another_period_is_not_comparable(harness):
 
 def test_a_claim_about_another_pool_is_not_comparable(harness):
     scope = {"geometry_hash": "0x" + "1" * 64, "year_start": 2019, "year_end": 2024,
-             "pool": "WHOLE_ECOSYSTEM", "unit": "tCO2e"}
+             "pool": "WHOLE_ECOSYSTEM", "unit": "POTENTIAL_UNIT_OF_THE_CASE"}
     result = result_of(harness, {**POSITIVE, "claimed_units": 500, "claim_scope": scope},
                        "pool-key-00000001")
     assert "POOL_MISMATCH" in result["claim"]["mismatch_reasons"]
@@ -283,7 +283,7 @@ def test_the_result_never_calls_a_gap_a_loss_or_a_verdict(harness):
 
 def test_every_result_states_the_pool_and_the_sign(harness):
     change = result_of(harness, POSITIVE, "sign-key-00000001")["change"]
-    assert change["pool"] == "AGB"
+    assert change["pool"] == "AGB_LIVE_WOODY"
     assert change["sign_convention"] == "POSITIVE_E_MEANS_POOL_LOSS"
 
 
@@ -315,7 +315,8 @@ def test_a_claim_of_zero_is_not_applicable_rather_than_supported(harness):
     """
     claim = result_of(harness, {**POSITIVE, "claimed_units": 0}, "zeroclaim-key-002")["claim"]
     assert claim["status"] == "NOT_APPLICABLE"
-    assert claim["mismatch_reasons"] == ["NO_POSITIVE_CLAIM"]
+    assert claim["reason"] == "NO_POSITIVE_CLAIM"
+    assert claim["mismatch_reasons"] == [], "nothing disagreed"
     assert claim["supported_share"] is None
     assert claim["unsupported_gap"] == 0.0
     assert claim["comparable"] is False
