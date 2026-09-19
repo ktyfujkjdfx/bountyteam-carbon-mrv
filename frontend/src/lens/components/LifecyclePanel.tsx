@@ -32,7 +32,7 @@ export function LifecyclePanel({
           return (
             <li key={item.step} data-testid={`lens-lifecycle-${item.step}`} data-state={completed ? 'done' : availability.allowed ? 'ready' : 'blocked'}>
               <div className="lens-lifecycle-head">
-                <span className={`badge tone-${completed ? 'ok' : availability.allowed ? 'info' : 'neutral'}`}>{completed ? 'ВЫПОЛНЕНО' : availability.allowed ? 'ДОСТУПНО' : 'НЕДОСТУПНО'}</span>
+                <span className={`badge tone-${completed ? 'ok' : availability.allowed ? 'info' : 'neutral'}`}>{completed ? 'Выполнено' : availability.allowed ? 'Доступно' : 'Недоступно'}</span>
                 <strong>{item.label}</strong>
               </div>
               <p className="muted small">{item.description}</p>

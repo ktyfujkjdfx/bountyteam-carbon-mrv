@@ -158,7 +158,7 @@ export function renderReportHtml(result: AnalysisResult): string {
     ['Площадь запроса, га', fmt(result.areas.requested_ha, 4)],
     ['Рассчитанная площадь, га', fmt(result.areas.calculated_ha, 4)],
     ['Изменение запаса, т C', fmt(result.change.delta_carbon_tc)],
-    ['Eproj, т CO₂-экв.', fmt(result.change.eproj_tco2e)],
+    ['Изменение запаса углерода (Eproj), т CO₂-экв.', fmt(result.units.eproj_tco2e)],
     ['Ebase, т CO₂-экв.', fmt(result.units.ebase_tco2e)],
     ['R, т CO₂-экв.', fmt(result.units.r_tco2e)],
     ['H, т CO₂-экв.', fmt(result.units.h_tco2e)],

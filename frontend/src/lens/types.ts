@@ -214,7 +214,8 @@ export interface Change {
   total_carbon_start_tc: number | null;
   total_carbon_end_tc: number | null;
   delta_carbon_tc: number | null;
-  eproj_tco2e: number | null;
+  /** Ссылка на место публикации величины: сама она лежит в `units.eproj_tco2e` и только там. */
+  eproj_ref: string;
   eproj_tco2e_ha_year: number | null;
   normalisation_area_ha: number | null;
   sign_convention: string;
@@ -334,12 +335,25 @@ export interface Zone {
   evidence_refs: string[];
   evidence: Record<string, unknown>;
   artifact_ref: string | null;
-  /** Outline of the zone when the service ships one; otherwise the map anchors a labelled marker. */
+  /**
+   * Контур зоны. Контракт его не объявляет: клиент подмешивает геометрию из проверенного по хешу
+   * артефакта `change_zones`, а без артефакта карта ставит подписанный маркер.
+   */
   geometry?: Geometry | null;
-  severity?: string | null;
-  detection_resolution_m?: number | null;
-  observed_between?: Record<string, unknown> | null;
-  evidence_events?: unknown[];
+  /**
+   * Дополнения из того же артефакта зон. Контракт `Zone` их не объявляет, поэтому они собраны
+   * отдельным блоком: на экране они подписаны как данные файла зон, а не как поля API.
+   */
+  annex?: ZoneAnnex | null;
+}
+
+/** Свойства объекта в файле зон, которых нет в контракте `Zone`. */
+export interface ZoneAnnex {
+  severity: string | null;
+  detection_resolution_m: number | null;
+  observed_between: { start?: unknown; end?: unknown } | null;
+  evidence_events: string[];
+  event_date_range: { start?: unknown; end?: unknown } | null;
 }
 
 export interface Scene {

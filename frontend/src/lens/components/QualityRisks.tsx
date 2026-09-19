@@ -1,6 +1,7 @@
 import { StatusBadge } from '../../components/common';
 import { metaFor } from '../../domain/status';
 import { eventsForAoi } from '../data';
+import { codeRu, serviceTextRu } from '../ru';
 import { SEVERITY_META } from '../status';
 import type { AnalysisResult } from '../types';
 
@@ -196,7 +197,7 @@ export function QualityRisks({ result }: { result: AnalysisResult }) {
         подмешиваются.
       </p>
 
-      <h3>Предупреждения расчёта</h3>
+      <h3>На что обратить внимание</h3>
       {warnings.length === 0 ? (
         <p className="muted small" data-testid="lens-warnings-empty">
           Предупреждений нет.
@@ -206,14 +207,20 @@ export function QualityRisks({ result }: { result: AnalysisResult }) {
           {warnings.map((warning) => (
             <li key={`${warning.code}-${warning.message}`} data-testid={`lens-warning-${warning.code}`}>
               <StatusBadge meta={metaFor(SEVERITY_META, warning.severity)} />{' '}
-              <span>{warning.message}</span>
-              {warning.code !== 'UNSTRUCTURED_WARNING' && <div className="mono small muted">{warning.code}</div>}
+              {codeRu(warning.code) && <b>{codeRu(warning.code)}. </b>}
+              <span>{serviceTextRu(warning.message)}</span>
+              {warning.code !== 'UNSTRUCTURED_WARNING' && (
+                <details className="lens-tech">
+                  <summary>Код предупреждения</summary>
+                  <div className="lens-tech-body mono small">{warning.code}</div>
+                </details>
+              )}
             </li>
           ))}
         </ul>
       )}
 
-      <h3>Риски</h3>
+      <h3>Риски участка</h3>
       <div className="lens-risk-grid" data-testid="lens-risks">
         {cards.map((card) => (
           <article key={card.id} className="lens-risk-card" data-testid={`lens-risk-${card.id}`}>
@@ -227,12 +234,23 @@ export function QualityRisks({ result }: { result: AnalysisResult }) {
       </div>
       <p className="muted small">Карточки независимы и намеренно не сводятся в один рейтинг.</p>
 
-      <h3>Ограничения</h3>
+      <h3>Чего этот расчёт не утверждает</h3>
+      <p className="muted small">Границы метода: их стоит прочитать до того, как принимать решение по числу.</p>
       <ul className="limitations small" data-testid="lens-limitations">
         {result.limitations.map((item) => (
-          <li key={`${item.code}-${item.message}`}><span>{item.message}</span><div className="mono small muted">{item.code}</div></li>
+          <li key={`${item.code}-${item.message}`}>
+            <span>{serviceTextRu(item.message)}</span>
+          </li>
         ))}
       </ul>
+      <details className="lens-tech">
+        <summary>Коды ограничений</summary>
+        <div className="lens-tech-body">
+          {result.limitations.map((item) => (
+            <span key={`${item.code}-${item.message}`} className="mono small">{item.code}</span>
+          ))}
+        </div>
+      </details>
     </div>
   );
 }

@@ -146,12 +146,14 @@ export function passportStatusOf(submission: Submission): PassportStatus {
 }
 
 export const PASSPORT_STATUS_TEXT: Record<PassportStatus, { label: string; tone: string; hint: string }> = {
-  DRAFT: { label: 'ЧЕРНОВИК', tone: 'neutral', hint: 'Заявка подана, расчёт ещё не выполнялся.' },
-  ANALYSING: { label: 'РАСЧЁТ ИДЁТ', tone: 'info', hint: 'Сервис считает эту заявку. Повторный запуск он отклонит.' },
-  CALCULATED: { label: 'РАССЧИТАН', tone: 'info', hint: 'Расчёт выполнен; верификатор его ещё не финализировал.' },
-  FINALIZED: { label: 'ФИНАЛИЗИРОВАН', tone: 'ok', hint: 'Верификатор подтвердил, что паспорт отражает этот расчёт.' },
-  INTEGRITY_FAILED: { label: 'ЦЕЛОСТНОСТЬ НАРУШЕНА', tone: 'blocked', hint: 'Хеш содержания не совпал: файл или расчёт изменились после фиксации.' },
-  UNKNOWN: { label: 'СОСТОЯНИЕ НЕИЗВЕСТНО', tone: 'neutral', hint: 'Сервис сообщил состояние, которого этот клиент не знает. Действия над заявкой скрыты, пока клиент не обновлён.' },
+  // Это состояние паспорта, а не заявки: поданная заявка тоже стоит здесь, пока её не посчитали.
+  // Слово «черновик» на поданной заявке читалось так, будто владелец её ещё не отправил.
+  DRAFT: { label: 'Ждёт расчёта', tone: 'neutral', hint: 'Паспорта ещё нет: расчёт по этой заявке не выполнялся.' },
+  ANALYSING: { label: 'Расчёт идёт', tone: 'info', hint: 'Сервис считает эту заявку. Повторный запуск он отклонит.' },
+  CALCULATED: { label: 'Рассчитан', tone: 'info', hint: 'Расчёт выполнен; верификатор его ещё не финализировал.' },
+  FINALIZED: { label: 'Финализирован', tone: 'ok', hint: 'Верификатор подтвердил, что паспорт отражает этот расчёт.' },
+  INTEGRITY_FAILED: { label: 'Целостность нарушена', tone: 'blocked', hint: 'Хеш содержания не совпал: файл или расчёт изменились после фиксации.' },
+  UNKNOWN: { label: 'Состояние неизвестно', tone: 'neutral', hint: 'Сервис сообщил состояние, которого этот клиент не знает. Действия над заявкой скрыты, пока клиент не обновлён.' },
 };
 
 export const LIFECYCLE_STEPS: Array<{ step: LifecycleStep; label: string; description: string }> = [

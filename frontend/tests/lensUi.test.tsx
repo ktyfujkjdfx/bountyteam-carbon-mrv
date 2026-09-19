@@ -51,7 +51,7 @@ describe('claim stress test', () => {
   it('calls a zero claim absent, never supported', async () => {
     const result = await resultOf('DOC_EXAMPLE_Q395', { year_start: 2019, year_end: 2020, claimed_units: 0 });
     render(<ClaimStressTest result={result} priceKey="base" />);
-    expect(screen.getByTestId('lens-claim-status')).toHaveTextContent('ПОЛОЖИТЕЛЬНОГО ЗАЯВЛЕНИЯ НЕТ');
+    expect(screen.getByTestId('lens-claim-status')).toHaveTextContent('Положительного заявления нет');
     expect(screen.getByTestId('lens-claim-sentence')).toHaveTextContent('Положительное заявление отсутствует');
     expect(screen.queryByTestId('lens-claim-zero-warning')).toBeNull();
   });
@@ -66,7 +66,7 @@ describe('claim stress test', () => {
   it('shows the gap, its scenario value and the scope of the comparison', async () => {
     const result = await resultOf('DOC_EXAMPLE_Q395', { year_start: 2019, year_end: 2020, claimed_units: 1000 });
     render(<ClaimStressTest result={result} priceKey="base" />);
-    expect(screen.getByTestId('lens-claim-status')).toHaveTextContent('ПОДТВЕРЖДЕНО ЧАСТИЧНО');
+    expect(screen.getByTestId('lens-claim-status')).toHaveTextContent('Подтверждено частично');
     expect(screen.getByTestId('lens-claim-gap')).toHaveTextContent('605');
     expect(screen.getByTestId('lens-claim-gap')).toHaveTextContent('907 500');
     expect(screen.getByTestId('lens-claim-share')).toHaveTextContent('40 %');
@@ -77,7 +77,7 @@ describe('claim stress test', () => {
   it('explains an incomparable period instead of showing a gap', async () => {
     const result = await resultOf('DOC_EXAMPLE_Q395', { year_start: 2019, year_end: 2024, claimed_units: 500 });
     render(<ClaimStressTest result={result} priceKey="base" />);
-    expect(screen.getByTestId('lens-claim-status')).toHaveTextContent('СРАВНЕНИЕ НЕВОЗМОЖНО');
+    expect(screen.getByTestId('lens-claim-status')).toHaveTextContent('Сравнение невозможно');
     expect(screen.getByTestId('lens-claim-reasons')).toHaveTextContent('другому периоду');
     expect(screen.getByTestId('lens-claim-gap')).toHaveTextContent('—');
   });
@@ -91,7 +91,7 @@ describe('quality and risks', () => {
     expect(screen.getByTestId('lens-coverage-optical_paired_valid_fraction')).toHaveTextContent('18 %');
     expect(screen.getByTestId('lens-coverage-uncertainty_fraction')).toBeVisible();
     expect(screen.getByTestId('lens-coverage-baseline_fraction')).toBeVisible();
-    expect(screen.getByTestId('lens-warning-LOW_OPTICAL_PAIRED_VALID')).toHaveTextContent('ПРЕДУПРЕЖДЕНИЕ');
+    expect(screen.getByTestId('lens-warning-LOW_OPTICAL_PAIRED_VALID')).toHaveTextContent('Предупреждение');
   });
 
   it('builds three independent risk cards from measured facts and no overall rating', async () => {
@@ -209,7 +209,7 @@ describe('workspaces and guards', () => {
     await user.click(screen.getByTestId('lens-run-analysis'));
     await waitFor(() => expect(screen.getByTestId('lens-q')).toBeVisible(), { timeout: 15_000 });
     await user.click(screen.getByTestId('lens-finalize'));
-    expect(screen.getAllByTestId('lens-passport-status')[0]).toHaveTextContent('ФИНАЛИЗИРОВАН');
+    expect(screen.getAllByTestId('lens-passport-status')[0]).toHaveTextContent('Финализирован');
     resetSessionStore(null);
     sessionStorage.clear();
   }, 30_000);

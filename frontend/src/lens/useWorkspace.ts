@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useResource } from '../hooks/useResource';
+import type { Notify } from './notify';
 import { LensError, type CreateVerificationRequest, type LensApiClient, type VerificationRequest } from './client';
 import { approximateAreaHa, validateGeometry } from './geometry';
 import { renderReportHtml } from './passport';
 import { useAnalysis } from './useAnalysis';
 import type { CellFeature, CellsState, GapLayerState } from './components/LensMapView';
+import { SNAPSHOT_ROLES, type SnapshotImage, type SnapshotsState } from './components/Snapshots';
 import type { PriceKey } from './components/Headline';
 import type { RequestDraft } from './components/RequestForm';
 import type { AnalysisResult, AreaMeasurement, Artifact, Catalog, Geometry, Proof, Zone } from './types';
@@ -137,11 +139,15 @@ function mergeZoneFeatures(result: AnalysisResult, features: Array<{ geometry: G
       return {
         ...zone,
         geometry: feature.geometry,
-        severity: typeof props.severity === 'string' ? props.severity : null,
-        detection_resolution_m: typeof props.detection_resolution_m === 'number' ? props.detection_resolution_m : null,
-        observed_between: typeof props.observed_between === 'object' && props.observed_between !== null
-          ? props.observed_between as Record<string, unknown> : null,
-        evidence_events: Array.isArray(props.evidence_events) ? props.evidence_events : [],
+        annex: {
+          severity: typeof props.severity === 'string' ? props.severity : null,
+          detection_resolution_m: typeof props.detection_resolution_m === 'number' ? props.detection_resolution_m : null,
+          observed_between: typeof props.observed_between === 'object' && props.observed_between !== null
+            ? (props.observed_between as { start?: unknown; end?: unknown }) : null,
+          evidence_events: Array.isArray(props.evidence_events) ? props.evidence_events.map(String) : [],
+          event_date_range: typeof props.event_date_range === 'object' && props.event_date_range !== null
+            ? (props.event_date_range as { start?: unknown; end?: unknown }) : null,
+        },
       };
     }),
   };
@@ -151,7 +157,7 @@ function mergeZoneFeatures(result: AnalysisResult, features: Array<{ geometry: G
  * Everything the three workspaces share: the catalog, the contour being measured, the analysis in
  * flight, the submissions of this session and the cells layer of the shown result.
  */
-export function useWorkspace(client: LensApiClient, actorEmail: string) {
+export function useWorkspace(client: LensApiClient, actorEmail: string, notify: Notify = () => {}) {
   const catalogResource = useResource<Catalog>((signal) => client.getCatalog(signal), [client]);
   const catalog = catalogResource.data;
   const catalogLoading = catalogResource.loading;
@@ -164,6 +170,9 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
   const [submissions, setSubmissions] = useState<Submission[]>(() => client.kind === 'fixture' ? loadSubmissions() : []);
   const submissionsRef = useRef<Submission[]>(submissions);
   const [activeSubmissionId, setActiveSubmissionId] = useState<string | null>(() => client.kind === 'fixture' ? loadSubmissions()[0]?.submission_id ?? null : null);
+  // Пользователь мог намеренно закрыть заявку и вернуться к списку. Обновление списка не должно
+  // молча открывать первую заявку снова — иначе кнопка «назад» не работает.
+  const clearedRef = useRef(false);
 
   const [priceKey, setPriceKey] = useState<PriceKey>('base');
   const [customPrice, setCustomPrice] = useState<number | null>(null);
@@ -171,6 +180,14 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const [cells, setCells] = useState<CellsState>({ kind: 'hidden' });
   const [gaps, setGaps] = useState<GapLayerState>({ kind: 'hidden' });
+  // Снимки принадлежат конкретному результату, и это хранится вместе с ними: иначе от прошлой
+  // заявки остаётся чужая оптика, пока грузится новая.
+  const [snapshots, setSnapshots] = useState<{ for: AnalysisResult | null; state: SnapshotsState }>({
+    for: null,
+    state: { kind: 'hidden' },
+  });
+  // Каждый показанный снимок держит objectURL; без освобождения вкладка копит их на каждый результат.
+  const snapshotRelease = useRef<Array<() => void>>([]);
   const [zoneResult, setZoneResult] = useState<AnalysisResult | null>(null);
   const [proof, setProof] = useState<Proof | null>(null);
 
@@ -193,7 +210,10 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
       if (signal?.aborted) return;
       submissionsRef.current = next;
       setSubmissions(next);
-      setActiveSubmissionId((current) => current && next.some((item) => item.submission_id === current) ? current : next[0]?.submission_id ?? null);
+      setActiveSubmissionId((current) => {
+        if (current && next.some((item) => item.submission_id === current)) return current;
+        return clearedRef.current ? null : next[0]?.submission_id ?? null;
+      });
       setRequestError(null);
     } catch (error) {
       if (!signal?.aborted) setRequestError(error instanceof LensError ? `${error.code}: ${error.message}` : String(error));
@@ -301,24 +321,25 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
   const submitRequest = useCallback(
     async (title: string) => {
       setRequestError(null);
-      if (!draft.geometry) {
-        setRequestError('Контур не задан: выберите участок, нарисуйте его или импортируйте GeoJSON.');
+      const refuse = (reason: string) => {
+        setRequestError(reason);
+        notify({ tone: 'warn', title: 'Заявку пока нельзя отправить', text: reason });
         return null;
+      };
+      if (!draft.geometry) {
+        return refuse('Контур не задан: выберите участок, нарисуйте его или импортируйте GeoJSON.');
       }
       const acceptedMeasurement = measureResource.data ?? (client.kind === 'fixture' ? measurement : null);
       if (!acceptedMeasurement || !acceptedMeasurement.valid || !acceptedMeasurement.within_limit ||
           acceptedMeasurement.area_ha === null || !acceptedMeasurement.geometry) {
-        setRequestError('Дождитесь корректного измерения контура сервисом и исправьте указанные ошибки.');
-        return null;
+        return refuse('Дождитесь корректного измерения контура сервисом и исправьте указанные ошибки.');
       }
       if (draft.yearEnd <= draft.yearStart) {
-        setRequestError('Конечный год должен быть больше начального.');
-        return null;
+        return refuse('Конечный год должен быть больше начального.');
       }
       const claimed = draft.claimedUnits.trim();
       if (claimed !== '' && (!Number.isFinite(Number(claimed)) || Number(claimed) < 0)) {
-        setRequestError('Заявленный объём должен быть неотрицательным числом.');
-        return null;
+        return refuse('Заявленный объём должен быть неотрицательным числом.');
       }
       if (client.kind === 'http') {
         if (!client.createRequest || !client.submitRequest) {
@@ -339,9 +360,17 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
           const submission = serverSubmission(submitted, null);
           persist([submission, ...submissionsRef.current.filter((item) => item.submission_id !== submission.submission_id)]);
           setActiveSubmissionId(submission.submission_id);
+          notify({
+            tone: 'ok',
+            title: 'Заявка отправлена на проверку',
+            text: `${submission.title}, ${submission.year_start}–${submission.year_end}.`,
+            hint: 'Расчёт запускает верификатор. Числа появятся здесь после его подтверждения.',
+          });
           return submission;
         } catch (error) {
-          setRequestError(error instanceof LensError ? `${error.code}: ${error.message}` : String(error));
+          const reason = error instanceof LensError ? `${error.code}: ${error.message}` : String(error);
+          setRequestError(reason);
+          notify({ tone: 'error', title: 'Сервис не принял заявку', text: reason });
           return null;
         }
       }
@@ -357,9 +386,15 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
       });
       persist([submission, ...submissionsRef.current]);
       setActiveSubmissionId(submission.submission_id);
+      notify({
+        tone: 'ok',
+        title: 'Заявка создана',
+        text: `${submission.title}, ${submission.year_start}–${submission.year_end}.`,
+        hint: 'Дальше её проверяет верификатор.',
+      });
       return submission;
     },
-    [actorEmail, client, draft, measureResource.data, measurement, persist],
+    [actorEmail, client, draft, measureResource.data, measurement, notify, persist],
   );
 
   const runAnalysis = useCallback(
@@ -375,13 +410,25 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
           setRequestError('CONTRACT: сервисный клиент не поддерживает lifecycle заявок.');
           return null;
         }
+        notify({
+          tone: 'info',
+          title: 'Расчёт запущен',
+          text: 'Сервис считает по спутниковым данным. Обычно это занимает до минуты.',
+        });
         try {
           const accepted = await client.startRequestAnalysis(submission.submission_id, { idempotencyKey: `lens-request-${crypto.randomUUID()}` });
           analysisId = accepted.analysis_id;
           if (!analysisId) throw new LensError('CONTRACT', 'Сервис не вернул analysis_id для заявки.');
           result = await analysis.watch(analysisId);
         } catch (error) {
-          setRequestError(error instanceof LensError ? `${error.code}: ${error.message}` : String(error));
+          const reason = error instanceof LensError ? `${error.code}: ${error.message}` : String(error);
+          setRequestError(reason);
+          notify({
+            tone: 'error',
+            title: 'Расчёт не выполнен',
+            text: reason,
+            hint: 'Заявка осталась в очереди: сервис сам вернул её в состояние «ждёт проверки».',
+          });
           // The service owns what happened to the request: a failed run returns it to SUBMITTED,
           // and guessing that here would leave the queue showing a state the service disagrees with.
           void refreshRequests();
@@ -413,6 +460,12 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
         // different contour than the one submitted. It is refused, and it is refused where the
         // person can read it — a thrown rejection here would reach only the console.
         setRequestError('GEOMETRY_HASH_MISMATCH: сервис рассчитал другой нормализованный контур; результат не принят.');
+        notify({
+          tone: 'error',
+          title: 'Результат не принят',
+          text: 'Сервис рассчитал другой нормализованный контур, чем был в заявке.',
+          hint: 'Число описывало бы не тот участок, поэтому оно не показано.',
+        });
         return null;
       }
       const updated: Submission = {
@@ -438,16 +491,46 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
       // Reconcile with the service once the number is on screen: status and events are its state,
       // not a conclusion this client is entitled to draw from a finished poll.
       if (client.kind === 'http') void refreshRequests();
+      const units = result.units.q;
+      notify(
+        units === null
+          ? {
+              tone: 'warn',
+              title: 'Расчёт завершён: единицы не рассчитаны',
+              text: 'Обязательных данных на этом участке не хватило.',
+              hint: 'Это не ноль единиц: смотрите раздел «Насколько можно доверять».',
+            }
+          : units === 0
+            ? {
+                tone: 'warn',
+                title: 'Расчёт завершён: подтверждённых единиц ноль',
+                text: 'Результат периода не превышает базовую линию.',
+                hint: 'Это полноценный результат проверки, а не ошибка.',
+              }
+            : {
+                tone: 'ok',
+                title: `Расчёт завершён: ${units.toLocaleString('ru-RU')} единиц`,
+                text: 'Числа и карта ниже.',
+                hint: 'Осталось подтвердить результат, чтобы его увидел инвестор.',
+              },
+      );
       return result;
     },
-    [actorEmail, analysis, client, persist, refreshRequests],
+    [actorEmail, analysis, client, notify, persist, refreshRequests],
   );
 
   const showCells = useCallback(async () => {
     const result = shownResult;
     const artifact = result?.artifacts.find((item) => item.role === 'cci_cell_layer' || item.role === 'cells') ?? null;
     if (!result || !artifact) {
-      setCells({ kind: 'unavailable', reason: 'Сервис не приложил к этому результату слой ячеек.' });
+      const reason = 'Сервис не приложил к этому результату слой ячеек.';
+      setCells({ kind: 'unavailable', reason });
+      notify({
+        tone: 'warn',
+        title: 'Ячейки показать нечем',
+        text: reason,
+        hint: 'Файл ячеек формирует сервис при расчёте: попросите верификатора пересчитать заявку.',
+      });
       return;
     }
     setCells({ kind: 'loading' });
@@ -455,17 +538,76 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
       const payload = await client.getArtifact(artifact);
       if (payload.integrity === 'MISMATCH') {
         setCells({ kind: 'integrity-failed', reason: `Хеш файла не совпал с заявленным ${artifact.sha256.slice(0, 18)}…` });
+        notify({
+          tone: 'error',
+          title: 'Целостность слоя не подтверждена',
+          text: 'Хеш файла ячеек не совпал с заявленным.',
+          hint: 'Слой не показан: выдавать непроверенные данные за доверенные нельзя.',
+        });
         return;
       }
       const parsed = cellsFromGeoJson(payload.data);
       setCells(parsed.length === 0 ? { kind: 'empty' } : { kind: 'ready', cells: parsed });
+      notify(
+        parsed.length === 0
+          ? { tone: 'warn', title: 'Слой ячеек пуст', text: 'В файле нет ни одной ячейки.' }
+          : { tone: 'ok', title: `Ячейки на карте: ${parsed.length.toLocaleString('ru-RU')}`, hint: 'Нажмите ячейку, чтобы увидеть запас углерода и погрешность.' },
+      );
     } catch (error) {
-      setCells({
-        kind: 'unavailable',
-        reason: error instanceof LensError ? `${error.code}: ${error.message}` : String(error),
-      });
+      const reason = error instanceof LensError ? `${error.code}: ${error.message}` : String(error);
+      setCells({ kind: 'unavailable', reason });
+      notify({ tone: 'error', title: 'Слой ячеек не загрузился', text: reason, hint: 'Карта и расчёт остаются на месте.' });
     }
-  }, [client, shownResult]);
+  }, [client, notify, shownResult]);
+
+  const showSnapshots = useCallback(async () => {
+    const result = shownResult;
+    if (!result) return;
+    const wanted = SNAPSHOT_ROLES.map((entry) => result.artifacts.find((item) => item.role === entry.role))
+      .filter((item): item is Artifact => item !== undefined);
+    if (wanted.length === 0) {
+      setSnapshots({ for: result, state: { kind: 'unavailable', reason: 'Сервис не приложил к этому результату ни одного снимка.' } });
+      return;
+    }
+    snapshotRelease.current.forEach((release) => release());
+    snapshotRelease.current = [];
+    setSnapshots({ for: result, state: { kind: 'loading' } });
+    try {
+      const loaded: SnapshotImage[] = [];
+      for (const artifact of wanted) {
+        const payload = await client.getArtifact(artifact);
+        snapshotRelease.current.push(payload.release);
+        loaded.push({ role: artifact.role, artifact, src: payload.src, integrity: payload.integrity });
+      }
+      setSnapshots({ for: result, state: { kind: 'ready', images: loaded } });
+      // Несовпавший хеш — это не мелочь фона: снимок не показан, и человек должен узнать почему.
+      const refused = loaded.filter((image) => image.integrity === 'MISMATCH').length;
+      if (refused > 0) {
+        notify({
+          tone: 'error',
+          title: refused === 1 ? 'Один снимок не показан' : `Снимков не показано: ${refused}`,
+          text: 'Хеш файла не совпал с заявленным в результате.',
+          hint: 'Остальные снимки и расчёт остаются на месте.',
+        });
+      }
+    } catch (error) {
+      const reason = error instanceof LensError ? `${error.code}: ${error.message}` : String(error);
+      setSnapshots({ for: result, state: { kind: 'unavailable', reason } });
+      notify({ tone: 'warn', title: 'Снимки не загрузились', text: reason, hint: 'Карта и расчёт остаются на месте.' });
+    }
+  }, [client, notify, shownResult]);
+
+  // Показывать можно только снимки того результата, который сейчас на экране: для любого другого
+  // состояние снова «ничего не загружено», и блок запрашивает свою оптику сам. Ссылки прошлого
+  // результата освобождает эта же загрузка, а последние — размонтирование вкладки.
+  const snapshotsState: SnapshotsState = snapshots.for === shownResult ? snapshots.state : { kind: 'hidden' };
+  useEffect(
+    () => () => {
+      snapshotRelease.current.forEach((release) => release());
+      snapshotRelease.current = [];
+    },
+    [],
+  );
 
   const finalize = useCallback(
     async (submission: Submission, verifier: string) => {
@@ -478,9 +620,17 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
           const finalized = await client.finalizeRequest(submission.submission_id);
           const updated = serverSubmission(finalized, submission.result);
           persist(submissionsRef.current.map((item) => item.submission_id === submission.submission_id ? updated : item));
+          notify({
+            tone: 'ok',
+            title: 'Результат подтверждён',
+            text: 'Паспорт закреплён за этой заявкой.',
+            hint: 'Теперь его видит инвестор, а повторное подтверждение сервис уже не примет.',
+          });
           return;
         } catch (error) {
-          setRequestError(error instanceof LensError ? `${error.code}: ${error.message}` : String(error));
+          const reason = error instanceof LensError ? `${error.code}: ${error.message}` : String(error);
+          setRequestError(reason);
+          notify({ tone: 'error', title: 'Подтвердить не удалось', text: reason });
           return;
         }
       }
@@ -490,8 +640,9 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
         verifier,
       );
       persist(submissionsRef.current.map((item) => (item.submission_id === submission.submission_id ? updated : item)));
+      notify({ tone: 'ok', title: 'Результат подтверждён', hint: 'Теперь его видит инвестор.' });
     },
-    [client, persist],
+    [client, notify, persist],
   );
 
   const addNote = useCallback(
@@ -547,7 +698,14 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
     setRequestError,
     submissions,
     activeSubmission,
-    setActiveSubmissionId,
+    setActiveSubmissionId: (id: string) => {
+      clearedRef.current = false;
+      setActiveSubmissionId(id);
+    },
+    clearActiveSubmission: () => {
+      clearedRef.current = true;
+      setActiveSubmissionId(null);
+    },
     analysis,
     shownResult,
     proof,
@@ -561,7 +719,9 @@ export function useWorkspace(client: LensApiClient, actorEmail: string) {
     setSelectedCellId,
     cells,
     gaps,
+    snapshots: snapshotsState,
     showCells,
+    showSnapshots,
     submitRequest,
     runAnalysis,
     finalize,

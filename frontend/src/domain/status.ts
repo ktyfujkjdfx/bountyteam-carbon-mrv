@@ -25,7 +25,7 @@ export interface StatusMeta {
 
 export const UNKNOWN_VALUE_HINT = 'Неизвестное значение от Backend — значение отсутствует в текущем API-контракте.';
 
-const MAX_UNKNOWN_LABEL = 64;
+const MAX_UNKNOWN_LABEL = 48;
 
 export function isKnownKey<K extends string>(table: Readonly<Record<K, unknown>>, value: unknown): value is K {
   return typeof value === 'string' && Object.hasOwn(table, value);
@@ -42,7 +42,7 @@ export function describeReceived(value: unknown): string {
 }
 
 export function unknownMeta(value: unknown): StatusMeta {
-  return { label: `UNKNOWN: ${describeReceived(value)}`, tone: 'neutral', hint: UNKNOWN_VALUE_HINT, unknown: true };
+  return { label: `Неизвестное значение: ${describeReceived(value)}`, tone: 'neutral', hint: UNKNOWN_VALUE_HINT, unknown: true };
 }
 
 // Contract drift must degrade to a neutral, explicit label instead of crashing the dashboard.

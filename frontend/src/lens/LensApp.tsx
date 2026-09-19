@@ -2,13 +2,31 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { MethodologyDialog } from '../components/MethodologyDialog';
 import { LensError, type LensApiClient } from './client';
 import { createLensClient, resolveLensConfig, switchModeHref, type LensConfig } from './config';
-import { FORBIDDEN_NOTE, ROLE_LABELS, demoLogin, fetchMe, login as serviceLogin, logout as serviceLogout, permissionsFor, type LensSession } from './auth';
+import { DEMO_ACCOUNTS, FORBIDDEN_NOTE, ROLE_LABELS, demoLogin, demoServiceLogin, fetchDemoAccounts, fetchMe, login as serviceLogin, logout as serviceLogout, permissionsFor, type LensSession, type ServiceDemoAccount } from './auth';
 import { getSession, getToken, setSession, subscribeSession } from './sessionStore';
 import { LoginScreen } from './components/LoginScreen';
+import { Toasts } from './components/Toasts';
+import { useToasts } from './notify';
 import { InvestorWorkspace, OwnerWorkspace, VerifierWorkspace } from './components/Workspaces';
 import { useWorkspace } from './useWorkspace';
 
 type Route = 'owner' | 'verifier' | 'investor';
+
+/** Что человек должен сделать на своём экране — одной фразой, без терминов. */
+const ROLE_GUIDE: Record<Route, { title: string; text: string }> = {
+  owner: {
+    title: 'Ваша задача: подать участок на проверку',
+    text: 'Выберите участок, укажите период и — если хотите — сколько единиц заявляете. Дальше участок проверит верификатор: расчёт запускает он, а не вы.',
+  },
+  verifier: {
+    title: 'Ваша задача: проверить заявку расчётом',
+    text: 'Откройте заявку из очереди и нажмите «Проверить проект». Сервис посчитает по спутниковым данным; после этого результат можно подтвердить — он станет виден инвестору.',
+  },
+  investor: {
+    title: 'Здесь только проверенные результаты',
+    text: 'В портфеле видны участки, по которым верификатор подтвердил расчёт. Для каждого показано, сколько единиц подтверждено, чем это ограничено и сколько это стоит по ценам кейса.',
+  },
+};
 
 function routeFromHash(hash: string): Route | null {
   const value = hash.replace(/^#\/?/, '').split('?')[0];
@@ -28,6 +46,12 @@ export function LensApp({ client: injected, config: injectedConfig }: { client?:
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [route, setRoute] = useState<Route | null>(() => (typeof window === 'undefined' ? null : routeFromHash(window.location.hash)));
+  // Роли, в которые сервис разрешает войти одним нажатием. В офлайн-режиме это местные
+  // помеченные учётные записи, в рабочем — то, что сервис сам объявил.
+  const [roles, setRoles] = useState<ServiceDemoAccount[]>(() =>
+    config.mode === 'fixture'
+      ? DEMO_ACCOUNTS.map((account) => ({ username: account.email, display_name: account.display_name, role: account.role }))
+      : []);
   const methodologyRef = useRef<HTMLDialogElement | null>(null);
 
   // The session is ended where the service says it is over, so an expired one returns the person to
@@ -67,6 +91,23 @@ export function LensApp({ client: injected, config: injectedConfig }: { client?:
     };
   }, [config.baseUrl, config.mode]);
 
+  // Спрашиваем сервис, какие роли можно открыть нажатием. Пустой ответ — обычное дело: тогда на
+  // экране остаётся вход по имени и паролю.
+  useEffect(() => {
+    if (config.mode === 'fixture') return;
+    let cancelled = false;
+    fetchDemoAccounts({ baseUrl: config.baseUrl })
+      .then((accounts) => {
+        if (!cancelled) setRoles(accounts);
+      })
+      .catch(() => {
+        if (!cancelled) setRoles([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [config.baseUrl, config.mode]);
+
   useEffect(() => {
     const onHash = () => setRoute(routeFromHash(window.location.hash));
     window.addEventListener('hashchange', onHash);
@@ -85,6 +126,27 @@ export function LensApp({ client: injected, config: injectedConfig }: { client?:
       setLoginError(null);
       try {
         const next = config.mode === 'fixture' ? demoLogin(username, password) : await serviceLogin({ baseUrl: config.baseUrl }, username, password);
+        setSession(next);
+        goTo(next.role);
+      } catch (error) {
+        setLoginError(error instanceof LensError ? error.message : String(error));
+      } finally {
+        setLoginBusy(false);
+      }
+    },
+    [config.baseUrl, config.mode, goTo, loginBusy],
+  );
+
+  const enterRole = useCallback(
+    async (username: string) => {
+      if (loginBusy) return;
+      setLoginBusy(true);
+      setLoginError(null);
+      try {
+        const account = DEMO_ACCOUNTS.find((item) => item.email === username);
+        const next = config.mode === 'fixture' && account
+          ? demoLogin(account.email, account.password)
+          : await demoServiceLogin({ baseUrl: config.baseUrl }, username);
         setSession(next);
         goTo(next.role);
       } catch (error) {
@@ -116,9 +178,10 @@ export function LensApp({ client: injected, config: injectedConfig }: { client?:
     return (
       <LoginScreen
         onSubmit={(username, password) => void signIn(username, password)}
+        onRoleEntry={(username) => void enterRole(username)}
+        roles={roles}
         busy={loginBusy}
         error={loginError}
-        showDemoAccounts={config.demoAccounts}
         modeNote={
           config.mode === 'fixture'
             ? 'Офлайн-режим: значения приходят из помеченного набора, вход выполняется локально.'
@@ -163,15 +226,17 @@ function AuthenticatedShell({
   allowed: boolean;
   methodologyRef: React.RefObject<HTMLDialogElement | null>;
 }) {
-  const workspace = useWorkspace(client, session.username);
+  const { toasts, notify, dismiss } = useToasts();
+  const workspace = useWorkspace(client, session.username, notify);
   const offline = client.kind === 'fixture';
   const permissions = permissionsFor(session.role);
   const actions = [
     permissions.canSubmitRequest ? 'подача заявки' : null,
     permissions.canRunAnalysis ? 'запуск анализа' : null,
-    permissions.canFinalize ? 'финализация паспорта' : null,
-    permissions.canSeeFinalizedOnly ? 'чтение финализированных паспортов' : null,
+    permissions.canFinalize ? 'подтверждение паспорта' : null,
+    permissions.canSeeFinalizedOnly ? 'чтение подтверждённых паспортов' : null,
   ].filter((item): item is string => item !== null);
+  const guide = ROLE_GUIDE[session.role];
 
   return (
     <div className="app lens">
@@ -182,26 +247,23 @@ function AuthenticatedShell({
         </div>
         <nav className="topnav" aria-label="Разделы">
           <button type="button" className="topnav-item" aria-current={route === session.role ? 'page' : undefined} onClick={() => onNavigate(session.role)} data-testid="lens-nav-workspace">
-            Рабочее место
+            Мой экран
           </button>
           <button type="button" className="topnav-item" onClick={() => methodologyRef.current?.showModal()} data-testid="lens-open-methodology">
-            Методология
+            Как считается
           </button>
           <a className="topnav-item" href="/" data-testid="lens-p0-link">
-            MRV P0
+            Дашборд MRV
           </a>
         </nav>
         <div className="topbar-right">
           <span className={`badge ${offline ? 'tone-review' : 'tone-ok'}`} data-testid="lens-mode">
-            {offline ? 'ОФЛАЙН-НАБОР' : 'СЕРВИС'}
+            {offline ? 'Офлайн-набор' : 'Считает сервис'}
           </span>
           <span className="badge tone-neutral" data-testid="lens-role">
             {ROLE_LABELS[session.role]}
           </span>
-          <a className="topnav-item small" href={switchModeHref(offline ? 'http' : 'fixture', window.location)} data-testid="lens-mode-switch">
-            {offline ? 'к сервису' : 'к офлайн-набору'}
-          </a>
-          <button type="button" className="topnav-item small" onClick={onSignOut} data-testid="lens-logout">
+          <button type="button" className="btn btn-small btn-secondary" onClick={onSignOut} data-testid="lens-logout">
             Выйти
           </button>
         </div>
@@ -211,10 +273,12 @@ function AuthenticatedShell({
         <span className="dot" aria-hidden="true" />
         <strong data-testid="lens-session-username">{session.username}</strong>
         <span>
-          Доступно: {actions.join(', ')}.{' '}
           {offline
-            ? 'Офлайн-набор: территории, площади, базовая линия, сцены и события — из официального data/; рассчитанные величины помечены как условный пример или логический вектор.'
-            : `Значения рассчитывает сервис ${config.baseUrl}.`}
+            ? 'Офлайн-набор: числа взяты из помеченного примера, а не рассчитаны по вашему участку.'
+            : 'Все числа на экране рассчитал сервис по официальным данным кейса.'}{' '}
+          <a className="link-button" href={switchModeHref(offline ? 'http' : 'fixture', window.location)} data-testid="lens-mode-switch">
+            {offline ? 'перейти к сервису' : 'открыть офлайн-набор'}
+          </a>
         </span>
       </div>
 
@@ -227,6 +291,15 @@ function AuthenticatedShell({
       )}
 
       <main id="main">
+        {allowed && (
+          <div className="lens-guide" data-testid="lens-guide">
+            <span className="lens-guide-icon" aria-hidden="true">i</span>
+            <span className="lens-guide-text">
+              <strong>{guide.title}</strong>
+              <span>{guide.text}</span>
+            </span>
+          </div>
+        )}
         {!allowed ? (
           <div className="state state-warn" role="status" data-testid="lens-forbidden">
             <strong>Экран другой роли</strong>
@@ -239,12 +312,26 @@ function AuthenticatedShell({
           </div>
         ) : (
           <>
-            {session.role === 'owner' && <OwnerWorkspace workspace={workspace} session={session} />}
-            {session.role === 'verifier' && <VerifierWorkspace workspace={workspace} session={session} offline={offline} />}
-            {session.role === 'investor' && <InvestorWorkspace workspace={workspace} session={session} />}
+            {session.role === 'owner' && <OwnerWorkspace workspace={workspace} session={session} notify={notify} />}
+            {session.role === 'verifier' && <VerifierWorkspace workspace={workspace} session={session} offline={offline} notify={notify} />}
+            {session.role === 'investor' && <InvestorWorkspace workspace={workspace} session={session} notify={notify} />}
           </>
         )}
+        <details className="lens-tech" data-testid="lens-tech-session">
+          <summary>Технические подробности сеанса</summary>
+          <div className="lens-tech-body">
+            <span>Учётная запись: {session.username} · роль {ROLE_LABELS[session.role]}</span>
+            <span>Разрешённые действия: {actions.join(', ')}.</span>
+            <span>
+              {offline
+                ? 'Режим офлайн-набора: помеченные значения, вход выполняется локально.'
+                : `Адрес сервиса: ${config.baseUrl}`}
+            </span>
+            <span className="muted">Запреты проверяет сервис, а не этот экран: запрос без права завершится ответом 403.</span>
+          </div>
+        </details>
       </main>
+      <Toasts toasts={toasts} onDismiss={dismiss} />
       <MethodologyDialog ref={methodologyRef} />
     </div>
   );

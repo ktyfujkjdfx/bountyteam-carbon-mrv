@@ -4,63 +4,63 @@
 import type { StatusMeta } from '../domain/status';
 
 export const JOB_META: Record<string, StatusMeta> = {
-  QUEUED: { label: 'В ОЧЕРЕДИ', tone: 'info', hint: 'Запрос принят и ждёт обработки.' },
-  RUNNING: { label: 'СЧИТАЕТСЯ', tone: 'info', hint: 'Расчёт выполняется.' },
-  SUCCEEDED: { label: 'ГОТОВО', tone: 'ok', hint: 'Расчёт завершён, результат получен.' },
-  FAILED: { label: 'ОШИБКА РАСЧЁТА', tone: 'blocked', hint: 'Задание завершилось ошибкой; результата нет.' },
+  QUEUED: { label: 'В очереди', tone: 'info', hint: 'Запрос принят и ждёт обработки.' },
+  RUNNING: { label: 'Считается', tone: 'info', hint: 'Расчёт выполняется.' },
+  SUCCEEDED: { label: 'Готово', tone: 'ok', hint: 'Расчёт завершён, результат получен.' },
+  FAILED: { label: 'Ошибка расчёта', tone: 'blocked', hint: 'Задание завершилось ошибкой; результата нет.' },
 };
 
 export const CALCULATION_META: Record<string, StatusMeta> = {
-  AVAILABLE: { label: 'РАСЧЁТ ВЫПОЛНЕН', tone: 'ok', hint: 'Обязательные данные были на месте, значения рассчитаны.' },
-  UNAVAILABLE: { label: 'РАСЧЁТ НЕВОЗМОЖЕН', tone: 'neutral', hint: 'Не хватает обязательных данных или покрытия. Это не ноль единиц.' },
+  AVAILABLE: { label: 'Расчёт выполнен', tone: 'ok', hint: 'Обязательные данные были на месте, значения рассчитаны.' },
+  UNAVAILABLE: { label: 'Расчёт невозможен', tone: 'neutral', hint: 'Не хватает обязательных данных или покрытия. Это не ноль единиц.' },
 };
 
 export const EVIDENCE_META: Record<string, StatusMeta> = {
-  SUFFICIENT: { label: 'ОБЪЯСНЕНИЕ ПОЛНОЕ', tone: 'ok', hint: 'Изменение объясняется показанными наблюдениями.' },
-  REVIEW_REQUIRED: { label: 'НУЖНА ПРОВЕРКА', tone: 'review', hint: 'Часть изменений объясняется ограниченно.' },
-  INSUFFICIENT: { label: 'ОБЪЯСНЕНИЕ НЕДОСТАТОЧНО', tone: 'neutral', hint: 'Наблюдений недостаточно, чтобы объяснить изменение.' },
+  SUFFICIENT: { label: 'Объяснение полное', tone: 'ok', hint: 'Изменение объясняется показанными наблюдениями.' },
+  REVIEW_REQUIRED: { label: 'Нужна проверка', tone: 'review', hint: 'Часть изменений объясняется ограниченно.' },
+  INSUFFICIENT: { label: 'Объяснение недостаточно', tone: 'neutral', hint: 'Наблюдений недостаточно, чтобы объяснить изменение.' },
 };
 
 export const CLAIM_META: Record<string, StatusMeta> = {
-  NOT_PROVIDED: { label: 'ЗАЯВЛЕНИЕ НЕ ВВЕДЕНО', tone: 'neutral', hint: 'Заявленный объём не задан; расчёт от него не зависит.' },
-  NOT_APPLICABLE: { label: 'ПОЛОЖИТЕЛЬНОГО ЗАЯВЛЕНИЯ НЕТ', tone: 'neutral', hint: 'Заявлен нулевой объём: сравнивать нечего, и это не подтверждение.' },
-  NOT_COMPARABLE: { label: 'СРАВНЕНИЕ НЕВОЗМОЖНО', tone: 'review', hint: 'Контур, период, пул или единицы заявления не совпадают с запросом.' },
-  UNASSESSABLE: { label: 'НЕЛЬЗЯ ОЦЕНИТЬ', tone: 'neutral', hint: 'Расчёт единиц недоступен, сравнивать не с чем.' },
-  SUPPORTED_BY_CASE: { label: 'ПОДТВЕРЖДЕНО РАСЧЁТОМ', tone: 'ok', hint: 'Заявленный объём не превышает расчёт по методике кейса.' },
-  PARTIALLY_SUPPORTED_BY_CASE: { label: 'ПОДТВЕРЖДЕНО ЧАСТИЧНО', tone: 'review', hint: 'Часть заявленного объёма расчётом не подтверждается.' },
-  NOT_SUPPORTED_BY_CASE: { label: 'НЕ ПОДТВЕРЖДЕНО РАСЧЁТОМ', tone: 'alert', hint: 'Расчёт по методике кейса не даёт положительных единиц.' },
+  NOT_PROVIDED: { label: 'Заявление не введено', tone: 'neutral', hint: 'Заявленный объём не задан; расчёт от него не зависит.' },
+  NOT_APPLICABLE: { label: 'Положительного заявления нет', tone: 'neutral', hint: 'Заявлен нулевой объём: сравнивать нечего, и это не подтверждение.' },
+  NOT_COMPARABLE: { label: 'Сравнение невозможно', tone: 'review', hint: 'Контур, период, пул или единицы заявления не совпадают с запросом.' },
+  UNASSESSABLE: { label: 'Нельзя оценить', tone: 'neutral', hint: 'Расчёт единиц недоступен, сравнивать не с чем.' },
+  SUPPORTED_BY_CASE: { label: 'Подтверждено расчётом', tone: 'ok', hint: 'Заявленный объём не превышает расчёт по методике кейса.' },
+  PARTIALLY_SUPPORTED_BY_CASE: { label: 'Подтверждено частично', tone: 'review', hint: 'Часть заявленного объёма расчётом не подтверждается.' },
+  NOT_SUPPORTED_BY_CASE: { label: 'Не подтверждено расчётом', tone: 'alert', hint: 'Расчёт по методике кейса не даёт положительных единиц.' },
 };
 
 export const ZONE_FACT_META: Record<string, StatusMeta> = {
-  TREE_COVER_LOSS: { label: 'ПОТЕРЯ ДРЕВЕСНОГО ПОКРОВА', tone: 'alert', hint: 'Продукт изменений отмечает год потери покрова.' },
-  SPECTRAL_CHANGE_ONLY: { label: 'ТОЛЬКО СПЕКТРАЛЬНОЕ ИЗМЕНЕНИЕ', tone: 'review', hint: 'Изменение видно по отражению; потеря покрова не зарегистрирована.' },
-  RECOVERY_INDICATION: { label: 'ПРИЗНАК ВОССТАНОВЛЕНИЯ', tone: 'ok', hint: 'Наблюдается прирост; вывод делается по результату периода.' },
+  TREE_COVER_LOSS: { label: 'Потеря древесного покрова', tone: 'alert', hint: 'Продукт изменений отмечает год потери покрова.' },
+  SPECTRAL_CHANGE_ONLY: { label: 'Только спектральное изменение', tone: 'review', hint: 'Изменение видно по отражению; потеря покрова не зарегистрирована.' },
+  RECOVERY_INDICATION: { label: 'Признак восстановления', tone: 'ok', hint: 'Наблюдается прирост; вывод делается по результату периода.' },
 };
 
 export const ZONE_CAUSE_META: Record<string, StatusMeta> = {
-  FIRE_SUPPORTED: { label: 'ПРИЧИНА: ПОЖАР ПО ПРОДУКТУ', tone: 'alert', hint: 'Есть внешний продукт гарей; точная площадь и дата им не измеряются.' },
-  UNKNOWN: { label: 'ПРИЧИНА НЕ УСТАНОВЛЕНА', tone: 'neutral', hint: 'Изменение наблюдается, но пожар или вырубка не доказаны.' },
-  NOT_APPLICABLE: { label: 'ПРИЧИНА НЕ ОПРЕДЕЛЯЕТСЯ', tone: 'neutral', hint: 'Для этой зоны вопрос причины не ставится.' },
+  FIRE_SUPPORTED: { label: 'Причина: пожар по продукту', tone: 'alert', hint: 'Есть внешний продукт гарей; точная площадь и дата им не измеряются.' },
+  UNKNOWN: { label: 'Причина не установлена', tone: 'neutral', hint: 'Изменение наблюдается, но пожар или вырубка не доказаны.' },
+  NOT_APPLICABLE: { label: 'Причина не определяется', tone: 'neutral', hint: 'Для этой зоны вопрос причины не ставится.' },
 };
 
 export const ANCHOR_META: Record<string, StatusMeta> = {
-  NOT_REQUESTED: { label: 'ЗАПИСЬ В РЕЕСТР НЕ ЗАПРАШИВАЛАСЬ', tone: 'neutral', hint: 'Якорь не запрашивался; целостность проверяется хешем файла.' },
-  PENDING: { label: 'ЗАПИСЬ В ОБРАБОТКЕ', tone: 'info', hint: 'Якорь отправлен и ещё не подтверждён.' },
-  CONFIRMED: { label: 'ЗАПИСЬ ПОДТВЕРЖДЕНА', tone: 'ok', hint: 'Якорь подтверждён. Он не удостоверяет истинность расчёта.' },
-  FAILED: { label: 'ЗАПИСЬ НЕ УДАЛАСЬ', tone: 'blocked', hint: 'Якорь не записан; расчёт и паспорт это не меняет.' },
+  NOT_REQUESTED: { label: 'Запись в реестр не запрашивалась', tone: 'neutral', hint: 'Якорь не запрашивался; целостность проверяется хешем файла.' },
+  PENDING: { label: 'Запись в обработке', tone: 'info', hint: 'Якорь отправлен и ещё не подтверждён.' },
+  CONFIRMED: { label: 'Запись подтверждена', tone: 'ok', hint: 'Якорь подтверждён. Он не удостоверяет истинность расчёта.' },
+  FAILED: { label: 'Запись не удалась', tone: 'blocked', hint: 'Якорь не записан; расчёт и паспорт это не меняет.' },
 };
 
 export const SEVERITY_META: Record<string, StatusMeta> = {
-  INFO: { label: 'ПОЯСНЕНИЕ', tone: 'info', hint: 'Замечание, не влияющее на пригодность расчёта.' },
-  WARNING: { label: 'ПРЕДУПРЕЖДЕНИЕ', tone: 'review', hint: 'Ограничение, которое влияет на интерпретацию.' },
-  BLOCKING: { label: 'БЛОКИРУЕТ РАСЧЁТ', tone: 'blocked', hint: 'Ограничение, из-за которого часть результата недоступна.' },
+  INFO: { label: 'Пояснение', tone: 'info', hint: 'Замечание, не влияющее на пригодность расчёта.' },
+  WARNING: { label: 'Предупреждение', tone: 'review', hint: 'Ограничение, которое влияет на интерпретацию.' },
+  BLOCKING: { label: 'Блокирует расчёт', tone: 'blocked', hint: 'Ограничение, из-за которого часть результата недоступна.' },
 };
 
 export const COMPARISON_META: Record<string, StatusMeta> = {
-  INITIAL: { label: 'ПЕРВОЕ НАБЛЮДЕНИЕ', tone: 'neutral', hint: 'Для этой области сравнения расчёт выполняется впервые.' },
-  REVISION_OF_SAME_SCOPE: { label: 'ВЕРСИЯ ТОЙ ЖЕ ОБЛАСТИ', tone: 'info', hint: 'Повторный расчёт того же контура, периода, пула и метода.' },
-  NEW_OBSERVATION: { label: 'НОВОЕ НАБЛЮДЕНИЕ', tone: 'review', hint: 'Другой период того же контура: это не списание прежних единиц.' },
-  NOT_COMPARABLE: { label: 'НЕСОПОСТАВИМО', tone: 'neutral', hint: 'Область сравнения изменилась, поэтому версии нельзя сравнивать напрямую.' },
+  INITIAL: { label: 'Первое наблюдение', tone: 'neutral', hint: 'Для этой области сравнения расчёт выполняется впервые.' },
+  REVISION_OF_SAME_SCOPE: { label: 'Версия той же области', tone: 'info', hint: 'Повторный расчёт того же контура, периода, пула и метода.' },
+  NEW_OBSERVATION: { label: 'Новое наблюдение', tone: 'review', hint: 'Другой период того же контура: это не списание прежних единиц.' },
+  NOT_COMPARABLE: { label: 'Несопоставимо', tone: 'neutral', hint: 'Область сравнения изменилась, поэтому версии нельзя сравнивать напрямую.' },
 };
 
 export const ZERO_REASON_TEXT: Record<string, string> = {

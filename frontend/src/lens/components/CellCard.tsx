@@ -21,7 +21,7 @@ export function CellCard({ cell, result }: { cell: CellFeature; result: Analysis
       <header className="batch-header">
         <h4>Ячейка {cell.cell_id}</h4>
         <span className={`badge tone-${cell.valid ? 'ok' : 'review'}`} data-testid="lens-cell-valid">
-          {cell.valid ? 'ЕСТЬ ЧИСЛОВЫЕ ДАННЫЕ' : 'БЕЗ ЧИСЛОВЫХ ДАННЫХ'}
+          {cell.valid ? 'Есть числовые данные' : 'Без числовых данных'}
         </span>
       </header>
       <dl className="fields">

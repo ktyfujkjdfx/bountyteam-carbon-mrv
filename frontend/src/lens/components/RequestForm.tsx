@@ -84,39 +84,40 @@ export function RequestForm(props: Props) {
 
   return (
     <div className="lens-request" data-testid="lens-request-form">
-      <h3>Территория</h3>
-      {catalogLoading && <div className="state state-loading compact">Каталог загружается…</div>}
-      {!catalogLoading && !catalog && <Empty>Каталог участков недоступен.</Empty>}
+      <h3>1. Какой участок проверяем</h3>
+      {catalogLoading && <div className="state state-loading compact">Загружаем список участков…</div>}
+      {!catalogLoading && !catalog && <Empty>Список участков недоступен: сервис не ответил.</Empty>}
       {catalog && catalog.areas.length > 0 && (
         <label className="lens-field">
-          <span>Готовый участок</span>
+          <span>Участок из каталога</span>
           <select className="select" value={draft.aoiId ?? ''} onChange={(event) => chooseArea(event.target.value)} data-testid="lens-area-select">
             <option value="">— выберите участок —</option>
             {catalog.areas.map((area) => (
               <option key={area.aoi_id} value={area.aoi_id}>
-                {area.aoi_id} · {area.region}
+                {area.region} · {area.aoi_id}
               </option>
             ))}
           </select>
+          <span className="lens-field-note">Самый простой путь: возьмите готовый участок из данных кейса.</span>
         </label>
       )}
 
       <div className="lens-actions">
         <button type="button" className={`btn btn-small ${drawing ? '' : 'btn-secondary'}`} onClick={onToggleDrawing} aria-pressed={drawing} data-testid="lens-draw-toggle">
-          {drawing ? 'Завершить рисование' : 'Нарисовать контур'}
+          {drawing ? 'Готово, закончить рисование' : 'Нарисовать свой контур на карте'}
         </button>
         {catalog?.sample_requests.map((sample) => (
           <button key={sample.request_id} type="button" className="btn btn-small btn-secondary" onClick={() => chooseSample(sample.request_id)} data-testid={`lens-sample-${sample.request_id}`}>
-            Подучасток {sample.request_id}
+            Готовый подучасток {sample.request_id}
           </button>
         ))}
       </div>
 
-      <details className="evidence-section">
-        <summary>Импорт GeoJSON</summary>
-        <div className="evidence-section-body">
+      <details className="lens-tech">
+        <summary>Загрузить свой контур в формате GeoJSON</summary>
+        <div className="lens-tech-body">
           <label className="lens-field" htmlFor={importId}>
-            <span>Feature, FeatureCollection или geometry</span>
+            <span>Вставьте GeoJSON: Feature, FeatureCollection или geometry</span>
           </label>
           <textarea id={importId} className="input lens-textarea" rows={4} value={importText} onChange={(event) => setImportText(event.target.value)} data-testid="lens-geojson-input" spellCheck={false} />
           <button type="button" className="btn btn-small btn-secondary" onClick={applyImport} data-testid="lens-geojson-apply">
@@ -132,11 +133,11 @@ export function RequestForm(props: Props) {
 
       <dl className="fields">
         <div className="field">
-          <dt>Источник контура</dt>
-          <dd data-testid="lens-geometry-source">{draft.geometry ? draft.geometrySource : 'контур не задан'}</dd>
+          <dt>Откуда взялся контур</dt>
+          <dd data-testid="lens-geometry-source">{draft.geometry ? draft.geometrySource : 'контур пока не задан'}</dd>
         </div>
         <div className="field">
-          <dt>Площадь</dt>
+          <dt>Площадь участка</dt>
           <dd data-testid="lens-area">
             {measuring && <span className="muted">измеряется сервисом…</span>}
             {!measuring && measurement === null && <span className="muted">—</span>}
@@ -144,11 +145,11 @@ export function RequestForm(props: Props) {
               <>
                 <span className="mono">{measurement.area_ha.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} га</span>
                 <div className="muted small" data-testid="lens-area-source">
-                  {measurement.source === 'SERVICE' ? 'Площадь сервиса.' : 'Предварительная оценка.'} {measurement.note}
+                  {measurement.source === 'SERVICE' ? 'Площадь измерил сервис.' : 'Предварительная оценка.'} {measurement.note}
                 </div>
               </>
             )}
-            <div className="muted small">Предел запроса — {maxArea.toLocaleString('ru-RU')} га.</div>
+            <div className="muted small">Один запрос — не больше {maxArea.toLocaleString('ru-RU')} га.</div>
           </dd>
         </div>
       </dl>
@@ -160,7 +161,7 @@ export function RequestForm(props: Props) {
       )}
       {overLimit && measurement?.area_ha !== null && (
         <div className="state state-error compact" role="alert" data-testid="lens-area-over-limit">
-          <strong>Контур больше предела</strong>
+          <strong>Участок слишком большой</strong>
           <span>
             Площадь {measurement.area_ha.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} га превышает предел {maxArea.toLocaleString('ru-RU')} га.
             Уменьшите контур и повторите: запрос не отправляется.
@@ -168,10 +169,10 @@ export function RequestForm(props: Props) {
         </div>
       )}
 
-      <h3>Период</h3>
+      <h3>2. За какие годы считаем</h3>
       <div className="lens-years">
         <label className="lens-field">
-          <span>Начальный год</span>
+          <span>С какого года</span>
           <select className="select" value={draft.yearStart} onChange={(event) => onDraft({ ...draft, yearStart: Number(event.target.value) })} data-testid="lens-year-start">
             {years.map((year) => (
               <option key={year} value={year}>
@@ -181,7 +182,7 @@ export function RequestForm(props: Props) {
           </select>
         </label>
         <label className="lens-field">
-          <span>Конечный год</span>
+          <span>По какой год</span>
           <select className="select" value={draft.yearEnd} onChange={(event) => onDraft({ ...draft, yearEnd: Number(event.target.value) })} data-testid="lens-year-end">
             {years.map((year) => (
               <option key={year} value={year}>
@@ -194,20 +195,21 @@ export function RequestForm(props: Props) {
 
       {allowClaim && (
         <>
-          <h3>Заявленный объём</h3>
+          <h3>3. Сколько единиц вы заявляете</h3>
           <label className="lens-field">
-            <span>Заявлено единиц (необязательно)</span>
+            <span>Заявлено единиц (можно не указывать)</span>
             <input className="input" inputMode="numeric" value={draft.claimedUnits} onChange={(event) => onDraft({ ...draft, claimedUnits: event.target.value })} data-testid="lens-claim-input" aria-describedby="lens-claim-note" />
           </label>
           <p className="muted small" id="lens-claim-note">
-            Пользовательский ввод, не данные организаторов. На расчёт он не влияет; без него все основные функции работают.
+            Это ваше заявление, а не данные кейса. На расчёт оно не влияет: сервис посчитает своё число и покажет, насколько ваше им
+            подтверждается. Поле можно оставить пустым.
           </p>
         </>
       )}
 
       {error && (
         <div className="state state-error compact" role="alert" data-testid="lens-request-error">
-          <strong>Запрос нельзя отправить</strong>
+          <strong>Заявку пока нельзя отправить</strong>
           <span>{error}</span>
         </div>
       )}
@@ -219,7 +221,7 @@ export function RequestForm(props: Props) {
         disabled={busy || measuring || measurement === null || !measurement.valid || !measurement.within_limit || measureError !== null}
         data-testid="lens-submit"
       >
-        {busy ? 'Выполняется…' : submitLabel}
+        {busy ? 'Отправляем…' : submitLabel}
       </button>
     </div>
   );
