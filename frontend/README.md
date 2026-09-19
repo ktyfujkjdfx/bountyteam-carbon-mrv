@@ -11,6 +11,56 @@ React 19 + TypeScript 5.9 (strict) + Vite 8, Leaflet 1.9 without remote tiles, V
 Playwright (system Microsoft Edge, no browser download). Node `24.19.0` (root `.nvmrc`).
 IBM Plex Sans / Plex Mono are bundled via `@fontsource` (OFL-1.1), so the offline `dist` loads no remote fonts.
 
+## Carbon Lens workspaces (`/lens`)
+
+Three roles, three screens, one shared reading of a result. Sign-in is required; the P0 MRV dashboard
+stays on `/` and is untouched. Demo script: [DEMO_LENS.md](DEMO_LENS.md). Integration assumptions and
+the findings from the live stand: [docs/LENS_INTEGRATION.md](docs/LENS_INTEGRATION.md).
+
+| Role | Question it answers | Screen |
+|---|---|---|
+| Владелец проекта | «Как подать участок и проверить заявленный объём?» | мои заявки, новая заявка, площадь с сервера, `claimed_units`, статус обработки, замечания верификатора, паспорт |
+| Верификатор | «Подтверждается ли эффект данными и методикой?» | очередь заявок, карта и зоны, запуск анализа, разбор расчёта, качество и риски, claim stress test, замечания, финализация |
+| Инвестор | «Что подтверждено, какие риски и сценарная стоимость?» | только финализированные паспорта, Q, разрыв заявления, риски, сценарий до 2029, три цены и своя цена, отчёт, демо-жизненный цикл |
+
+The first screen answers in four numbers — Q, Eproj, R and the scenario value — plus one sentence:
+«Дополнительный эффект подтверждён», «Расчёт выполнен, дополнительный эффект не подтверждён» or
+«Недостаточно данных для расчёта». Everything technical lives one click deeper, in three tabs: «Что
+произошло», «Как рассчитано», «Качество и риски».
+
+| Mode | How | Data |
+|---|---|---|
+| Live service (default) | `VITE_LENS_API_BASE_URL=<origin>/api/v2` | Backend `/api/v2`; the token is a runtime value, never baked into `dist` |
+| Offline set | `?lens=fixture` or `VITE_LENS_API_MODE=fixture` | official `data/` plus labelled result sets — the conditional example of the statement (Q = 395) and logic vectors |
+
+`?auth=demo` sends the session token as `X-Demo-Session` instead of `Authorization: Bearer`, which the
+service deployed today requires (see finding L1 in the integration notes). A failing service is always
+reported as a failure — the offline set is never substituted automatically.
+
+## Carbon Lens data boundary
+
+Open `http://127.0.0.1:5173/lens` in dev, `http://127.0.0.1:4173/lens` on the built `dist`, or
+`index.html#/lens` when the offline bundle is opened from a folder.
+
+| Screen area | Content |
+|---|---|
+| Запрос | supplied areas from the catalog, drawn rectangle, GeoJSON import, official sub-request, years of the catalog, optional `claimed_units` labelled as user input |
+| Карта | request contour, change zones, the native cell grid on demand, WGS84 readout, scale, no remote tiles |
+| Что произошло | annual stock against the case baseline, the scenario years kept apart, zones with fact and cause, official event records |
+| Как рассчитано | Eproj → Ebase → R → H/R → deduction → reserve → Q, each step showing its formula, inputs and the source of every parameter |
+| Качество и риски | four coverage axes, requested/calculated area, the scenario interval with its sensitivity variants, structured warnings, three independent risk cards, limitations |
+| Заявлено и подтверждено | claimed, calculated Q, supported share, unsupported gap and its scenario value, the scope of the comparison |
+| Сценарная стоимость | three case prices plus an optional price of the reader, labelled as their own scenario |
+| Паспорт | status, who submitted and who finalised, both hashes, the check of a received file, sources with licences |
+| Демо-цикл | расчёт → верификация → демо-выпуск → демо-передача → демо-погашение, labelled as a demonstration, blocked when Q = 0 |
+
+Data boundary: `src/lens/client.ts` defines the only interface the screens know; `httpClient.ts` and
+`fixtureClient.ts` implement it. Territories, the baseline table, scenes, fire events, coefficients,
+prices and the source registry are read from the official `data/` archive through `src/lens/data.ts`.
+Computed values (stock, Eproj, R, uncertainty, Q) come from the service, or — offline — from labelled
+sets. The UI never computes scientific values: it formats them, multiplies Q by a scenario price and
+shows the gap the service calculated.
+
 ## Interface
 
 One map-first monitoring workspace (desktop-first, collapses to a single column ≤ 900 px):
@@ -54,7 +104,7 @@ npm run preview        # serve dist at http://127.0.0.1:4173
 | `gen:api` / `check:api` | `src/api/generated/openapi.ts` is regenerated from `contracts/openapi.yaml`, check fails on drift |
 | `lint` | ESLint strict TS + React hooks rules; literal `SIGNING` forbidden in `src/` |
 | `typecheck` | `strict`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess` |
-| `test` | 110 tests: status mapping vs schema enums, both adapters, polling, geometry, artifact pairing, components, unknown-enum resilience, root error boundary, golden-fixture flow |
+| `test` | 144 tests: status mapping vs schema enums, both adapters, polling, geometry, artifact pairing, components, unknown-enum resilience, root error boundary, golden-fixture flow, Carbon Lens adapter and workspace |
 | `build` + `check:dist` | offline `dist/` with relative paths, no remote hosts, no GeoTIFF |
 | `e2e` | full demo flow in a real browser + HTTP failure → manual offline fallback; `e2e/backend-integration.spec.ts` (opt-in) runs the real SPA against a live Backend incl. CORS |
 
